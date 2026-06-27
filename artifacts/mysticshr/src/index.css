@@ -1,0 +1,198 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-border: hsl(var(--card-border));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover-border: hsl(var(--popover-border));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-border: var(--primary-border);
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary-border: var(--secondary-border);
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted-border: var(--muted-border);
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-border: var(--accent-border);
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-border: var(--destructive-border);
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-primary-border: var(--sidebar-primary-border);
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-accent-border: var(--sidebar-accent-border);
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --font-sans: var(--app-font-sans);
+  --font-serif: var(--app-font-serif);
+  --font-mono: var(--app-font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/*
+ * Premium "Executive" theme.
+ *  - Pearl background, deep-ink foreground for editorial contrast.
+ *  - Primary: deep midnight ink (corporate, trustworthy).
+ *  - Accent: champagne gold (premium signal — used sparingly for highlights).
+ *  - Sidebar: near-black midnight with cool gradient feel.
+ *  - Slightly larger radius (0.625rem) and softer borders for refinement.
+ */
+:root {
+  --background: 30 25% 98%;            /* warm pearl */
+  --foreground: 222 35% 11%;           /* deep ink */
+  --border: 220 16% 88%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 35% 11%;
+  --card-border: 220 16% 92%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 35% 11%;
+  --popover-border: 220 16% 92%;
+  --primary: 222 38% 14%;              /* midnight ink */
+  --primary-foreground: 30 25% 98%;
+  --secondary: 220 16% 94%;
+  --secondary-foreground: 222 38% 14%;
+  --muted: 220 18% 96%;
+  --muted-foreground: 220 12% 42%;
+  --accent: 38 58% 50%;                /* champagne gold */
+  --accent-foreground: 222 38% 14%;
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 30 25% 98%;
+  --input: 220 16% 88%;
+  --ring: 38 58% 50%;
+  --chart-1: 222 38% 14%;
+  --chart-2: 38 58% 50%;
+  --chart-3: 175 55% 35%;              /* refined teal */
+  --chart-4: 264 35% 45%;              /* deep amethyst */
+  --chart-5: 12 60% 48%;               /* burnished copper */
+  --sidebar: 224 38% 9%;               /* near-black midnight */
+  --sidebar-foreground: 30 25% 95%;
+  --sidebar-border: 224 30% 16%;
+  --sidebar-primary: 38 58% 55%;
+  --sidebar-primary-foreground: 224 38% 9%;
+  --sidebar-accent: 224 30% 15%;
+  --sidebar-accent-foreground: 38 58% 60%;
+  --sidebar-ring: 38 58% 55%;
+
+  --app-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --app-font-serif: 'Playfair Display', Georgia, serif;
+  --app-font-mono: 'JetBrains Mono', Menlo, monospace;
+  --radius: 0.625rem;
+
+  --button-outline: rgba(15, 23, 42, .08);
+  --badge-outline: rgba(15, 23, 42, .04);
+  --opaque-button-border-intensity: -8;
+  --elevate-1: rgba(15, 23, 42, .04);
+  --elevate-2: rgba(15, 23, 42, .08);
+}
+
+.dark {
+  --background: 224 30% 7%;            /* deep slate */
+  --foreground: 30 20% 96%;
+  --border: 224 22% 18%;
+  --card: 224 28% 10%;
+  --card-foreground: 30 20% 96%;
+  --card-border: 224 22% 18%;
+  --popover: 224 28% 10%;
+  --popover-foreground: 30 20% 96%;
+  --popover-border: 224 22% 18%;
+  --primary: 38 58% 55%;               /* gold becomes primary in dark */
+  --primary-foreground: 224 30% 7%;
+  --secondary: 224 22% 16%;
+  --secondary-foreground: 30 20% 96%;
+  --muted: 224 22% 14%;
+  --muted-foreground: 220 14% 65%;
+  --accent: 38 58% 55%;
+  --accent-foreground: 224 30% 7%;
+  --destructive: 0 65% 55%;
+  --destructive-foreground: 30 20% 96%;
+  --input: 224 22% 18%;
+  --ring: 38 58% 55%;
+  --chart-1: 38 58% 55%;
+  --chart-2: 200 50% 60%;
+  --chart-3: 175 55% 50%;
+  --chart-4: 264 45% 65%;
+  --chart-5: 12 60% 60%;
+  --sidebar: 224 32% 6%;
+  --sidebar-foreground: 30 20% 92%;
+  --sidebar-border: 224 22% 14%;
+  --sidebar-primary: 38 58% 55%;
+  --sidebar-primary-foreground: 224 30% 7%;
+  --sidebar-accent: 224 24% 12%;
+  --sidebar-accent-foreground: 38 58% 60%;
+  --sidebar-ring: 38 58% 55%;
+
+  --button-outline: rgba(255, 255, 255, .08);
+  --badge-outline: rgba(255, 255, 255, .04);
+  --elevate-1: rgba(255, 255, 255, .03);
+  --elevate-2: rgba(255, 255, 255, .06);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Slim, theme-matched scrollbar for the side navigation. */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.22);
+  }
+  .sidebar-scroll {
+    scrollbar-gutter: stable;
+  }
+}

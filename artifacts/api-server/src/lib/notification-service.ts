@@ -1,0 +1,618 @@
+import nodemailer from "nodemailer";
+import { db } from "./db";
+import { notificationLogsTable, notificationTemplatesTable, notificationPreferencesTable, systemSettingsTable, employeesTable, candidatesTable } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
+
+/**
+ * Master registry of notification event types employees can opt in/out of.
+ * Keep in sync with the keys in `getDefaultSubject` / `getDefaultEmailBody` /
+ * `getDefaultWhatsAppMsg` below. Grouped + labeled for the ESS preferences UI.
+ */
+export const NOTIFICATION_EVENT_TYPES: ReadonlyArray<{
+  eventType: string;
+  label: string;
+  description: string;
+  module: string;
+}> = [
+  { eventType: "leave_submitted", label: "Leave application submitted (for approvers)", description: "When a team member submits a leave request that needs your approval.", module: "Leave" },
+  { eventType: "leave_approved", label: "Your leave was approved", description: "When your leave request is approved.", module: "Leave" },
+  { eventType: "leave_rejected", label: "Your leave was rejected", description: "When your leave request is not approved.", module: "Leave" },
+  { eventType: "leave_dates_edited", label: "Your approved leave dates were changed by HR", description: "When HR edits the date range of one of your approved leave applications.", module: "Leave" },
+  { eventType: "payslip_published", label: "Your payslip is ready", description: "When a new payslip is published for you.", module: "Payroll" },
+  { eventType: "payroll_locked", label: "Payroll locked", description: "When a payroll period is locked.", module: "Payroll" },
+  { eventType: "payroll_run_pending_approval", label: "Payroll run pending approval", description: "When a payroll run is computed and awaits your approval.", module: "Payroll" },
+  { eventType: "form_16_available", label: "Your Form 16 is ready", description: "Annual email at financial year-end with a link to download your Form 16 (TDS certificate).", module: "Payroll" },
+  { eventType: "offer_letter_issued", label: "Offer letter issued", description: "When a new offer letter is issued to you.", module: "Recruitment" },
+  { eventType: "onboarding_access", label: "Pre-onboarding portal access", description: "When your pre-onboarding portal is activated.", module: "Onboarding" },
+  { eventType: "onboarding_doc_pending", label: "Pre-onboarding documents pending", description: "Reminders to complete pre-onboarding documents.", module: "Onboarding" },
+  { eventType: "document_issued", label: "A document was issued to you", description: "When HR issues a document (payslip, certificate, etc.) to you.", module: "Documents" },
+  { eventType: "document_request_fulfilled", label: "Your document request was fulfilled", description: "When HR fulfills a document request you submitted.", module: "Documents" },
+  { eventType: "document_request_cancelled", label: "Your document request was cancelled", description: "When HR cancels a document request you submitted.", module: "Documents" },
+  { eventType: "document_request_created", label: "New document request raised (for HR)", description: "When an employee submits a new document request that needs HR action.", module: "Documents" },
+  { eventType: "helpdesk_ticket_raised", label: "Helpdesk ticket assigned to you", description: "When a helpdesk ticket is assigned to you to resolve.", module: "Helpdesk" },
+  { eventType: "helpdesk_ticket_confirmation", label: "Helpdesk ticket received (confirmation)", description: "Confirmation that a ticket you raised has been received.", module: "Helpdesk" },
+  { eventType: "helpdesk_ticket_created", label: "New helpdesk ticket created (for HR/agents)", description: "When a new helpdesk ticket is raised.", module: "Helpdesk" },
+  { eventType: "helpdesk_status_changed", label: "Your helpdesk ticket status changed", description: "When the status of one of your helpdesk tickets changes.", module: "Helpdesk" },
+  { eventType: "helpdesk_comment_added", label: "New comment on your helpdesk ticket", description: "When someone comments on a helpdesk ticket you're involved in.", module: "Helpdesk" },
+  { eventType: "helpdesk_sla_breach", label: "Helpdesk SLA breach alert", description: "When a helpdesk ticket breaches its SLA.", module: "Helpdesk" },
+  { eventType: "exit_clearance_completed", label: "Exit clearance completed (for HR)", description: "When an employee's exit clearance is fully completed.", module: "Exit" },
+  { eventType: "exit_clearance_done", label: "Your exit clearance is complete", description: "When your own exit clearance is complete.", module: "Exit" },
+  { eventType: "exit_initiated", label: "Your exit request was processed", description: "When your exit request status is updated.", module: "Exit" },
+  { eventType: "exit_request_submitted", label: "New exit request submitted", description: "Notifies HR when an employee raises a new exit request.", module: "Exit" },
+  { eventType: "exit_request_rejected", label: "Your exit request was not approved", description: "When your exit request is rejected.", module: "Exit" },
+  { eventType: "exit_clearance_task_assigned", label: "Exit clearance task assigned to you", description: "When an exit clearance task is assigned to you.", module: "Exit" },
+  { eventType: "exit_clearance_task_overdue", label: "Exit clearance task overdue (WhatsApp nudge)", description: "Daily WhatsApp reminder when an exit clearance task assigned to you is past its due date.", module: "Exit" },
+  { eventType: "fnf_pending_approval", label: "Full & Final settlement pending approval", description: "When an FnF is computed and awaits your approval.", module: "Exit" },
+  { eventType: "fnf_approved", label: "Your Full & Final was approved", description: "When your FnF settlement is approved.", module: "Exit" },
+  { eventType: "relieving_doc_link", label: "Relieving documents — direct download link", description: "Email containing a direct, time-limited link to download your relieving / experience documents (no portal sign-in required).", module: "Exit" },
+  { eventType: "id_card_generated", label: "ID card ready", description: "When your ID card is generated.", module: "Documents" },
+  { eventType: "no_sign_in", label: "No sign-in detected today", description: "Daily attendance reminder if you haven't signed in.", module: "Attendance" },
+  { eventType: "no_sign_out", label: "No sign-out detected today", description: "Daily attendance reminder if you haven't signed out.", module: "Attendance" },
+  { eventType: "overtime_alert", label: "Overtime threshold exceeded", description: "When your hours today exceed the overtime threshold.", module: "Attendance" },
+  { eventType: "consecutive_absence", label: "Consecutive absence alert", description: "When you've been absent multiple consecutive days.", module: "Attendance" },
+];
+
+/** Set of all known event types — fast O(1) lookup. */
+export const NOTIFICATION_EVENT_TYPE_SET: ReadonlySet<string> = new Set(NOTIFICATION_EVENT_TYPES.map((e) => e.eventType));
+
+/** Storage location for company-wide notification preference defaults that
+ * seed each new joiner's `notification_preferences` rows. Persisted as a
+ * single JSONB blob (one row in `system_settings`) keyed by event type. */
+export const NOTIFICATION_DEFAULTS_CATEGORY = "notification_defaults";
+export const NOTIFICATION_DEFAULTS_KEY = "all";
+
+export type NotificationDefaultsMap = Record<string, { emailEnabled: boolean; whatsappEnabled: boolean }>;
+
+/**
+ * Read the company-wide defaults map from `system_settings`. Returns an empty
+ * map when nothing has been configured yet — callers should fall back to the
+ * historical hard-coded "everything on" behavior in that case.
+ */
+export async function getNotificationDefaults(): Promise<NotificationDefaultsMap> {
+  const [row] = await db.select().from(systemSettingsTable)
+    .where(and(
+      eq(systemSettingsTable.category, NOTIFICATION_DEFAULTS_CATEGORY),
+      eq(systemSettingsTable.key, NOTIFICATION_DEFAULTS_KEY),
+    ))
+    .limit(1);
+  if (!row || !row.value || typeof row.value !== "object" || Array.isArray(row.value)) return {};
+  const out: NotificationDefaultsMap = {};
+  for (const [k, v] of Object.entries(row.value as Record<string, unknown>)) {
+    if (!NOTIFICATION_EVENT_TYPE_SET.has(k)) continue;
+    if (!v || typeof v !== "object") continue;
+    const obj = v as Record<string, unknown>;
+    out[k] = {
+      emailEnabled: obj["emailEnabled"] !== false,
+      whatsappEnabled: obj["whatsappEnabled"] !== false,
+    };
+  }
+  return out;
+}
+
+/**
+ * Seed the per-event `notification_preferences` rows for a freshly created
+ * employee. Uses the company-wide defaults if any have been configured;
+ * otherwise falls back to "everything on" (matching legacy behavior).
+ * Existing rows for the employee are left untouched (idempotent on re-run).
+ */
+export async function seedNotificationPreferencesForEmployee(employeeId: number): Promise<number> {
+  const defaults = await getNotificationDefaults();
+  const existing = await db.select({ eventType: notificationPreferencesTable.eventType })
+    .from(notificationPreferencesTable)
+    .where(eq(notificationPreferencesTable.employeeId, employeeId));
+  const have = new Set(existing.map((r) => r.eventType));
+  const rows: Array<{ employeeId: number; eventType: string; emailEnabled: boolean; whatsappEnabled: boolean }> = [];
+  for (const meta of NOTIFICATION_EVENT_TYPES) {
+    if (have.has(meta.eventType)) continue;
+    const d = defaults[meta.eventType];
+    rows.push({
+      employeeId,
+      eventType: meta.eventType,
+      emailEnabled: d ? d.emailEnabled : true,
+      whatsappEnabled: d ? d.whatsappEnabled : true,
+    });
+  }
+  if (!rows.length) return 0;
+  await db.insert(notificationPreferencesTable).values(rows);
+  return rows.length;
+}
+
+interface SendEmailOptions {
+  to: string;
+  toName?: string;
+  subject: string;
+  html: string;
+  eventType: string;
+  module: string;
+  entityType?: string;
+  entityId?: number;
+  metadata?: Record<string, unknown>;
+}
+
+interface SendWhatsAppOptions {
+  to: string;
+  toName?: string;
+  message: string;
+  eventType: string;
+  module: string;
+  entityType?: string;
+  entityId?: number;
+}
+
+/**
+ * Coerce a JSONB value to a string for credential reads. JSON values can come
+ * back as string | number | boolean | null; anything truthy gets stringified
+ * and trimmed, empty strings collapse to undefined so env-fallback can kick in.
+ */
+function asConfigString(v: unknown): string | undefined {
+  if (v === null || v === undefined) return undefined;
+  const s = typeof v === "string" ? v : String(v);
+  const trimmed = s.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+/**
+ * Read SMTP credentials. Source of truth is the `system_settings` table
+ * (category=`email`, set via the System Config UI). Each individual key falls
+ * back to its corresponding SMTP_* environment variable when the DB value is
+ * missing or empty, so on a fresh install env-driven credentials still work.
+ */
+async function getSmtpSettings() {
+  const rows = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.category, "email"));
+  const db_: Record<string, string | undefined> = {};
+  for (const r of rows) db_[r.key] = asConfigString(r.value);
+
+  return {
+    host: db_["host"] ?? process.env["SMTP_HOST"],
+    port: db_["port"] ?? process.env["SMTP_PORT"],
+    secure: db_["secure"] ?? process.env["SMTP_SECURE"],
+    username: db_["username"] ?? process.env["SMTP_USER"],
+    password: db_["password"] ?? process.env["SMTP_PASS"],
+    from: db_["from"] ?? process.env["SMTP_FROM"],
+  };
+}
+
+/**
+ * Read WhatsApp Cloud API credentials. Same DB-first / env-fallback pattern as
+ * `getSmtpSettings()`.
+ */
+async function getWhatsAppSettings() {
+  const rows = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.category, "whatsapp"));
+  const db_: Record<string, string | undefined> = {};
+  for (const r of rows) db_[r.key] = asConfigString(r.value);
+
+  return {
+    phone_number_id: db_["phone_number_id"] ?? process.env["WHATSAPP_PHONE_NUMBER_ID"],
+    access_token: db_["access_token"] ?? process.env["WHATSAPP_ACCESS_TOKEN"],
+  };
+}
+
+async function logNotification(params: {
+  channel: string;
+  eventType: string;
+  module: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  recipientName?: string;
+  subject?: string;
+  body?: string;
+  status: "sent" | "failed" | "pending";
+  errorMessage?: string;
+  entityType?: string;
+  entityId?: number;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    await db.insert(notificationLogsTable).values({
+      channel: params.channel,
+      eventType: params.eventType,
+      module: params.module,
+      recipientEmail: params.recipientEmail,
+      recipientPhone: params.recipientPhone,
+      recipientName: params.recipientName,
+      subject: params.subject,
+      body: params.body,
+      status: params.status,
+      errorMessage: params.errorMessage,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      metadata: params.metadata as Record<string, unknown> | null | undefined,
+    });
+  } catch (e) {
+    console.error("[notification-service] Failed to log notification:", e);
+  }
+}
+
+export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
+  const smtp = await getSmtpSettings();
+  if (!smtp.host || !smtp.from) {
+    await logNotification({
+      channel: "email",
+      eventType: opts.eventType,
+      module: opts.module,
+      recipientEmail: opts.to,
+      recipientName: opts.toName,
+      subject: opts.subject,
+      body: opts.html,
+      status: "failed",
+      errorMessage: "SMTP not configured",
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+      metadata: opts.metadata,
+    });
+    return false;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port: parseInt(smtp.port ?? "587"),
+    secure: smtp.secure === "true",
+    auth: smtp.username ? { user: smtp.username, pass: smtp.password } : undefined,
+  });
+
+  try {
+    await transporter.sendMail({
+      from: smtp.from,
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
+    });
+    await logNotification({
+      channel: "email",
+      eventType: opts.eventType,
+      module: opts.module,
+      recipientEmail: opts.to,
+      recipientName: opts.toName,
+      subject: opts.subject,
+      body: opts.html,
+      status: "sent",
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+      metadata: opts.metadata,
+    });
+    return true;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await logNotification({
+      channel: "email",
+      eventType: opts.eventType,
+      module: opts.module,
+      recipientEmail: opts.to,
+      recipientName: opts.toName,
+      subject: opts.subject,
+      body: opts.html,
+      status: "failed",
+      errorMessage: msg,
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+      metadata: opts.metadata,
+    });
+    console.error("[notification-service] Email send failed:", msg);
+    return false;
+  }
+}
+
+export async function sendWhatsApp(opts: SendWhatsAppOptions): Promise<boolean> {
+  const wa = await getWhatsAppSettings();
+  if (!wa.phone_number_id || !wa.access_token) {
+    await logNotification({
+      channel: "whatsapp",
+      eventType: opts.eventType,
+      module: opts.module,
+      recipientPhone: opts.to,
+      recipientName: opts.toName,
+      body: opts.message,
+      status: "failed",
+      errorMessage: "WhatsApp not configured",
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+    });
+    return false;
+  }
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v18.0/${wa.phone_number_id}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${wa.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: opts.to,
+          type: "text",
+          text: { body: opts.message },
+        }),
+      }
+    );
+    const ok = res.ok;
+    await logNotification({
+      channel: "whatsapp",
+      eventType: opts.eventType,
+      module: opts.module,
+      recipientPhone: opts.to,
+      recipientName: opts.toName,
+      body: opts.message,
+      status: ok ? "sent" : "failed",
+      errorMessage: ok ? undefined : await res.text(),
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+    });
+    return ok;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await logNotification({
+      channel: "whatsapp",
+      eventType: opts.eventType,
+      module: opts.module,
+      recipientPhone: opts.to,
+      recipientName: opts.toName,
+      body: opts.message,
+      status: "failed",
+      errorMessage: msg,
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+    });
+    return false;
+  }
+}
+
+function interpolate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+}
+
+/** Auto-resolve phone from employees table by DB employee row id */
+async function resolveEmployeePhone(employeeId?: number | null): Promise<string | undefined> {
+  if (!employeeId) return undefined;
+  const [row] = await db.select({ phone: employeesTable.phone }).from(employeesTable).where(eq(employeesTable.id, employeeId)).limit(1);
+  return row?.phone ?? undefined;
+}
+
+/** Auto-resolve phone from candidates table by DB candidate row id */
+async function resolveCandidatePhone(candidateId?: number | null): Promise<string | undefined> {
+  if (!candidateId) return undefined;
+  const [row] = await db.select({ phone: candidatesTable.phone }).from(candidatesTable).where(eq(candidatesTable.id, candidateId)).limit(1);
+  return row?.phone ?? undefined;
+}
+
+/**
+ * Resolve which channels are allowed for a given employee + event. Defaults to
+ * { email: true, whatsapp: true } when the employee has no stored preference
+ * row (opt-out model). Unknown employeeId returns the default (no filtering).
+ */
+async function getEmployeePreference(employeeId: number | null | undefined, eventType: string): Promise<{ email: boolean; whatsapp: boolean }> {
+  if (!employeeId) return { email: true, whatsapp: true };
+  const [row] = await db.select({
+    emailEnabled: notificationPreferencesTable.emailEnabled,
+    whatsappEnabled: notificationPreferencesTable.whatsappEnabled,
+  }).from(notificationPreferencesTable)
+    .where(and(eq(notificationPreferencesTable.employeeId, employeeId), eq(notificationPreferencesTable.eventType, eventType)))
+    .limit(1);
+  if (!row) return { email: true, whatsapp: true };
+  return { email: row.emailEnabled, whatsapp: row.whatsappEnabled };
+}
+
+/** Look up an employee row id from their work email — used when the dispatcher
+ * caller didn't supply `recipientEmployeeDbId`. Returns null if no match. */
+async function resolveEmployeeIdByEmail(email?: string | null): Promise<number | null> {
+  if (!email) return null;
+  const [row] = await db.select({ id: employeesTable.id }).from(employeesTable).where(eq(employeesTable.email, email)).limit(1);
+  return row?.id ?? null;
+}
+
+export async function dispatchNotification(params: {
+  eventType: string;
+  module: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  recipientName?: string;
+  /** DB row id from employees table — used to auto-resolve phone for WhatsApp */
+  recipientEmployeeDbId?: number | null;
+  /** DB row id from candidates table — used to auto-resolve phone for WhatsApp */
+  recipientCandidateId?: number | null;
+  variables?: Record<string, string>;
+  entityType?: string;
+  entityId?: number;
+  metadata?: Record<string, unknown>;
+  /** Mandatory/compliance notifications (e.g. annual Form 16) — when true,
+   * skip per-employee opt-out preferences. Default false. */
+  bypassPreferences?: boolean;
+  /** Restrict dispatch to a specific set of channels regardless of template
+   * configuration. Useful for compliance flows that must be email-only. */
+  channels?: Array<"email" | "whatsapp">;
+}): Promise<void> {
+  try {
+    const templates = await db.select().from(notificationTemplatesTable).where(
+      and(eq(notificationTemplatesTable.eventType, params.eventType), eq(notificationTemplatesTable.isActive, true))
+    );
+    const tpl = templates[0];
+    const vars = params.variables ?? {};
+
+    const tplEmail = tpl ? (tpl.channel === "email" || tpl.channel === "both") : true;
+    // Default to true so WhatsApp fires for all events (if credentials are configured)
+    const tplWA = tpl ? (tpl.channel === "whatsapp" || tpl.channel === "both") : true;
+    // Caller-supplied channel restriction (e.g. compliance email-only flows)
+    // takes precedence over template configuration.
+    const allowEmail = params.channels ? params.channels.includes("email") : true;
+    const allowWA = params.channels ? params.channels.includes("whatsapp") : true;
+    const shouldEmail = tplEmail && allowEmail;
+    const shouldWA = tplWA && allowWA;
+
+    // Per-employee opt-out: if the recipient is an employee, respect their
+    // notification preferences for this event. Defaults to enabled when no
+    // explicit preference row exists. Skipped for non-employee recipients
+    // (e.g. external candidate emails).
+    const recipientEmpId = params.recipientEmployeeDbId
+      ?? await resolveEmployeeIdByEmail(params.recipientEmail);
+    const prefs = params.bypassPreferences
+      ? { email: true, whatsapp: true }
+      : await getEmployeePreference(recipientEmpId, params.eventType);
+
+    if (params.recipientEmail && shouldEmail && prefs.email) {
+      const subject = tpl?.emailSubject ? interpolate(tpl.emailSubject, vars) : getDefaultSubject(params.eventType);
+      const html = tpl?.emailBody ? interpolate(tpl.emailBody, vars) : getDefaultEmailBody(params.eventType, vars);
+      await sendEmail({
+        to: params.recipientEmail,
+        toName: params.recipientName,
+        subject,
+        html,
+        eventType: params.eventType,
+        module: params.module,
+        entityType: params.entityType,
+        entityId: params.entityId,
+        metadata: params.metadata,
+      });
+    }
+
+    if (shouldWA && prefs.whatsapp) {
+      // Resolve phone: explicit > employee lookup (using resolved id, which
+      // also covers the email-only fallback path) > candidate lookup
+      const phone = params.recipientPhone
+        ?? await resolveEmployeePhone(recipientEmpId)
+        ?? await resolveCandidatePhone(params.recipientCandidateId);
+      if (phone) {
+        const msg = tpl?.whatsappTemplate ? interpolate(tpl.whatsappTemplate, vars) : getDefaultWhatsAppMsg(params.eventType, vars);
+        await sendWhatsApp({
+          to: phone,
+          toName: params.recipientName,
+          message: msg,
+          eventType: params.eventType,
+          module: params.module,
+          entityType: params.entityType,
+          entityId: params.entityId,
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[notification-service] dispatchNotification error:", e);
+  }
+}
+
+function getDefaultSubject(eventType: string): string {
+  const subjects: Record<string, string> = {
+    leave_submitted: "Leave Application Submitted — Action Required",
+    leave_approved: "Your Leave Request Has Been Approved",
+    leave_rejected: "Your Leave Request Was Not Approved",
+    leave_dates_edited: "Your Approved Leave Dates Were Updated by HR",
+    payslip_published: "Your Payslip is Ready",
+    payroll_locked: "Payroll Lock Activated",
+    payroll_run_pending_approval: "Payroll Run Ready for Approval — Action Required",
+    form_16_available: "Your Form 16 is Ready to Download",
+    offer_letter_issued: "Your Offer Letter from Automystics Technologies",
+    onboarding_access: "Welcome! Your Pre-Onboarding Portal is Ready",
+    document_issued: "A Document Has Been Issued to You",
+    document_request_fulfilled: "Your Document Request is Ready",
+    document_request_cancelled: "Your Document Request Was Cancelled",
+    document_request_created: "New Document Request — Action Required",
+    helpdesk_ticket_raised: "Helpdesk Ticket Assigned to You",
+    helpdesk_ticket_confirmation: "We've Received Your Helpdesk Ticket",
+    helpdesk_ticket_created: "New Helpdesk Ticket Raised",
+    helpdesk_status_changed: "Update on Your Helpdesk Ticket",
+    helpdesk_comment_added: "New Comment on Your Helpdesk Ticket",
+    helpdesk_sla_breach: "⚠️ SLA Breach Alert — Helpdesk Ticket",
+    exit_clearance_completed: "Exit Clearance Completed — FnF Initiation Required",
+    exit_clearance_done: "Your Exit Clearance is Complete",
+    exit_initiated: "Your Exit Request Has Been Processed",
+    exit_request_submitted: "New Exit Request — Awaiting HR Review",
+    exit_request_rejected: "Update on Your Exit Request",
+    exit_clearance_task_assigned: "Exit Clearance Task Assigned to You — Action Required",
+    exit_clearance_task_overdue: "⚠️ Exit Clearance Task Overdue — Action Required",
+    fnf_pending_approval: "Full & Final Settlement Ready for Approval",
+    fnf_approved: "Your Full & Final Settlement Has Been Approved",
+    relieving_doc_link: "Your Relieving Documents — Direct Download Link",
+    id_card_generated: "Your ID Card is Ready",
+    no_sign_in: "Action Required: No Attendance Sign-In Detected",
+    no_sign_out: "Reminder: Please Sign Out for Today",
+    overtime_alert: "Overtime Threshold Exceeded Today",
+    consecutive_absence: "Absence Alert — Consecutive Days Detected",
+    onboarding_doc_pending: "Action Required: Complete Pre-Onboarding Documents",
+  };
+  return subjects[eventType] ?? `Notification: ${eventType}`;
+}
+
+function getDefaultEmailBody(eventType: string, vars: Record<string, string>): string {
+  const greet = `<p>Dear ${vars.recipientName ?? "Team Member"},</p>`;
+  const footer = `<p style="color:#666;font-size:12px;margin-top:24px">This is an automated notification from MysticsHR — Automystics Technologies.</p>`;
+
+  const bodies: Record<string, string> = {
+    leave_submitted: `${greet}<p>A leave application has been submitted by <strong>${vars.employeeName ?? "an employee"}</strong> from <strong>${vars.fromDate ?? ""}</strong> to <strong>${vars.toDate ?? ""}</strong> (${vars.days ?? ""} day(s)) for <em>${vars.leaveType ?? "leave"}</em>.</p><p>Please log in to MysticsHR to review and approve/reject the application.</p>`,
+    leave_approved: `${greet}<p>Your leave from <strong>${vars.fromDate ?? ""}</strong> to <strong>${vars.toDate ?? ""}</strong> has been <strong style="color:green">approved</strong>.</p><p>Leave Type: ${vars.leaveType ?? ""}</p>`,
+    leave_rejected: `${greet}<p>Your leave request from <strong>${vars.fromDate ?? ""}</strong> to <strong>${vars.toDate ?? ""}</strong> has been <strong style="color:red">rejected</strong>.</p><p>Reason: ${vars.reason ?? "Not provided"}</p>`,
+    leave_dates_edited: `${greet}<p>HR has updated the dates of ${vars.employeeName ? `<strong>${vars.employeeName}</strong>'s` : "your"} approved <em>${vars.leaveType ?? "leave"}</em> application.</p><ul><li>Previous: <strong>${vars.oldFromDate ?? ""}</strong> to <strong>${vars.oldToDate ?? ""}</strong> (${vars.oldDays ?? ""} day(s))</li><li>Updated: <strong>${vars.newFromDate ?? ""}</strong> to <strong>${vars.newToDate ?? ""}</strong> (${vars.newDays ?? ""} day(s))</li></ul>${vars.editedBy ? `<p>Edited by: <strong>${vars.editedBy}</strong></p>` : ""}${vars.editReason ? `<p>Reason: ${vars.editReason}</p>` : ""}<p>${vars.employeeName ? "The employee's" : "Your"} leave balance has been adjusted accordingly. Please log in to MysticsHR if you have any questions.</p>`,
+    payslip_published: `${greet}<p>Your payslip for <strong>${vars.period ?? "the current period"}</strong> is now available.</p>${vars.payslipUrl ? `<p style="margin:18px 0"><a href="${vars.payslipUrl}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">View Your Payslip</a></p>` : `<p>Log in to your ESS portal to view and download.</p>`}`,
+    payroll_locked: `${greet}<p>The payroll for period <strong>${vars.period ?? ""}</strong> has been locked. Please complete all final processing steps.</p>`,
+    form_16_available: `${greet}<p>Your <strong>Form 16</strong> (annual TDS certificate) for the financial year <strong>${vars.financialYear ?? ""}</strong> is now available to download from MysticsHR.</p><p>Please retain a copy for your income tax filing.</p>${vars.form16Url ? `<p style="margin:18px 0"><a href="${vars.form16Url}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Download Form 16</a></p>` : `<p>Log in to MysticsHR &rarr; Payroll &rarr; Tax Declaration to download.</p>`}`,
+    payroll_run_pending_approval: `${greet}<p>A payroll run for <strong>${vars.period ?? ""}</strong> has been computed by <strong>${vars.initiatorName ?? "the payroll team"}</strong> and is ready for your review and approval.</p><ul><li>Total employees: <strong>${vars.totalEmployees ?? ""}</strong></li><li>Total gross: <strong>${vars.totalGross ?? ""}</strong></li><li>Total net pay: <strong>${vars.totalNet ?? ""}</strong></li></ul>${vars.runUrl ? `<p style="margin:18px 0"><a href="${vars.runUrl}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Review Payroll Run</a></p>` : `<p>Log in to MysticsHR to review the payroll run.</p>`}`,
+    onboarding_access: `${greet}<p>Welcome to Automystics Technologies! Your pre-onboarding portal is now active. Please complete your checklist before your joining date of <strong>${vars.joiningDate ?? ""}</strong>.</p>`,
+    document_issued: `${greet}<p>A document (<strong>${vars.documentType ?? "document"}</strong>) has been issued to you. Log in to MysticsHR to download it securely.</p>`,
+    document_request_fulfilled: `${greet}<p>Your request for a <strong>${vars.documentType ?? "document"}</strong> submitted on <strong>${vars.requestDate ?? ""}</strong> has been <strong style="color:green">fulfilled</strong> by HR.</p>${vars.hrNote ? `<p><strong>HR note:</strong> ${vars.hrNote}</p>` : ""}${vars.deepLink ? `<p style="margin:18px 0"><a href="${vars.deepLink}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">View Your Document</a></p>` : `<p>Log in to MysticsHR &rarr; Documents to download it.</p>`}`,
+    document_request_cancelled: `${greet}<p>Your request for a <strong>${vars.documentType ?? "document"}</strong> submitted on <strong>${vars.requestDate ?? ""}</strong> has been <strong style="color:#b91c1c">cancelled</strong> by HR.</p>${vars.hrNote ? `<p><strong>HR remarks:</strong> ${vars.hrNote}</p>` : `<p>Please contact HR if you have any questions or wish to resubmit the request.</p>`}${vars.deepLink ? `<p style="margin:18px 0"><a href="${vars.deepLink}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">View Request Details</a></p>` : ""}`,
+    document_request_created: `${greet}<p>A new document request has been raised by <strong>${vars.employeeName ?? "an employee"}</strong>:</p><ul><li>Document: <strong>${vars.documentType ?? ""}</strong></li>${vars.reason ? `<li>Reason: ${vars.reason}</li>` : ""}</ul><p>Please log in to MysticsHR to review and process the request.</p>`,
+    helpdesk_ticket_raised: `${greet}<p>A helpdesk ticket (<strong>#${vars.ticketId ?? ""}</strong>) has been assigned to you: <em>${vars.subject ?? ""}</em>.</p><p>SLA Deadline: <strong>${vars.slaDeadline ?? ""}</strong></p>`,
+    helpdesk_ticket_confirmation: `${greet}<p>We've received your helpdesk ticket <strong>#${vars.ticketId ?? ""}</strong> (<em>${vars.subject ?? ""}</em>) under <strong>${vars.category ?? ""}</strong> with priority <strong>${vars.priority ?? ""}</strong>.</p><p>SLA Deadline: <strong>${vars.slaDeadline ?? ""}</strong>. We'll keep you updated as it progresses.</p>`,
+    helpdesk_ticket_created: `${greet}<p>A new helpdesk ticket has been raised by <strong>${vars.raisedBy ?? "an employee"}</strong>:</p><ul><li>Ticket ID: <strong>#${vars.ticketId ?? ""}</strong></li><li>Subject: <em>${vars.subject ?? ""}</em></li><li>Category: ${vars.category ?? ""}</li><li>Priority: <strong>${vars.priority ?? ""}</strong></li><li>SLA Deadline: ${vars.slaDeadline ?? ""}</li></ul><p>Please log in to MysticsHR to review and take action.</p>`,
+    helpdesk_status_changed: `${greet}<p>Your helpdesk ticket <strong>#${vars.ticketId ?? ""}</strong> (<em>${vars.subject ?? ""}</em>) status has been updated to <strong>${vars.newStatus ?? ""}</strong>${vars.oldStatus ? ` (was: ${vars.oldStatus})` : ""}.</p><p>Log in to MysticsHR to view full details.</p>`,
+    helpdesk_comment_added: `${greet}<p>A new comment has been posted on your helpdesk ticket <strong>#${vars.ticketId ?? ""}</strong> (<em>${vars.subject ?? ""}</em>) by <strong>${vars.commentAuthor ?? "a team member"}</strong>:</p><blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${vars.commentPreview ?? ""}</blockquote><p>Log in to MysticsHR to reply or view the full conversation.</p>`,
+    helpdesk_sla_breach: `${greet}<p>⚠️ Helpdesk ticket <strong>#${vars.ticketId ?? ""}</strong> (<em>${vars.subject ?? ""}</em>) has breached its SLA deadline. Immediate action is required.</p>`,
+    exit_clearance_completed: `${greet}<p>Exit clearance for <strong>${vars.employeeName ?? "an employee"}</strong> (${vars.employeeId ?? ""}) is fully completed. Please initiate the Final & Full Settlement process.</p>`,
+    exit_clearance_done: `${greet}<p>Your exit clearance has been completed. HR will initiate your Full and Final Settlement shortly. Thank you for your contributions to Automystics Technologies.</p>`,
+    exit_initiated: `${greet}<p>Your exit request status has been updated to <strong>${vars.status ?? "Clearance Pending"}</strong>. Please complete all clearance tasks in the MysticsHR portal.</p>`,
+    exit_request_submitted: `${greet}<p>A new exit request has been raised by <strong>${vars.employeeName ?? "an employee"}</strong> (${vars.employeeId ?? ""}):</p><ul><li>Type: <strong>${vars.exitType ?? ""}</strong></li><li>Requested last working day: <strong>${vars.requestedLwd ?? ""}</strong></li>${vars.reason ? `<li>Reason: ${vars.reason}</li>` : ""}</ul><p>Please log in to MysticsHR &rarr; Exit to review and start the clearance workflow.</p>`,
+    exit_request_rejected: `${greet}<p>Your exit request submitted on <strong>${vars.submittedDate ?? ""}</strong> has been <strong style="color:red">not approved</strong> by HR.</p>${vars.reason ? `<p><strong>HR remarks:</strong> ${vars.reason}</p>` : ""}<p>Please get in touch with the HR team if you have any questions.</p>`,
+    exit_clearance_task_overdue: `${greet}<p>⚠️ The following exit clearance task assigned to you is <strong style="color:#b91c1c">past its due date</strong>:</p><ul><li>Employee: <strong>${vars.employeeName ?? ""}</strong>${vars.employeeId ? ` (${vars.employeeId})` : ""}</li><li>Task: <em>${vars.taskName ?? ""}</em></li><li>Due date: <strong>${vars.dueDate ?? ""}</strong></li><li>Days overdue: <strong>${vars.daysOverdue ?? ""}</strong></li></ul><p>Please complete this task immediately so the Full and Final Settlement is not delayed.</p>${vars.actionUrl ? `<p style="margin:18px 0"><a href="${vars.actionUrl}" style="background:#b91c1c;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Open Clearance Task</a></p>` : ""}`,
+    exit_clearance_task_assigned: `${greet}<p>You have been assigned a new exit clearance task for <strong>${vars.employeeName ?? "an employee"}</strong> (${vars.employeeId ?? ""}):</p><ul><li>Department: <strong>${vars.department ?? ""}</strong></li><li>Task: <em>${vars.taskName ?? ""}</em></li><li>Due date: <strong>${vars.dueDate ?? ""}</strong></li>${vars.taskDescription ? `<li>${vars.taskDescription}</li>` : ""}</ul><p>Please complete this task in MysticsHR before the employee's last working day so the Full and Final Settlement can proceed without delay.</p>`,
+    fnf_pending_approval: `${greet}<p>The Full and Final Settlement for <strong>${vars.employeeName ?? "an employee"}</strong> (${vars.employeeId ?? ""}) has been computed and is awaiting your review and approval.</p><ul><li>Total payable: <strong>${vars.totalPayable ?? ""}</strong></li><li>Computed by: ${vars.computedBy ?? "the payroll team"}</li></ul><p>Please log in to MysticsHR to review the figures and record your approval.</p>`,
+    fnf_approved: `${greet}<p>Your Full and Final Settlement has been <strong style="color:green">fully approved</strong>.</p>${vars.documentsIssued ? `<p>Your relieving letter and experience certificate have been issued and are available in the MysticsHR documents section.</p>` : `<p>HR will share your relieving letter and experience certificate shortly — please reach out to HR if you do not receive them.</p>`}${vars.totalPayable ? `<p>Total payable: <strong>${vars.totalPayable}</strong></p>` : ""}<p>Thank you for your contributions to Automystics Technologies. We wish you the very best in your future endeavours.</p>`,
+    relieving_doc_link: `${greet}<p>Your <strong>${vars.documentType ?? "relieving document"}</strong> has been issued. You can download it directly using the link below — no MysticsHR sign-in required.</p>${vars.downloadUrl ? `<p style="margin:18px 0"><a href="${vars.downloadUrl}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Download ${vars.documentType ?? "document"}</a></p>` : ""}<p style="color:#555">This link is valid until <strong>${vars.expiresAt ?? ""}</strong> and is for your personal use only. Please save a copy locally for your records.</p><p style="color:#555;font-size:12px">If the button does not work, copy and paste this URL into your browser:<br/><span style="word-break:break-all">${vars.downloadUrl ?? ""}</span></p>`,
+    offer_letter_issued: `${greet}<p>Congratulations! An offer letter for the position of <strong>${vars.jobTitle ?? ""}</strong> has been issued to you with offer code <strong>${vars.offerCode ?? ""}</strong>. Your proposed joining date is <strong>${vars.joiningDate ?? ""}</strong>. Please log in to MysticsHR to review and accept.</p>`,
+    id_card_generated: `${greet}<p>Your ID card is now ready. Log in to MysticsHR to download it.</p>`,
+    no_sign_in: `${greet}<p>Our system has not recorded a sign-in for you today. If you are working, please update your attendance immediately through MysticsHR or contact HR.</p>`,
+    no_sign_out: `${greet}<p>You have a sign-in record for today but no sign-out has been recorded. Please update your attendance or contact HR to avoid payroll discrepancies.</p>`,
+    overtime_alert: `${greet}<p>Your total working hours today have exceeded the overtime threshold (<strong>${vars.hours ?? "9"} hours</strong>). Please ensure this is approved by your manager.</p>`,
+    consecutive_absence: `${greet}<p>Our records indicate you have been absent for <strong>${vars.days ?? "2"}</strong> or more consecutive days. If this is due to a medical or personal reason, please apply for leave in MysticsHR or contact HR as soon as possible.</p>`,
+    onboarding_doc_pending: `${greet}<p>You have pending pre-onboarding documents that must be completed before your joining date of <strong>${vars.joiningDate ?? "your joining date"}</strong>. Please log in to the MysticsHR Pre-Onboarding portal to complete your checklist.</p>`,
+  };
+
+  return `<div style="font-family:sans-serif;max-width:600px;margin:auto">${bodies[eventType] ?? `${greet}<p>You have a new notification regarding ${eventType.replace(/_/g, " ")}.</p>`}${footer}</div>`;
+}
+
+function getDefaultWhatsAppMsg(eventType: string, vars: Record<string, string>): string {
+  const msgs: Record<string, string> = {
+    leave_submitted: `MysticsHR: Leave application by ${vars.employeeName ?? "an employee"} (${vars.fromDate ?? ""} - ${vars.toDate ?? ""}) awaits your approval.`,
+    leave_approved: `MysticsHR: Your leave (${vars.fromDate ?? ""} - ${vars.toDate ?? ""}) has been approved.`,
+    leave_rejected: `MysticsHR: Your leave request (${vars.fromDate ?? ""} - ${vars.toDate ?? ""}) was not approved.`,
+    leave_dates_edited: `MysticsHR: HR updated your approved leave dates from ${vars.oldFromDate ?? ""}–${vars.oldToDate ?? ""} to ${vars.newFromDate ?? ""}–${vars.newToDate ?? ""}.`,
+    payslip_published: `MysticsHR: Your payslip for ${vars.period ?? "this month"} is ready.${vars.payslipUrl ? ` View: ${vars.payslipUrl}` : " Log in to ESS to download."}`,
+    payroll_run_pending_approval: `MysticsHR: Payroll run for ${vars.period ?? ""} is computed and awaiting your approval. ${vars.runUrl ?? "Log in to MysticsHR to review."}`,
+    form_16_available: `MysticsHR: Your Form 16 for FY ${vars.financialYear ?? ""} is ready.${vars.form16Url ? ` Download: ${vars.form16Url}` : " Log in to MysticsHR to download."}`,
+    offer_letter_issued: `MysticsHR: Your offer letter is ready. Please check your email and respond.`,
+    document_issued: `MysticsHR: A new document (${vars.documentType ?? "document"}) has been issued to you. Log in to MysticsHR to download.`,
+    document_request_fulfilled: `MysticsHR: Your document request (${vars.documentType ?? "document"}) is ready.${vars.deepLink ? ` View: ${vars.deepLink}` : " Log in to download."}`,
+    document_request_cancelled: `MysticsHR: Your document request (${vars.documentType ?? "document"}) was cancelled by HR.${vars.hrNote ? ` Remarks: ${vars.hrNote}` : ""}`,
+    document_request_created: `MysticsHR: New document request (${vars.documentType ?? ""}) raised by ${vars.employeeName ?? "an employee"}. Please review.`,
+    helpdesk_ticket_raised: `MysticsHR: Helpdesk ticket #${vars.ticketId ?? ""} (${vars.subject ?? ""}) assigned to you. SLA: ${vars.slaDeadline ?? ""}.`,
+    helpdesk_ticket_confirmation: `MysticsHR: We received your ticket #${vars.ticketId ?? ""} (${vars.subject ?? ""}). Priority: ${vars.priority ?? ""}. SLA: ${vars.slaDeadline ?? ""}.`,
+    helpdesk_ticket_created: `MysticsHR: New helpdesk ticket #${vars.ticketId ?? ""} (${vars.subject ?? ""}) raised by ${vars.raisedBy ?? "an employee"}. Priority: ${vars.priority ?? ""}.`,
+    helpdesk_status_changed: `MysticsHR: Your ticket #${vars.ticketId ?? ""} status updated to ${vars.newStatus ?? ""}.`,
+    helpdesk_comment_added: `MysticsHR: New comment on your ticket #${vars.ticketId ?? ""} by ${vars.commentAuthor ?? "a team member"}. Log in to view.`,
+    helpdesk_sla_breach: `MysticsHR: ⚠️ Ticket #${vars.ticketId ?? ""} (${vars.subject ?? ""}) has breached SLA. Immediate action required.`,
+    exit_clearance_done: `MysticsHR: Your exit clearance is complete. HR will initiate your Full & Final Settlement shortly.`,
+    exit_clearance_completed: `MysticsHR: Exit clearance for ${vars.employeeName ?? "an employee"} is complete. Please initiate FnF.`,
+    exit_initiated: `MysticsHR: Your exit request status updated to ${vars.status ?? "Clearance Pending"}. Please complete clearance tasks.`,
+    exit_request_submitted: `MysticsHR: New exit request raised by ${vars.employeeName ?? "an employee"} (${vars.exitType ?? ""}, LWD ${vars.requestedLwd ?? ""}). Please review.`,
+    exit_request_rejected: `MysticsHR: Your exit request was not approved by HR. Please contact HR for details.`,
+    exit_clearance_task_assigned: `MysticsHR: New exit clearance task assigned: "${vars.taskName ?? ""}" for ${vars.employeeName ?? "an employee"}. Due ${vars.dueDate ?? ""}.`,
+    exit_clearance_task_overdue: `MysticsHR: ⚠️ Exit clearance task "${vars.taskName ?? ""}" for ${vars.employeeName ?? "an employee"} is ${vars.daysOverdue ?? ""} day(s) overdue (due ${vars.dueDate ?? ""}). Please act now.${vars.actionUrl ? ` ${vars.actionUrl}` : ""}`,
+    fnf_pending_approval: `MysticsHR: FnF for ${vars.employeeName ?? "an employee"} (₹${vars.totalPayable ?? ""}) is computed and awaits your approval.`,
+    fnf_approved: `MysticsHR: Your Full & Final Settlement has been approved. Relieving documents are ready in MysticsHR.`,
+    id_card_generated: `MysticsHR: Your ID card is ready for download.`,
+    no_sign_in: `MysticsHR: No sign-in detected for today. Please mark your attendance.`,
+    no_sign_out: `MysticsHR: No sign-out detected. Please update your attendance.`,
+    overtime_alert: `MysticsHR: Your working hours exceed the overtime threshold today.`,
+    consecutive_absence: `MysticsHR: ${vars.days ?? "2"}+ consecutive absences detected. Please contact HR.`,
+    onboarding_doc_pending: `MysticsHR: You have pending pre-onboarding documents. Please complete them before ${vars.joiningDate ?? "your joining date"}.`,
+  };
+  return msgs[eventType] ?? `MysticsHR notification: ${eventType.replace(/_/g, " ")}`;
+}

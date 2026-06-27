@@ -1,0 +1,738 @@
+import { useEffect, useRef, lazy, Suspense } from "react";
+import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
+import { Switch, Route, useLocation, Router as WouterRouter, Redirect, Link } from "wouter";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { ShieldAlert } from "lucide-react";
+
+import LandingPage from "@/pages/landing";
+import DashboardPage from "@/pages/dashboard";
+import EmployeesPage from "@/pages/employees/index";
+import EmployeeDetailPage from "@/pages/employees/detail";
+import NewEmployeePage from "@/pages/employees/new";
+import OrgChartPage from "@/pages/org-chart/index";
+import DepartmentsPage from "@/pages/departments";
+import DesignationsPage from "@/pages/designations";
+import UsersPage from "@/pages/users";
+import AuditLogsPage from "@/pages/audit-logs";
+import RecruitmentPage from "@/pages/recruitment/index";
+import RequisitionDetailPage from "@/pages/recruitment/requisition-detail";
+import CandidateDetailPage from "@/pages/recruitment/candidate-detail";
+import PreOnboardingPage from "@/pages/pre-onboarding/index";
+import PreOnboardingDetailPage from "@/pages/pre-onboarding/detail";
+import OnboardingPage from "@/pages/onboarding/index";
+import OnboardingDetailPage from "@/pages/onboarding/detail";
+import ShiftsPage from "@/pages/shifts/index";
+import ShiftCalendarPage from "@/pages/shifts/calendar";
+import AttendancePage from "@/pages/attendance/index";
+import AttendanceRegularizationPage from "@/pages/attendance/regularization";
+import AttendanceSummaryPage from "@/pages/attendance/summary";
+import LeavePage from "@/pages/leave/index";
+import LeaveTypesPage from "@/pages/leave/types";
+import LeaveCalendarPage from "@/pages/leave/calendar";
+import LeaveApprovalsPage from "@/pages/leave/approvals";
+import LeavePoliciesPage from "@/pages/leave/policies";
+import PermissionsPage from "@/pages/permissions/index";
+import PayrollDashboardPage from "@/pages/payroll/index";
+import SalaryStructuresPage from "@/pages/payroll/salary-structures";
+import PayrollRunDetailPage from "@/pages/payroll/runs";
+import PayslipsPage from "@/pages/payroll/payslips";
+import TaxDeclarationPage from "@/pages/payroll/tax-declaration";
+import StatutoryReportsPage from "@/pages/payroll/reports";
+import SalaryRevisionsPage from "@/pages/payroll/salary-revisions";
+import PerformancePage from "@/pages/performance/index";
+import GoalsPage from "@/pages/performance/goals";
+import AppraisalsPage from "@/pages/performance/appraisals";
+import EvaluationsPage from "@/pages/performance/evaluations";
+import CalibrationPage from "@/pages/performance/calibration";
+import CycleDetailPage from "@/pages/performance/cycle-detail";
+import PerformanceHistoryPage from "@/pages/performance/history";
+import EssPortalPage from "@/pages/ess/index";
+import HelpdeskPage from "@/pages/helpdesk/index";
+import TicketDetailPage from "@/pages/helpdesk/ticket-detail";
+import SlaReportPage from "@/pages/helpdesk/sla-report";
+import DocumentsPage from "@/pages/documents/index";
+import ExitPage from "@/pages/exit/index";
+import ExitDetailPage from "@/pages/exit/detail";
+import AnalyticsDashboard from "@/pages/analytics/index";
+import ReportsPage from "@/pages/reports/index";
+import CommunicationsPage from "@/pages/communications/index";
+import SystemConfigPage from "@/pages/system-config/index";
+import ApiKeysPage from "@/pages/settings/api-keys";
+import ApiDocsPage from "@/pages/settings/api-docs";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { useCurrentHrmsUser, type HrmsRole, hasRole } from "@/lib/useCurrentHrmsUser";
+
+const NewEmployee = NewEmployeePage;
+
+function Forbidden() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+      <ShieldAlert className="w-16 h-16 text-muted-foreground" />
+      <h1 className="text-2xl font-bold">Access Denied</h1>
+      <p className="text-muted-foreground max-w-sm">
+        You don't have permission to view this page. Contact your HR administrator if you believe this is an error.
+      </p>
+      <Link href="/dashboard" className="text-primary hover:underline text-sm">
+        Return to Dashboard
+      </Link>
+    </div>
+  );
+}
+
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+const PayrollChartHarnessLazy = lazy(() => import("./pages/__test__/payroll-chart-harness"));
+const PayrollReportsHarnessLazy = lazy(() => import("./pages/__test__/payroll-reports-harness"));
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath)
+    ? path.slice(basePath.length) || "/"
+    : path;
+}
+
+if (!clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY in .env file");
+}
+
+const clerkAppearance = {
+  options: {
+    logoPlacement: "inside" as const,
+    logoLinkUrl: basePath || "/",
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: "hsl(222, 47%, 25%)",
+    colorBackground: "hsl(210, 20%, 98%)",
+    colorInputBackground: "hsl(0, 0%, 100%)",
+    colorText: "hsl(220, 80%, 10%)",
+    colorTextSecondary: "hsl(215, 16%, 47%)",
+    colorInputText: "hsl(220, 80%, 10%)",
+    colorNeutral: "hsl(210, 20%, 85%)",
+    borderRadius: "0.5rem",
+    fontFamily: "'Inter', sans-serif",
+    fontFamilyButtons: "'Inter', sans-serif",
+  },
+  elements: {
+    rootBox: "w-full",
+    cardBox: "shadow-lg border border-[hsl(210,20%,90%)] rounded-2xl w-full overflow-hidden",
+    card: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    footer: "!shadow-none !border-0 !bg-transparent !rounded-none bg-[hsl(210,20%,94%)]",
+    headerTitle: { color: "hsl(220, 80%, 10%)" },
+    headerSubtitle: { color: "hsl(215, 16%, 47%)" },
+    socialButtonsBlockButtonText: { color: "hsl(220, 80%, 10%)" },
+    formFieldLabel: { color: "hsl(220, 80%, 10%)", fontWeight: 500 },
+    footerActionLink: { color: "hsl(222, 47%, 25%)", fontWeight: 600 },
+    footerActionText: { color: "hsl(215, 16%, 47%)" },
+    dividerText: { color: "hsl(215, 16%, 47%)" },
+    formFieldInput: "border-[hsl(210,20%,85%)] focus:ring-[hsl(222,47%,25%)]",
+    formButtonPrimary:
+      "bg-[hsl(222,47%,25%)] hover:bg-[hsl(222,47%,20%)] text-[hsl(210,20%,98%)] font-semibold shadow-sm",
+  },
+};
+
+function SignInPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-muted/30 px-4">
+      <div className="w-full max-w-md">
+        <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      </div>
+    </div>
+  );
+}
+
+function LogoutPage() {
+  const { signOut } = useClerk();
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    void signOut(() => setLocation("/"));
+  }, [signOut, setLocation]);
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-muted/30 px-4">
+      <p className="text-sm text-muted-foreground">Signing you out…</p>
+    </div>
+  );
+}
+
+function SignUpPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-muted/30 px-4">
+      <div className="w-full max-w-md">
+        <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      </div>
+    </div>
+  );
+}
+
+function HomeRedirect() {
+  return (
+    <>
+      <Show when="signed-in">
+        <Redirect to="/dashboard" />
+      </Show>
+      <Show when="signed-out">
+        <LandingPage />
+      </Show>
+    </>
+  );
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <Show when="signed-in">
+        <MainLayout>{children}</MainLayout>
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/" />
+      </Show>
+    </>
+  );
+}
+
+function RoleProtectedRoute({
+  children,
+  allowedRoles,
+}: {
+  children: React.ReactNode;
+  allowedRoles: HrmsRole[];
+}) {
+  const { role, isLoading, isNotProvisioned } = useCurrentHrmsUser();
+
+  if (isLoading) return null;
+  if (isNotProvisioned) return <>{children}</>;
+
+  if (!hasRole(role, allowedRoles)) {
+    return <Forbidden />;
+  }
+
+  return <>{children}</>;
+}
+
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const qc = useQueryClient();
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+        qc.clear();
+      }
+      prevUserIdRef.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, qc]);
+
+  return null;
+}
+
+function NotFound() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold mb-4">404</h1>
+        <p className="text-muted-foreground mb-4">Page not found</p>
+        <Link href="/">
+          <a className="text-primary hover:underline">Return Home</a>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
+
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      localization={{
+        signIn: {
+          start: {
+            title: "Welcome back to MysticsHR",
+            subtitle: "Sign in to access the cockpit",
+          },
+        },
+        signUp: {
+          start: {
+            title: "Join MysticsHR",
+            subtitle: "Set up your account access",
+          },
+        },
+      }}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
+        <Switch>
+          <Route path="/" component={HomeRedirect} />
+          {import.meta.env.DEV && (
+            <Route path="/__test/payroll-chart">
+              <Suspense fallback={null}>
+                <PayrollChartHarnessLazy />
+              </Suspense>
+            </Route>
+          )}
+          {import.meta.env.DEV && (
+            <Route path="/__test/payroll-reports">
+              <Suspense fallback={null}>
+                <PayrollReportsHarnessLazy />
+              </Suspense>
+            </Route>
+          )}
+          <Route path="/sign-in/*?" component={SignInPage} />
+          <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/logout" component={LogoutPage} />
+
+          <Route path="/dashboard">
+            <ProtectedRoute><DashboardPage /></ProtectedRoute>
+          </Route>
+
+          <Route path="/org-chart">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <OrgChartPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/employees/new">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+                <NewEmployee />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/employees/:id">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+                <EmployeeDetailPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/employees">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+                <EmployeesPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/departments">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+                <DepartmentsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/designations">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+                <DesignationsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/users">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager"]}>
+                <UsersPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/recruitment/requisitions/:id">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+                <RequisitionDetailPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/recruitment/candidates/:id">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+                <CandidateDetailPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/recruitment">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+                <RecruitmentPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/pre-onboarding/:id">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+                <PreOnboardingDetailPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/pre-onboarding">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+                <PreOnboardingPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/onboarding/:id">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+                <OnboardingDetailPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/onboarding">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+                <OnboardingPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/shifts/calendar">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+                <ShiftCalendarPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/shifts">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+                <ShiftsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/attendance/regularization">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <AttendanceRegularizationPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/attendance/summary">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+                <AttendanceSummaryPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/attendance">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <AttendancePage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/my-attendance">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <AttendancePage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/leave/types">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+                <LeaveTypesPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/leave/calendar">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <LeaveCalendarPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/leave/approvals">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+                <LeaveApprovalsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/leave/policies">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+                <LeavePoliciesPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/leave">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <LeavePage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/permissions">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <PermissionsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/payroll/salary-structures">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
+                <SalaryStructuresPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/payroll/runs/:id">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "payroll_admin"]}>
+                <PayrollRunDetailPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/payroll/payslips">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
+                <PayslipsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/payroll/tax-declaration">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
+                <TaxDeclarationPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/payroll/reports">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "payroll_admin"]}>
+                <StatutoryReportsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/payroll/salary-revisions">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
+                <SalaryRevisionsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/payroll">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
+                <PayrollDashboardPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/performance/goals">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+                <GoalsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/performance/appraisals">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+                <AppraisalsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/performance/evaluations">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+                <EvaluationsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/performance/calibration">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+                <CalibrationPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/performance/history">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+                <PerformanceHistoryPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/performance/cycles/:id">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+                <CycleDetailPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/performance">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+                <PerformancePage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/ess">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <EssPortalPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/helpdesk/sla-report">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+                <SlaReportPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/helpdesk/:id">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <TicketDetailPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/helpdesk">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <HelpdeskPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/documents">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <DocumentsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/exit/:id">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <ExitDetailPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/exit">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+                <ExitPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/analytics">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+                <AnalyticsDashboard />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/reports">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+                <ReportsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/audit-logs">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager"]}>
+                <AuditLogsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/communications">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager"]}>
+                <CommunicationsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/settings">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager"]}>
+                <SystemConfigPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/settings/api-keys">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin"]}>
+                <ApiKeysPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/settings/api-docs">
+            <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={["super_admin"]}>
+                <ApiDocsPage />
+              </RoleProtectedRoute>
+            </ProtectedRoute>
+          </Route>
+
+          <Route component={NotFound} />
+        </Switch>
+      </QueryClientProvider>
+    </ClerkProvider>
+  );
+}
+
+function App() {
+  return (
+    <WouterRouter base={basePath}>
+      <ClerkProviderWithRoutes />
+    </WouterRouter>
+  );
+}
+
+export default App;

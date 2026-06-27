@@ -1,0 +1,584 @@
+import {
+  useListAppraisalOutcomes,
+  getListAppraisalOutcomesQueryKey,
+  useListPerformanceCycles,
+  useListPerformanceGoals,
+  getListPerformanceGoalsQueryKey,
+  useListSelfAppraisals,
+  getListSelfAppraisalsQueryKey,
+  useListManagerEvaluations,
+  getListManagerEvaluationsQueryKey,
+  useGetCycleAverages,
+  getGetCycleAveragesQueryKey,
+  type PerformanceCycle,
+  type PerformanceGoal,
+  type SelfAppraisal,
+  type ManagerEvaluation,
+} from "@workspace/api-client-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
+import { AlertTriangle, History, Trophy, Target, TrendingUp, Users } from "lucide-react";
+import { useState } from "react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  type TooltipProps,
+} from "recharts";
+
+const OUTCOME_COLORS: Record<string, string> = {
+  "Outstanding": "bg-green-100 text-green-800 border-green-200",
+  "Exceeds Expectations": "bg-emerald-100 text-emerald-800 border-emerald-200",
+  "Meets Expectations": "bg-blue-100 text-blue-800 border-blue-200",
+  "Needs Improvement": "bg-amber-100 text-amber-800 border-amber-200",
+  "Unsatisfactory": "bg-red-100 text-red-800 border-red-200",
+};
+
+function formatScore(score: string | null | undefined): string {
+  if (score === null || score === undefined) return "—";
+  const n = Number(score);
+  return Number.isFinite(n) ? n.toFixed(2) : String(score);
+}
+
+type TrendPoint = {
+  cycleId: number;
+  title: string;
+  startDate: string | null;
+  endDate: string | null;
+  outcomeLabel: string | null;
+  finalScore: number;
+  // Post-calibration score; only present for cycles where HR has actually
+  // recorded a normalized value, so the second trend line skips cycles
+  // without it (rather than dropping to zero).
+  normalizedScore: number | null;
+  peerAverage: number | null;
+  peerSampleSize: number | null;
+};
+
+// A cycle is flagged as an outlier when the employee's final score differs
+// from the peer average by more than this many points (on the 1–5 scale used
+// by performance outcomes). Centralised so the UI label, dot rendering, and
+// summary list all stay in sync.
+const OUTLIER_THRESHOLD = 1.0;
+
+function PerformanceTrendTooltip({
+  active, payload, comparisonLabel,
+}: TooltipProps<number, string> & { comparisonLabel: string }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0]?.payload as TrendPoint | undefined;
+  if (!p) return null;
+  return (
+    <div className="rounded-md border bg-background shadow-sm px-3 py-2 text-xs space-y-0.5">
+      <p className="font-medium text-sm">{p.title}</p>
+      <p className="text-muted-foreground">
+        {p.startDate ?? "—"} – {p.endDate ?? "—"}
+      </p>
+      <p>
+        Final score: <span className="font-semibold">{p.finalScore.toFixed(2)}</span>
+      </p>
+      {p.normalizedScore !== null && (
+        <p>
+          Normalized: <span className="font-semibold">{p.normalizedScore.toFixed(2)}</span>
+        </p>
+      )}
+      {p.peerAverage !== null && (
+        <p>
+          {comparisonLabel}:{" "}
+          <span className="font-semibold">{p.peerAverage.toFixed(2)}</span>
+          <span className="text-muted-foreground"> (n={p.peerSampleSize})</span>
+        </p>
+      )}
+      {p.peerAverage !== null && (() => {
+        const diff = p.finalScore - p.peerAverage;
+        const isOutlier = Math.abs(diff) > OUTLIER_THRESHOLD;
+        if (!isOutlier) return null;
+        const sign = diff >= 0 ? "+" : "−";
+        const cls = diff >= 0 ? "text-emerald-600" : "text-red-600";
+        return (
+          <p className={`flex items-center gap-1 ${cls}`}>
+            <AlertTriangle className="w-3 h-3" />
+            <span className="font-medium">{sign}{Math.abs(diff).toFixed(1)} vs {comparisonLabel}</span>
+          </p>
+        );
+      })()}
+      {p.outcomeLabel && (
+        <p className="text-muted-foreground">Outcome: {p.outcomeLabel}</p>
+      )}
+    </div>
+  );
+}
+
+function PerformanceTrendChart({
+  data, showComparison, comparisonLabel,
+}: { data: TrendPoint[]; showComparison: boolean; comparisonLabel: string }) {
+  if (data.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" /> Year-over-Year Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-xs text-muted-foreground">
+          No final scores yet — the trend will appear here once at least one cycle is finalized.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const hasAnyNormalized = data.some(d => d.normalizedScore !== null);
+  const scores = data.flatMap(d => {
+    const xs: number[] = [d.finalScore];
+    if (d.normalizedScore !== null) xs.push(d.normalizedScore);
+    if (showComparison && d.peerAverage !== null) xs.push(d.peerAverage);
+    return xs;
+  });
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const yMin = Math.max(0, Math.floor((min - 0.5) * 10) / 10);
+  const yMax = Math.ceil((max + 0.5) * 10) / 10;
+  const hasAnyComparison = showComparison && data.some(d => d.peerAverage !== null);
+  // Show the legend whenever a second series is on the chart so employees can
+  // tell the lines apart (Final / Normalized / peer comparison).
+  const showLegend = hasAnyComparison || hasAnyNormalized;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-primary" /> Year-over-Year Trend
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Final score across {data.length} closed {data.length === 1 ? "cycle" : "cycles"}, oldest to newest.
+          {showComparison && !hasAnyComparison && (
+            <> · Not enough peer data yet to draw a comparison line.</>
+          )}
+        </p>
+      </CardHeader>
+      <CardContent className="pt-2">
+        <div className="h-56 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
+              <XAxis
+                dataKey="title"
+                tick={{ fontSize: 11 }}
+                interval={0}
+                angle={data.length > 4 ? -20 : 0}
+                textAnchor={data.length > 4 ? "end" : "middle"}
+                height={data.length > 4 ? 50 : 30}
+              />
+              <YAxis
+                domain={[yMin, yMax]}
+                tick={{ fontSize: 11 }}
+                width={40}
+                allowDecimals
+              />
+              <Tooltip content={<PerformanceTrendTooltip comparisonLabel={comparisonLabel} />} />
+              {showLegend && <Legend wrapperStyle={{ fontSize: 11 }} />}
+              <Line
+                type="monotone"
+                name="Final"
+                dataKey="finalScore"
+                stroke="hsl(var(--primary))"
+                strokeWidth={2}
+                // Custom dot so outlier cycles (|finalScore - peerAverage| >=
+                // OUTLIER_THRESHOLD when comparison is on) render as a larger
+                // amber-ringed marker. Non-outlier and no-comparison cycles
+                // keep the standard dot.
+                dot={(dotProps) => {
+                  const { cx, cy, payload, index } = dotProps as { cx?: number; cy?: number; payload?: TrendPoint; index?: number };
+                  if (cx == null || cy == null || !payload) {
+                    return <g key={`final-empty-${index ?? 0}`} />;
+                  }
+                  const peer = payload.peerAverage;
+                  const isOutlier = showComparison && peer !== null && Math.abs(payload.finalScore - peer) > OUTLIER_THRESHOLD;
+                  if (!isOutlier) {
+                    return <circle key={`final-${payload.cycleId}`} cx={cx} cy={cy} r={4} fill="hsl(var(--primary))" />;
+                  }
+                  return (
+                    <g key={`final-out-${payload.cycleId}`}>
+                      <circle cx={cx} cy={cy} r={7} fill="none" stroke="#f59e0b" strokeWidth={2} />
+                      <circle cx={cx} cy={cy} r={4} fill="#f59e0b" />
+                    </g>
+                  );
+                }}
+                activeDot={{ r: 6 }}
+                isAnimationActive={false}
+              />
+              {hasAnyNormalized && (
+                <Line
+                  type="monotone"
+                  name="Normalized"
+                  dataKey="normalizedScore"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  strokeDasharray="2 3"
+                  dot={{ r: 3, fill: "#10b981" }}
+                  activeDot={{ r: 5 }}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              )}
+              {hasAnyComparison && (
+                <Line
+                  type="monotone"
+                  name={comparisonLabel}
+                  dataKey="peerAverage"
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  dot={{ r: 3, fill: "hsl(var(--muted-foreground))" }}
+                  activeDot={{ r: 5 }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function CycleHistoryCard({
+  cycle,
+  outcome,
+  goals,
+  selfAppraisals,
+  managerEvaluations,
+}: {
+  cycle: PerformanceCycle;
+  outcome?: { finalScore?: string | null; outcomLabel?: string | null; normalizedScore?: string | null; calibrationNote?: string | null; calculatedAt?: string };
+  goals: PerformanceGoal[];
+  selfAppraisals: SelfAppraisal[];
+  managerEvaluations: ManagerEvaluation[];
+}) {
+  const selfByGoal = new Map(selfAppraisals.map(s => [s.goalId, s]));
+  const mgrByGoal = new Map(managerEvaluations.map(m => [m.goalId, m]));
+
+  const label = outcome?.outcomLabel ?? null;
+  const labelColor = label && OUTCOME_COLORS[label] ? OUTCOME_COLORS[label] : "bg-gray-100 text-gray-700 border-gray-200";
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle className="text-base">{cycle.title}</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {cycle.cycleType} · {cycle.startDate} – {cycle.endDate}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {label && (
+              <Badge variant="outline" className={labelColor}>
+                <Trophy className="w-3 h-3 mr-1" /> {label}
+              </Badge>
+            )}
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              Final: {formatScore(outcome?.finalScore)}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-4">
+        {outcome?.normalizedScore !== undefined && outcome?.normalizedScore !== null && (
+          <div className="text-xs text-muted-foreground">
+            Normalized score: <span className="font-medium text-foreground">{formatScore(outcome.normalizedScore)}</span>
+            {outcome?.calculatedAt && (
+              <> · Finalized {new Date(outcome.calculatedAt).toLocaleDateString()}</>
+            )}
+          </div>
+        )}
+        {outcome?.calibrationNote && (
+          <div className="text-xs bg-muted/50 rounded p-2 border">
+            <span className="font-medium">Calibration note: </span>{outcome.calibrationNote}
+          </div>
+        )}
+
+        {goals.length > 0 ? (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Target className="w-3.5 h-3.5 text-muted-foreground" />
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Goals & Ratings
+              </h4>
+            </div>
+            <div className="border rounded-md divide-y">
+              <div className="grid grid-cols-12 gap-2 px-3 py-1.5 text-[11px] uppercase tracking-wide text-muted-foreground bg-muted/30">
+                <div className="col-span-6">Goal</div>
+                <div className="col-span-2 text-right">Weight</div>
+                <div className="col-span-2 text-right">Self</div>
+                <div className="col-span-2 text-right">Manager</div>
+              </div>
+              {goals.map(goal => {
+                const self = selfByGoal.get(goal.id);
+                const mgr = mgrByGoal.get(goal.id);
+                return (
+                  <div key={goal.id} className="grid grid-cols-12 gap-2 px-3 py-2 text-sm items-center">
+                    <div className="col-span-6">
+                      <p className="font-medium truncate">{goal.title}</p>
+                      {goal.description && (
+                        <p className="text-[11px] text-muted-foreground line-clamp-1">{goal.description}</p>
+                      )}
+                    </div>
+                    <div className="col-span-2 text-right text-muted-foreground">{goal.weightage}%</div>
+                    <div className="col-span-2 text-right">{self?.rating ?? "—"}</div>
+                    <div className="col-span-2 text-right font-medium">{mgr?.rating ?? "—"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No goals recorded for this cycle.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Shared performance-history view for a specific employee. Renders the YoY
+ * trend chart on top and per-cycle cards below. Backend authorization
+ * (HR sees everyone, HOD sees direct reports, employees see only themselves)
+ * is enforced by the /performance/* APIs — this component just passes the
+ * employeeId through and renders empty/error states accordingly.
+ */
+export default function PerformanceHistoryView({
+  employeeId,
+  enabled = true,
+}: {
+  employeeId: number | undefined;
+  enabled?: boolean;
+}) {
+  const { role } = useCurrentHrmsUser();
+  const isHrRole = role === "super_admin" || role === "hr_manager" || role === "hr_executive";
+  const isHodRole = role === "hod";
+  const canCompare = isHrRole || isHodRole;
+
+  // HOD can only see department averages; HR can choose any scope. The
+  // designation scope aggregates all employees sharing the target's job title
+  // regardless of department, useful for like-for-like calibration.
+  const [showComparison, setShowComparison] = useState(false);
+  const [scope, setScope] = useState<"department" | "designation" | "company">("department");
+  const effectiveScope: "department" | "designation" | "company" = isHodRole ? "department" : scope;
+
+  const { data: cycles = [], isLoading: cyclesLoading } = useListPerformanceCycles({ status: "Closed" });
+  const params = employeeId ? { employeeId } : undefined;
+  const queryEnabled = enabled && !!employeeId;
+
+  const averageParams = employeeId ? { employeeId, scope: effectiveScope } : { employeeId: 0, scope: effectiveScope };
+  const { data: cycleAverages = [] } = useGetCycleAverages(averageParams, {
+    query: {
+      enabled: queryEnabled && canCompare && showComparison,
+      queryKey: getGetCycleAveragesQueryKey(averageParams),
+    },
+  });
+
+  const { data: outcomes = [], isLoading: outcomesLoading, error: outcomesError } = useListAppraisalOutcomes(
+    params,
+    { query: { enabled: queryEnabled, queryKey: getListAppraisalOutcomesQueryKey(params) } },
+  );
+  const { data: goals = [], isLoading: goalsLoading, error: goalsError } = useListPerformanceGoals(
+    params,
+    { query: { enabled: queryEnabled, queryKey: getListPerformanceGoalsQueryKey(params) } },
+  );
+  const { data: selfAppraisals = [], error: selfError } = useListSelfAppraisals(
+    params,
+    { query: { enabled: queryEnabled, queryKey: getListSelfAppraisalsQueryKey(params) } },
+  );
+  const { data: managerEvaluations = [], error: managerError } = useListManagerEvaluations(
+    params,
+    { query: { enabled: queryEnabled, queryKey: getListManagerEvaluationsQueryKey(params) } },
+  );
+
+  const loading = queryEnabled && (cyclesLoading || outcomesLoading || goalsLoading);
+  const subqueryError = outcomesError || goalsError || selfError || managerError;
+
+  const cycleIdsWithData = new Set<number>();
+  goals.forEach(g => cycleIdsWithData.add(g.cycleId));
+  outcomes.forEach(o => cycleIdsWithData.add(o.cycleId));
+
+  const closedCycles = cycles
+    .filter(c => cycleIdsWithData.has(c.id))
+    .sort((a, b) => (b.endDate ?? "").localeCompare(a.endDate ?? ""));
+
+  const outcomeByCycle = new Map(outcomes.map(o => [o.cycleId, o]));
+  const averageByCycle = new Map(cycleAverages.map(a => [a.cycleId, a]));
+
+  const trendData = closedCycles
+    .slice()
+    .sort((a, b) => (a.endDate ?? "").localeCompare(b.endDate ?? ""))
+    .map(c => {
+      const o = outcomeByCycle.get(c.id);
+      const score = o?.finalScore != null ? Number(o.finalScore) : NaN;
+      const normalized = o?.normalizedScore != null ? Number(o.normalizedScore) : NaN;
+      const avg = averageByCycle.get(c.id);
+      return {
+        cycleId: c.id,
+        title: c.title,
+        startDate: c.startDate,
+        endDate: c.endDate,
+        outcomeLabel: o?.outcomLabel ?? null,
+        finalScore: Number.isFinite(score) ? score : null,
+        normalizedScore: Number.isFinite(normalized) ? normalized : null,
+        peerAverage: avg ? avg.averageFinalScore : null,
+        peerSampleSize: avg ? avg.sampleSize : null,
+      };
+    })
+    .filter(d => d.finalScore !== null) as TrendPoint[];
+
+  const comparisonLabel = effectiveScope === "company"
+    ? "Company average"
+    : effectiveScope === "designation"
+      ? "Designation average"
+      : "Department average";
+
+  if (!employeeId) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          <History className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>No employee record linked.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (loading) {
+    return <Card><CardContent className="py-12 text-center text-muted-foreground">Loading history…</CardContent></Card>;
+  }
+  if (subqueryError) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          <p className="text-red-600 font-medium">Couldn't load performance history.</p>
+          <p className="text-xs mt-1">Please refresh the page or contact HR if the problem persists.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (closedCycles.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          <History className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>No completed appraisal cycles yet.</p>
+          <p className="text-xs mt-1">Past performance outcomes will appear here once a cycle is closed.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {canCompare && trendData.length > 0 && (
+        <Card>
+          <CardContent className="py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <Label htmlFor="compare-peers" className="text-sm font-medium cursor-pointer">
+                Compare with peer averages
+              </Label>
+              <Switch
+                id="compare-peers"
+                checked={showComparison}
+                onCheckedChange={setShowComparison}
+              />
+            </div>
+            {showComparison && isHrRole && (
+              <ToggleGroup
+                type="single"
+                size="sm"
+                value={scope}
+                onValueChange={(v) => {
+                  if (v === "department" || v === "designation" || v === "company") setScope(v);
+                }}
+                className="border rounded-md"
+              >
+                <ToggleGroupItem value="department" className="text-xs px-3">Department</ToggleGroupItem>
+                <ToggleGroupItem value="designation" className="text-xs px-3">Designation</ToggleGroupItem>
+                <ToggleGroupItem value="company" className="text-xs px-3">Company</ToggleGroupItem>
+              </ToggleGroup>
+            )}
+            {showComparison && (
+              <p className="text-xs text-muted-foreground">
+                Aggregated peer scores; the employee's own score is excluded and cycles with fewer than two peers are hidden.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      <PerformanceTrendChart
+        data={trendData}
+        showComparison={canCompare && showComparison}
+        comparisonLabel={comparisonLabel}
+      />
+      {canCompare && showComparison && (() => {
+        // Build the outlier list from the same trendData the chart uses so
+        // the summary card and the amber dots can never disagree.
+        const outliers = trendData
+          .filter(d => d.peerAverage !== null && Math.abs(d.finalScore - d.peerAverage) > OUTLIER_THRESHOLD)
+          .map(d => ({ ...d, diff: d.finalScore - (d.peerAverage as number) }))
+          .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+        if (outliers.length === 0) return null;
+        return (
+          <Card className="border-amber-200 bg-amber-50/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2 text-amber-900">
+                <AlertTriangle className="w-4 h-4" /> Outlier cycles
+                <span className="text-xs font-normal text-amber-800/80">
+                  Diverge from {comparisonLabel.toLowerCase()} by more than {OUTLIER_THRESHOLD.toFixed(1)}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ul className="text-xs space-y-1">
+                {outliers.map(o => {
+                  const sign = o.diff >= 0 ? "+" : "−";
+                  const cls = o.diff >= 0 ? "text-emerald-700" : "text-red-700";
+                  return (
+                    <li key={o.cycleId} className="flex items-center justify-between gap-3">
+                      <span className="font-medium truncate">{o.title}</span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="text-muted-foreground">
+                          You {o.finalScore.toFixed(2)} · peers {(o.peerAverage as number).toFixed(2)} (n={o.peerSampleSize})
+                        </span>
+                        <span className={`font-semibold ${cls}`}>{sign}{Math.abs(o.diff).toFixed(2)}</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        );
+      })()}
+      {closedCycles.map(cycle => {
+        const cycleGoals = goals.filter(g => g.cycleId === cycle.id);
+        const cycleGoalIds = new Set(cycleGoals.map(g => g.id));
+        return (
+          <CycleHistoryCard
+            key={cycle.id}
+            cycle={cycle}
+            outcome={outcomeByCycle.get(cycle.id)}
+            goals={cycleGoals}
+            selfAppraisals={selfAppraisals.filter(s => cycleGoalIds.has(s.goalId))}
+            managerEvaluations={managerEvaluations.filter(m => cycleGoalIds.has(m.goalId))}
+          />
+        );
+      })}
+    </div>
+  );
+}
