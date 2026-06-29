@@ -1,2 +1,3 @@
 - [RBAC & nav filtering](rbac-nav-filtering.md) — Sidebar+CommandPalette both use filterNavByPermissions; PermissionProtectedRoute added to key routes.
 - [Dashboard role-split](dashboard-role-split.md) — Dashboard has 4 distinct role views; KPI/chart APIs gated by needsKpis flag so employees never fire them.
+- [Resend email domain limitation](resend-domain.md) — free tier only sends to account owner; must verify domain at resend.com/domains to reach real users.
