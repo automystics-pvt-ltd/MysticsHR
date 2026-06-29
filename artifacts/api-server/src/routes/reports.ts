@@ -89,6 +89,7 @@ router.get("/analytics/dashboard", requireHrmsUser, requireRole(...MANAGER_ROLES
       .from(attendanceRecordsTable)
       .where(and(
         eq(attendanceRecordsTable.attendanceDate, todayStr),
+        eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId),
         or(
           eq(attendanceRecordsTable.status, "Present"),
           eq(attendanceRecordsTable.status, "Half-Day"),
@@ -105,7 +106,10 @@ router.get("/analytics/dashboard", requireHrmsUser, requireRole(...MANAGER_ROLES
       headcount: sql<number>`count(${employeesTable.id})::int`,
     }).from(employeesTable)
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
-      .where(eq(employeesTable.isActive, true))
+      .where(and(
+        eq(employeesTable.isActive, true),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .groupBy(departmentsTable.name)
       .orderBy(desc(sql<number>`count(${employeesTable.id})`));
 
@@ -121,6 +125,7 @@ router.get("/analytics/dashboard", requireHrmsUser, requireRole(...MANAGER_ROLES
         .where(and(
           eq(employeesTable.isActive, true),
           lte(employeesTable.dateOfJoining, monthEnd.toISOString().split("T")[0]),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
         ));
 
       const [joiners] = await db.select({ count: sql<number>`count(*)::int` })
@@ -128,6 +133,7 @@ router.get("/analytics/dashboard", requireHrmsUser, requireRole(...MANAGER_ROLES
         .where(and(
           gte(employeesTable.dateOfJoining, d.toISOString().split("T")[0]),
           lte(employeesTable.dateOfJoining, monthEnd.toISOString().split("T")[0]),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
         ));
 
       const [leavers] = await db.select({ count: sql<number>`count(*)::int` })
@@ -136,6 +142,7 @@ router.get("/analytics/dashboard", requireHrmsUser, requireRole(...MANAGER_ROLES
           eq(exitRequestsTable.status, "Separated"),
           gte(exitRequestsTable.separatedAt, d),
           lte(exitRequestsTable.separatedAt, monthEnd),
+          eq(exitRequestsTable.tenantId, req.hrmsUser!.tenantId)
         ));
 
       headcountTrend.push({
@@ -188,7 +195,10 @@ router.get("/reports/employee-directory", requireHrmsUser, requireRole(...MANAGE
     }).from(employeesTable)
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(
+        conds.length ? and(...conds) : sql`TRUE`,
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(employeesTable.firstName);
 
     const data = rows.map(r => ({
@@ -232,7 +242,11 @@ router.get("/reports/attendance-summary", requireHrmsUser, requireRole(...MANAGE
       .leftJoin(employeesTable, eq(attendanceRecordsTable.employeeId, employeesTable.id))
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(
+        conds.length ? and(...conds) : sql`TRUE`,
+        eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(desc(attendanceRecordsTable.attendanceDate));
 
     const data = rows.map(r => ({
@@ -279,7 +293,11 @@ router.get("/reports/leave-utilization", requireHrmsUser, requireRole(...MANAGER
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
       .leftJoin(leaveTypesTable, eq(leaveApplicationsTable.leaveTypeId, leaveTypesTable.id))
-      .where(and(...conds))
+      .where(and(
+        ...conds,
+        eq(leaveApplicationsTable.tenantId, req.hrmsUser!.tenantId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(desc(leaveApplicationsTable.fromDate));
 
     const data = rows.map(r => ({
@@ -301,7 +319,10 @@ router.get("/reports/payroll-register", requireHrmsUser, requireRole(...HR_ROLES
     if (year) runConds.push(eq(payrollRunsTable.periodYear, Number(year)));
 
     const runs = await db.select().from(payrollRunsTable)
-      .where(runConds.length ? and(...runConds) : undefined)
+      .where(and(
+        runConds.length ? and(...runConds) : sql`TRUE`,
+        eq(payrollRunsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(desc(payrollRunsTable.periodYear), desc(payrollRunsTable.periodMonth));
 
     if (runs.length === 0) { res.json({ data: [], total: 0 }); return; }
@@ -331,7 +352,11 @@ router.get("/reports/payroll-register", requireHrmsUser, requireRole(...HR_ROLES
       .leftJoin(employeesTable, eq(payrollRecordsTable.employeeId, employeesTable.id))
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
-      .where(and(...recConds))
+      .where(and(
+        ...recConds,
+        eq(payrollRecordsTable.tenantId, req.hrmsUser!.tenantId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(employeesTable.firstName);
 
     const data = rows.map(r => ({
@@ -363,7 +388,10 @@ router.get("/reports/headcount", requireHrmsUser, requireRole(...MANAGER_ROLES),
       count: sql<number>`count(${employeesTable.id})::int`,
     }).from(employeesTable)
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
-      .where(and(...conds))
+      .where(and(
+        ...conds,
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .groupBy(departmentsTable.name, employeesTable.employmentType, employeesTable.location);
 
     const data = byDept.map(r => ({
@@ -410,7 +438,11 @@ router.get("/reports/attrition", requireHrmsUser, requireRole(...MANAGER_ROLES),
       .leftJoin(employeesTable, eq(exitRequestsTable.employeeId, employeesTable.id))
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
-      .where(and(...conds))
+      .where(and(
+        ...conds,
+        eq(exitRequestsTable.tenantId, req.hrmsUser!.tenantId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(desc(exitRequestsTable.separatedAt));
 
     const data = rows.map(r => ({
@@ -449,6 +481,8 @@ router.get("/reports/performance-summary", requireHrmsUser, requireRole(...MANAG
       .where(and(
         ...conds,
         ...(departmentId ? [eq(employeesTable.departmentId, Number(departmentId))] : []),
+        eq(appraisalOutcomesTable.tenantId, req.hrmsUser!.tenantId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
       ))
       .orderBy(desc(appraisalOutcomesTable.finalScore));
 
@@ -482,7 +516,10 @@ router.get("/reports/recruitment-pipeline", requireHrmsUser, requireRole(...MANA
     }).from(jobRequisitionsTable)
       .leftJoin(departmentsTable, eq(jobRequisitionsTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(jobRequisitionsTable.designationId, designationsTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(
+        conds.length ? and(...conds) : sql`TRUE`,
+        eq(jobRequisitionsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(desc(jobRequisitionsTable.createdAt));
 
     const data = reqs;

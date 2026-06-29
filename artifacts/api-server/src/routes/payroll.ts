@@ -172,7 +172,7 @@ router.get("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_READ
         employeeCode: employeesTable.employeeId,
       })
       .from(salaryStructuresTable)
-      .leftJoin(employeesTable, eq(salaryStructuresTable.employeeId, employeesTable.id))
+      .leftJoin(employeesTable, and(eq(salaryStructuresTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, tenantId)))
       .where(and(...conds))
       .orderBy(desc(salaryStructuresTable.createdAt));
     res.json(structures);
@@ -343,7 +343,7 @@ router.get("/payroll/loans", requireHrmsUser, requireRole(...HR_ROLES), async (r
       employeeName: sql<string>`${employeesTable.firstName} || ' ' || ${employeesTable.lastName}`,
       employeeCode: employeesTable.employeeId,
     }).from(loanRepaymentsTable)
-      .leftJoin(employeesTable, eq(loanRepaymentsTable.employeeId, employeesTable.id))
+      .leftJoin(employeesTable, and(eq(loanRepaymentsTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, tenantId)))
       .where(and(...conds))
       .orderBy(desc(loanRepaymentsTable.createdAt));
     res.json(loans);
@@ -395,7 +395,7 @@ router.get("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROLE
     // Employees and HODs can only see their own tax declarations
     if (u.role === "employee" || u.role === "hod") {
       const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
+        .leftJoin(hrmsUsersTable, and(eq(hrmsUsersTable.employeeId, employeesTable.id), eq(hrmsUsersTable.tenantId, tenantId)))
         .where(and(eq(hrmsUsersTable.id, u.id), eq(employeesTable.tenantId, tenantId)));
       if (!emp) { res.status(403).json({ error: "No employee record found for current user." }); return; }
       conds.push(eq(taxRegimeDeclarationsTable.employeeId, emp.id));
@@ -415,7 +415,7 @@ router.get("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROLE
       createdAt: taxRegimeDeclarationsTable.createdAt,
       employeeName: sql<string>`${employeesTable.firstName} || ' ' || ${employeesTable.lastName}`,
     }).from(taxRegimeDeclarationsTable)
-      .leftJoin(employeesTable, eq(taxRegimeDeclarationsTable.employeeId, employeesTable.id))
+      .leftJoin(employeesTable, and(eq(taxRegimeDeclarationsTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, tenantId)))
       .where(and(...conds))
       .orderBy(desc(taxRegimeDeclarationsTable.createdAt));
     res.json(declarations);
@@ -437,7 +437,7 @@ router.post("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROL
     if ((selfOnlyRoles as readonly string[]).includes(u.role)) {
       // Employee and HOD can only declare for themselves — derive from auth, ignore body value
       const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
+        .leftJoin(hrmsUsersTable, and(eq(hrmsUsersTable.employeeId, employeesTable.id), eq(hrmsUsersTable.tenantId, tenantId)))
         .where(and(eq(hrmsUsersTable.id, u.id), eq(employeesTable.tenantId, tenantId)));
       if (!emp) { res.status(403).json({ error: "No employee record found for current user." }); return; }
       resolvedEmployeeId = emp.id;
@@ -505,16 +505,16 @@ router.put("/payroll/settings/:key", requireHrmsUser, requireRole(...PAYROLL_ADM
     const { value, description } = req.body as { value: string; description?: string };
     if (!value) { res.status(400).json({ error: "value is required." }); return; }
     const u = req.hrmsUser!;
-    const existing = await db.select().from(payrollSettingsTable).where(and(eq(payrollSettingsTable.settingKey, key), eq(payrollSettingsTable.tenantId, tenantId)));
+    const existing = await db.select().from(payrollSettingsTable).where(and(eq(payrollSettingsTable.settingKey, key as any), eq(payrollSettingsTable.tenantId, tenantId)));
     if (existing.length) {
       const [updated] = await db.update(payrollSettingsTable)
-        .set({ settingValue: value, description: description ?? existing[0].description, updatedById: u.id, updatedAt: new Date() })
-        .where(and(eq(payrollSettingsTable.settingKey, key), eq(payrollSettingsTable.tenantId, tenantId)))
+        .set({ settingValue: value, description: description ?? existing[0].description, updatedById: u.id })
+        .where(and(eq(payrollSettingsTable.settingKey, key as any), eq(payrollSettingsTable.tenantId, tenantId)))
         .returning();
       res.json(updated);
     } else {
       const [created] = await db.insert(payrollSettingsTable)
-        .values({ tenantId, settingKey: key, settingValue: value, description, updatedById: u.id })
+        .values({ tenantId, settingKey: key as any, settingValue: value, description, updatedById: u.id })
         .returning();
       res.status(201).json(created);
     }
@@ -969,6 +969,7 @@ router.post("/payroll/runs/:id/compute", requireHrmsUser, requireRole(...PAYROLL
       totalNet += netPay;
 
       const record = {
+        tenantId: req.hrmsUser!.tenantId,
         payrollRunId: runId,
         employeeId: emp.id,
         salaryStructureId: structure.id,
@@ -1060,20 +1061,20 @@ router.post("/payroll/runs/:id/compute", requireHrmsUser, requireRole(...PAYROLL
 router.post("/payroll/runs/:id/approve", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const runId = Number(req.params.id);
-    const [run] = await db.select().from(payrollRunsTable).where(eq(payrollRunsTable.id, runId));
+    const [run] = await db.select().from(payrollRunsTable).where(and(eq(payrollRunsTable.id, runId), eq(payrollRunsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!run) { res.status(404).json({ error: "Not found" }); return; }
     if (run.status !== "Computed") { res.status(422).json({ error: "Payroll must be in Computed status to approve." }); return; }
 
     await db.update(payrollRunsTable).set({ status: "Approved", approvedById: req.hrmsUser!.id, approvedAt: new Date(), updatedAt: new Date() })
-      .where(eq(payrollRunsTable.id, runId));
+      .where(and(eq(payrollRunsTable.id, runId), eq(payrollRunsTable.tenantId, req.hrmsUser!.tenantId)));
 
-    await db.update(payrollRecordsTable).set({ status: "Approved", updatedAt: new Date() }).where(eq(payrollRecordsTable.payrollRunId, runId));
+    await db.update(payrollRecordsTable).set({ status: "Approved", updatedAt: new Date() }).where(and(eq(payrollRecordsTable.payrollRunId, runId), eq(payrollRecordsTable.tenantId, req.hrmsUser!.tenantId)));
 
-    const records = await db.select().from(payrollRecordsTable).where(eq(payrollRecordsTable.payrollRunId, runId));
+    const records = await db.select().from(payrollRecordsTable).where(and(eq(payrollRecordsTable.payrollRunId, runId), eq(payrollRecordsTable.tenantId, req.hrmsUser!.tenantId)));
     for (const record of records) {
-      const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.id, record.employeeId));
-      const [dept] = emp?.departmentId ? await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, emp.departmentId)) : [null];
-      const [desig] = await db.select({ name: designationsTable.title }).from(designationsTable).where(eq(designationsTable.id, emp?.designationId ?? 0));
+      const [emp] = await db.select().from(employeesTable).where(and(eq(employeesTable.id, record.employeeId), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)));
+      const [dept] = emp?.departmentId ? await db.select({ name: departmentsTable.name }).from(departmentsTable).where(and(eq(departmentsTable.id, emp.departmentId), eq(departmentsTable.tenantId, req.hrmsUser!.tenantId))) : [null];
+      const [desig] = await db.select({ name: designationsTable.title }).from(designationsTable).where(and(eq(designationsTable.id, emp?.designationId ?? 0), eq(designationsTable.tenantId, req.hrmsUser!.tenantId)));
 
       const payslipData = {
         employee: { name: `${emp?.firstName ?? ""} ${emp?.lastName ?? ""}`, code: emp?.employeeId, department: dept?.name ?? "", designation: desig?.name ?? "" },
@@ -1099,9 +1100,9 @@ router.post("/payroll/runs/:id/approve", requireHrmsUser, requireRole(...PAYROLL
       const monthName = new Date(run.periodYear, run.periodMonth - 1).toLocaleString("en-IN", { month: "long" });
       const html = generatePayslipHtml(payslipData, monthName, run.periodYear);
 
-      const [existingSlip] = await db.select().from(payslipsTable).where(eq(payslipsTable.payrollRecordId, record.id));
+    const [existingSlip] = await db.select().from(payslipsTable).where(and(eq(payslipsTable.payrollRecordId, record.id), eq(payslipsTable.tenantId, run.tenantId)));
       if (existingSlip) {
-        await db.update(payslipsTable).set({ payslipData, htmlContent: html, generatedAt: new Date() }).where(eq(payslipsTable.id, existingSlip.id));
+        await db.update(payslipsTable).set({ payslipData, htmlContent: html, generatedAt: new Date() }).where(and(eq(payslipsTable.id, existingSlip.id), eq(payslipsTable.tenantId, run.tenantId)));
       } else {
         await db.insert(payslipsTable).values({
           tenantId: run.tenantId,
@@ -1144,26 +1145,26 @@ router.post("/payroll/runs/:id/approve", requireHrmsUser, requireRole(...PAYROLL
 router.post("/payroll/runs/:id/finalize", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const runId = Number(req.params.id);
-    const [run] = await db.select().from(payrollRunsTable).where(eq(payrollRunsTable.id, runId));
+    const [run] = await db.select().from(payrollRunsTable).where(and(eq(payrollRunsTable.id, runId), eq(payrollRunsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!run) { res.status(404).json({ error: "Not found" }); return; }
     if (run.status !== "Approved") { res.status(422).json({ error: "Payroll must be Approved to finalize." }); return; }
-    await db.update(payrollRunsTable).set({ status: "Locked", updatedAt: new Date() }).where(eq(payrollRunsTable.id, runId));
-    await db.update(payrollRecordsTable).set({ status: "Paid", updatedAt: new Date() }).where(eq(payrollRecordsTable.payrollRunId, runId));
-    const activeLoans = await db.select().from(loanRepaymentsTable).where(eq(loanRepaymentsTable.isActive, true));
+    await db.update(payrollRunsTable).set({ status: "Locked", updatedAt: new Date() }).where(and(eq(payrollRunsTable.id, runId), eq(payrollRunsTable.tenantId, req.hrmsUser!.tenantId)));
+    await db.update(payrollRecordsTable).set({ status: "Paid", updatedAt: new Date() }).where(and(eq(payrollRecordsTable.payrollRunId, runId), eq(payrollRecordsTable.tenantId, req.hrmsUser!.tenantId)));
+    const activeLoans = await db.select().from(loanRepaymentsTable).where(and(eq(loanRepaymentsTable.isActive, true), eq(loanRepaymentsTable.tenantId, req.hrmsUser!.tenantId)));
     for (const loan of activeLoans) {
       const newOutstanding = Math.max(0, Number(loan.outstandingAmount) - Number(loan.monthlyDeduction));
       await db.update(loanRepaymentsTable).set({
         outstandingAmount: String(newOutstanding),
         ...(newOutstanding <= 0 && { isActive: false }),
         updatedAt: new Date(),
-      }).where(eq(loanRepaymentsTable.id, loan.id));
+      }).where(and(eq(loanRepaymentsTable.id, loan.id), eq(loanRepaymentsTable.tenantId, req.hrmsUser!.tenantId)));
     }
 
     // Auto-release the payroll lock for this period once finalized so that
     // normal operations (attendance corrections, leave accruals, etc.) can resume.
     await db.update(payrollLocksTable)
       .set({ isLocked: false, updatedAt: new Date() })
-      .where(and(eq(payrollLocksTable.year, run.periodYear), eq(payrollLocksTable.month, run.periodMonth)));
+      .where(and(eq(payrollLocksTable.year, run.periodYear), eq(payrollLocksTable.month, run.periodMonth), eq(payrollLocksTable.tenantId, req.hrmsUser!.tenantId)));
 
     res.json({ message: "Payroll finalized and marked as Locked." });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -1233,9 +1234,9 @@ router.get("/payroll/payslips", requireHrmsUser, requireRole(...ALL_ROLES), asyn
       employeeCode: employeesTable.employeeId,
       netPay: payrollRecordsTable.netPay,
     }).from(payslipsTable)
-      .leftJoin(employeesTable, eq(payslipsTable.employeeId, employeesTable.id))
-      .leftJoin(payrollRecordsTable, eq(payslipsTable.payrollRecordId, payrollRecordsTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .leftJoin(employeesTable, and(eq(payslipsTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, u.tenantId)))
+      .leftJoin(payrollRecordsTable, and(eq(payslipsTable.payrollRecordId, payrollRecordsTable.id), eq(payrollRecordsTable.tenantId, u.tenantId)))
+      .where(and(...(conds.length ? conds : [eq(payslipsTable.tenantId, u.tenantId)])))
       .orderBy(desc(payslipsTable.periodYear), desc(payslipsTable.periodMonth));
     res.json(payslips);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -1243,14 +1244,14 @@ router.get("/payroll/payslips", requireHrmsUser, requireRole(...ALL_ROLES), asyn
 
 router.get("/payroll/payslips/:id", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
-    const [payslip] = await db.select().from(payslipsTable).where(eq(payslipsTable.id, Number(req.params.id)));
+    const u = req.hrmsUser!;
+    const [payslip] = await db.select().from(payslipsTable).where(and(eq(payslipsTable.id, Number(req.params.id)), eq(payslipsTable.tenantId, u.tenantId)));
     if (!payslip) { res.status(404).json({ error: "Not found" }); return; }
 
-    const u = req.hrmsUser!;
     // Employees and HODs may only access their own payslip
     if (u.role === "employee" || u.role === "hod") {
       const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id)).where(eq(hrmsUsersTable.id, u.id));
+        .leftJoin(hrmsUsersTable, and(eq(hrmsUsersTable.employeeId, employeesTable.id), eq(hrmsUsersTable.tenantId, u.tenantId))).where(and(eq(hrmsUsersTable.id, u.id), eq(employeesTable.tenantId, u.tenantId)));
       if (!emp || emp.id !== payslip.employeeId) { res.status(403).json({ error: "Forbidden" }); return; }
     }
 
@@ -1259,12 +1260,12 @@ router.get("/payroll/payslips/:id", requireHrmsUser, requireRole(...ALL_ROLES), 
     // generation existed). Persists so subsequent fetches are cheap.
     if (!payslip.htmlContent) {
       try {
-        const [record] = await db.select().from(payrollRecordsTable).where(eq(payrollRecordsTable.id, payslip.payrollRecordId));
-        const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.id, payslip.employeeId));
+        const [record] = await db.select().from(payrollRecordsTable).where(and(eq(payrollRecordsTable.id, payslip.payrollRecordId), eq(payrollRecordsTable.tenantId, u.tenantId)));
+        const [emp] = await db.select().from(employeesTable).where(and(eq(employeesTable.id, payslip.employeeId), eq(employeesTable.tenantId, u.tenantId)));
         const [dept] = emp?.departmentId
-          ? await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, emp.departmentId))
+          ? await db.select({ name: departmentsTable.name }).from(departmentsTable).where(and(eq(departmentsTable.id, emp.departmentId), eq(departmentsTable.tenantId, u.tenantId)))
           : [null as { name: string } | null];
-        const [desig] = await db.select({ name: designationsTable.title }).from(designationsTable).where(eq(designationsTable.id, emp?.designationId ?? 0));
+        const [desig] = await db.select({ name: designationsTable.title }).from(designationsTable).where(and(eq(designationsTable.id, emp?.designationId ?? 0), eq(designationsTable.tenantId, u.tenantId)));
 
         const num = (v: unknown) => Number(v ?? 0);
         const payslipData = {
@@ -1301,7 +1302,7 @@ router.get("/payroll/payslips/:id", requireHrmsUser, requireRole(...ALL_ROLES), 
 
         await db.update(payslipsTable)
           .set({ payslipData, htmlContent: html, generatedAt: new Date() })
-          .where(eq(payslipsTable.id, payslip.id));
+          .where(and(eq(payslipsTable.id, payslip.id), eq(payslipsTable.tenantId, u.tenantId)));
 
         payslip.htmlContent = html;
         (payslip as any).payslipData = payslipData;
@@ -1777,10 +1778,14 @@ router.get("/payroll/reports/bank-transfer", requireHrmsUser, requireRole(...PAY
       netPay: payrollRecordsTable.netPay,
       status: payrollRecordsTable.status,
     }).from(payrollRecordsTable)
-      .leftJoin(employeesTable, eq(payrollRecordsTable.employeeId, employeesTable.id))
-      .leftJoin(employeeProfilesTable, eq(employeeProfilesTable.employeeId, employeesTable.id))
-      .leftJoin(payrollRunsTable, eq(payrollRecordsTable.payrollRunId, payrollRunsTable.id))
-      .where(and(eq(payrollRunsTable.periodYear, Number(year)), eq(payrollRunsTable.periodMonth, Number(month))));
+      .leftJoin(employeesTable, and(eq(payrollRecordsTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
+      .leftJoin(employeeProfilesTable, and(eq(employeeProfilesTable.employeeId, employeesTable.id), eq(employeeProfilesTable.tenantId, req.hrmsUser!.tenantId)))
+      .leftJoin(payrollRunsTable, and(eq(payrollRecordsTable.payrollRunId, payrollRunsTable.id), eq(payrollRunsTable.tenantId, req.hrmsUser!.tenantId)))
+      .where(and(
+        eq(payrollRunsTable.periodYear, Number(year)),
+        eq(payrollRunsTable.periodMonth, Number(month)),
+        eq(payrollRecordsTable.tenantId, req.hrmsUser!.tenantId)
+      ));
 
     const totalNetPay = records.reduce((s, r) => s + Number(r.netPay), 0);
 
@@ -1837,7 +1842,7 @@ interface Form16Data {
   summary: { totalGross: number; totalTDS: number; totalPF: number; taxableIncome: number; regime: string };
 }
 
-async function loadForm16Data(empId: number, year: number): Promise<Form16Data | null> {
+async function loadForm16Data(empId: number, year: number, tenantId: number): Promise<Form16Data | null> {
   const records = await db.select({
     periodMonth: payrollRunsTable.periodMonth,
     periodYear: payrollRunsTable.periodYear,
@@ -1848,9 +1853,10 @@ async function loadForm16Data(empId: number, year: number): Promise<Form16Data |
     basic: payrollRecordsTable.basic,
     pfEmployee: payrollRecordsTable.pfEmployee,
   }).from(payrollRecordsTable)
-    .leftJoin(payrollRunsTable, eq(payrollRecordsTable.payrollRunId, payrollRunsTable.id))
+    .leftJoin(payrollRunsTable, and(eq(payrollRecordsTable.payrollRunId, payrollRunsTable.id), eq(payrollRunsTable.tenantId, tenantId)))
     .where(and(
       eq(payrollRecordsTable.employeeId, empId),
+      eq(payrollRecordsTable.tenantId, tenantId),
       or(
         and(eq(payrollRunsTable.periodYear, year), gte(payrollRunsTable.periodMonth, 4)),
         and(eq(payrollRunsTable.periodYear, year + 1), lte(payrollRunsTable.periodMonth, 3)),
@@ -1861,7 +1867,8 @@ async function loadForm16Data(empId: number, year: number): Promise<Form16Data |
   const [emp] = await db.select({
     name: sql<string>`${employeesTable.firstName} || ' ' || ${employeesTable.lastName}`,
     code: employeesTable.employeeId,
-  }).from(employeesTable).where(eq(employeesTable.id, empId));
+  }).from(employeesTable)
+    .where(and(eq(employeesTable.id, empId), eq(employeesTable.tenantId, tenantId)));
   if (!emp) return null;
 
   const totalGross = records.reduce((s, r) => s + Number(r.grossEarnings), 0);
@@ -1882,9 +1889,10 @@ router.get("/payroll/reports/form-16/:employeeId/:year", requireHrmsUser, requir
   try {
     const empId = Number(req.params.employeeId);
     const year = Number(req.params.year);
+    const u = req.hrmsUser!;
     const forbidden = await assertCanAccessEmployeeTaxData(req, empId);
     if (forbidden) { res.status(403).json({ error: forbidden }); return; }
-    const data = await loadForm16Data(empId, year);
+    const data = await loadForm16Data(empId, year, u.tenantId);
     if (!data) { res.status(404).json({ error: "Employee not found" }); return; }
     res.json(data);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -1895,9 +1903,10 @@ router.get("/payroll/reports/form-16/:employeeId/:year/pdf", requireHrmsUser, re
   try {
     const empId = Number(req.params.employeeId);
     const year = Number(req.params.year);
+    const u = req.hrmsUser!;
     const forbidden = await assertCanAccessEmployeeTaxData(req, empId);
     if (forbidden) { res.status(403).json({ error: forbidden }); return; }
-    const data = await loadForm16Data(empId, year);
+    const data = await loadForm16Data(empId, year, u.tenantId);
     if (!data) { res.status(404).json({ error: "Employee not found" }); return; }
 
     const pdfBytes = await generateForm16Pdf(data);

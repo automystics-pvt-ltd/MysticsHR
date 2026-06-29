@@ -78,7 +78,8 @@ async function userCanAccessAttachment(userId: number, role: string, objectPath:
       .from(employeesTable).where(
         and(
           eq(hrmsUsersTable.id, userId),
-          eq(employeesTable.tenantId, tenantId)
+          eq(employeesTable.tenantId, tenantId),
+          eq(hrmsUsersTable.tenantId, tenantId)
         )
       )
       .innerJoin(hrmsUsersTable, eq(employeesTable.id, hrmsUsersTable.employeeId));
@@ -119,7 +120,8 @@ async function userCanAccessAttachment(userId: number, role: string, objectPath:
       .from(employeesTable).where(
         and(
           eq(hrmsUsersTable.id, userId),
-          eq(employeesTable.tenantId, tenantId)
+          eq(employeesTable.tenantId, tenantId),
+          eq(hrmsUsersTable.tenantId, tenantId)
         )
       )
       .innerJoin(hrmsUsersTable, eq(employeesTable.id, hrmsUsersTable.employeeId));

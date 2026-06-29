@@ -41,7 +41,7 @@ router.post("/notifications/mark-read", requireHrmsUser, async (req, res) => {
     if (notificationIds && notificationIds.length > 0) {
       conds.push(inArray(userNotificationsTable.id, notificationIds));
     }
-    await db.update(userNotificationsTable).set({ isRead: true, updatedAt: new Date() })
+    await db.update(userNotificationsTable).set({ isRead: true })
       .where(and(...conds));
     res.json({ success: true });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }

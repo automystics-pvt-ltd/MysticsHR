@@ -243,7 +243,7 @@ router.get("/leave/policies", requireHrmsUser, requireRole(...ALL_ROLES), async 
     }
     const policies = await db.select(POLICY_SHAPE)
       .from(leavePoliciesTable)
-      .innerJoin(leaveTypesTable, eq(leavePoliciesTable.leaveTypeId, leaveTypesTable.id))
+      .innerJoin(leaveTypesTable, and(eq(leavePoliciesTable.leaveTypeId, leaveTypesTable.id), eq(leaveTypesTable.tenantId, tenantId)))
       .where(eq(leavePoliciesTable.tenantId, tenantId))
       .orderBy(leaveTypesTable.name);
     res.json(policies);
@@ -257,7 +257,7 @@ router.get("/leave/policies/:typeId", requireHrmsUser, requireRole(...ALL_ROLES)
     await getOrCreatePolicy(typeId, tenantId);
     const [policy] = await db.select(POLICY_SHAPE)
       .from(leavePoliciesTable)
-      .innerJoin(leaveTypesTable, eq(leavePoliciesTable.leaveTypeId, leaveTypesTable.id))
+      .innerJoin(leaveTypesTable, and(eq(leavePoliciesTable.leaveTypeId, leaveTypesTable.id), eq(leaveTypesTable.tenantId, tenantId)))
       .where(and(eq(leavePoliciesTable.leaveTypeId, typeId), eq(leavePoliciesTable.tenantId, tenantId)));
     if (!policy) { res.status(404).json({ error: "Leave type not found" }); return; }
     res.json(policy);
@@ -285,7 +285,7 @@ router.put("/leave/policies/:typeId", requireHrmsUser, requireRole(...HR_ROLES),
     await logAudit({ user: req.hrmsUser, action: "UPDATE_LEAVE_POLICY", module: "Leave", recordId: typeId, newValue: String(typeId), ipAddress: req.ip });
     const [result] = await db.select(POLICY_SHAPE)
       .from(leavePoliciesTable)
-      .innerJoin(leaveTypesTable, eq(leavePoliciesTable.leaveTypeId, leaveTypesTable.id))
+      .innerJoin(leaveTypesTable, and(eq(leavePoliciesTable.leaveTypeId, leaveTypesTable.id), eq(leaveTypesTable.tenantId, tenantId)))
       .where(and(eq(leavePoliciesTable.leaveTypeId, typeId), eq(leavePoliciesTable.tenantId, tenantId)));
     res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -358,9 +358,9 @@ router.get("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), as
         updatedAt: leaveApplicationsTable.updatedAt,
       })
       .from(leaveApplicationsTable)
-      .innerJoin(employeesTable, eq(leaveApplicationsTable.employeeId, employeesTable.id))
-      .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
-      .innerJoin(leaveTypesTable, eq(leaveApplicationsTable.leaveTypeId, leaveTypesTable.id))
+      .innerJoin(employeesTable, and(eq(leaveApplicationsTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, tenantId)))
+      .leftJoin(departmentsTable, and(eq(employeesTable.departmentId, departmentsTable.id), eq(departmentsTable.tenantId, tenantId)))
+      .innerJoin(leaveTypesTable, and(eq(leaveApplicationsTable.leaveTypeId, leaveTypesTable.id), eq(leaveTypesTable.tenantId, tenantId)))
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(desc(leaveApplicationsTable.createdAt));
 
@@ -412,9 +412,9 @@ router.get("/leave/applications/:id", requireHrmsUser, requireRole(...ALL_ROLES)
         updatedAt: leaveApplicationsTable.updatedAt,
       })
       .from(leaveApplicationsTable)
-      .innerJoin(employeesTable, eq(leaveApplicationsTable.employeeId, employeesTable.id))
-      .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
-      .innerJoin(leaveTypesTable, eq(leaveApplicationsTable.leaveTypeId, leaveTypesTable.id))
+      .innerJoin(employeesTable, and(eq(leaveApplicationsTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
+      .leftJoin(departmentsTable, and(eq(employeesTable.departmentId, departmentsTable.id), eq(departmentsTable.tenantId, req.hrmsUser!.tenantId)))
+      .innerJoin(leaveTypesTable, and(eq(leaveApplicationsTable.leaveTypeId, leaveTypesTable.id), eq(leaveTypesTable.tenantId, req.hrmsUser!.tenantId)))
       .where(and(eq(leaveApplicationsTable.id, Number(req.params.id)), eq(leaveApplicationsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!app) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -913,16 +913,16 @@ router.post("/leave/applications/:id/hod-action", requireHrmsUser, requireRole("
     const updated = await db.transaction(async (tx) => {
       let newStatus: typeof app.status;
       if (action === "Approved") {
-        newStatus = leaveType?.requiresHrApproval ? "HOD Approved" : "Approved";
+        newStatus = (leaveType?.requiresHrApproval ? "HOD Approved" : "Approved") as any;
       } else {
-        newStatus = "Rejected";
+        newStatus = "Rejected" as any;
       }
       const [row] = await tx.update(leaveApplicationsTable)
         .set({ status: newStatus, hodActionedById: req.hrmsUser!.id, hodRemarks: remarks ?? null, hodActionedAt: new Date(), updatedAt: new Date() })
         .where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)))
         .returning();
 
-      if (action === "Approved" && newStatus === "Approved") {
+      if (action === "Approved" && (newStatus as string) === "Approved") {
         // No HR approval needed — finalize balance
         const [bal] = await tx.select().from(leaveBalancesTable).where(
           and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year), eq(leaveBalancesTable.tenantId, tenantId))

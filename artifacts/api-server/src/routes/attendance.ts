@@ -92,7 +92,7 @@ function computeOvertimeMinutes(
  * assignments that overlap the target date (effectiveTo >= date).
  * Returns the most recently started assignment that covers the date.
  */
-async function getActiveShiftTemplate(employeeId: number, date: string) {
+async function getActiveShiftTemplate(employeeId: number, date: string, tenantId: number) {
   const [assignment] = await db
     .select({ shiftTemplateId: shiftAssignmentsTable.shiftTemplateId })
     .from(shiftAssignmentsTable)
@@ -100,6 +100,7 @@ async function getActiveShiftTemplate(employeeId: number, date: string) {
       and(
         eq(shiftAssignmentsTable.employeeId, employeeId),
         lte(shiftAssignmentsTable.effectiveFrom, date),
+        eq(shiftAssignmentsTable.tenantId, tenantId),
         or(
           isNull(shiftAssignmentsTable.effectiveTo),
           gte(shiftAssignmentsTable.effectiveTo, date),
@@ -109,7 +110,7 @@ async function getActiveShiftTemplate(employeeId: number, date: string) {
     .orderBy(desc(shiftAssignmentsTable.effectiveFrom))
     .limit(1);
   if (!assignment) return null;
-  const [template] = await db.select().from(shiftTemplatesTable).where(eq(shiftTemplatesTable.id, assignment.shiftTemplateId));
+  const [template] = await db.select().from(shiftTemplatesTable).where(and(eq(shiftTemplatesTable.id, assignment.shiftTemplateId), eq(shiftTemplatesTable.tenantId, tenantId)));
   return template ?? null;
 }
 
@@ -209,7 +210,7 @@ router.get("/attendance", requireHrmsUser, requireRole(...HR_READ_ROLES), async 
 
     let scoped = rows;
     if (departmentId) {
-      const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable).where(eq(employeesTable.departmentId, Number(departmentId)));
+      const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable).where(and(eq(employeesTable.departmentId, Number(departmentId)), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)));
       const ids = new Set(deptEmps.map((e) => e.id));
       scoped = rows.filter((r) => ids.has(r.employeeId));
     }
@@ -257,7 +258,7 @@ router.post("/attendance", requireHrmsUser, requireRole(...HR_ROLES), async (req
     const breakMins: number = body.breakDurationMinutes ?? 0;
     const totalMins = computeMinutesWorked(signIn, signOut, breakMins);
 
-    const template = await getActiveShiftTemplate(body.employeeId, body.attendanceDate);
+    const template = await getActiveShiftTemplate(body.employeeId, body.attendanceDate, req.hrmsUser!.tenantId);
     const minWorkingMins = template?.minWorkingHoursMinutes ?? 480;
     const overtimeThreshold = template?.overtimeThresholdMinutes ?? 30;
     const overtimeMins = template
@@ -493,7 +494,7 @@ router.post("/attendance/regularizations/:id/action", requireHrmsUser, requireRo
     }
 
     // Resolve overtime data outside transaction (read-only)
-    const template = await getActiveShiftTemplate(reg.employeeId as number, reg.attendanceDate as string);
+    const template = await getActiveShiftTemplate(reg.employeeId as number, reg.attendanceDate as string, req.hrmsUser!.tenantId);
     const minWorkingMins = template?.minWorkingHoursMinutes ?? 480;
     const overtimeThreshold = template?.overtimeThresholdMinutes ?? 30;
 
@@ -560,9 +561,9 @@ router.post("/attendance/regularizations/:id/action", requireHrmsUser, requireRo
 
 // --- EMPLOYEE SELF-SERVICE CLOCK IN/OUT ---
 
-async function getCallerEmployeeId(hrmsUserId: number, cachedEmployeeId: number | null | undefined): Promise<number | null> {
+async function getCallerEmployeeId(hrmsUserId: number, cachedEmployeeId: number | null | undefined, tenantId: number): Promise<number | null> {
   if (cachedEmployeeId) return cachedEmployeeId;
-  const [u] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(eq(hrmsUsersTable.id, hrmsUserId));
+  const [u] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, hrmsUserId), eq(hrmsUsersTable.tenantId, tenantId)));
   return u?.employeeId ?? null;
 }
 
@@ -646,14 +647,14 @@ function parseClockTelemetry(
 
 router.get("/attendance/me/today", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
-    const empId = await getCallerEmployeeId(req.hrmsUser!.id, req.hrmsUser!.employeeId);
+    const empId = await getCallerEmployeeId(req.hrmsUser!.id, req.hrmsUser!.employeeId, req.hrmsUser!.tenantId);
     if (!empId) { res.status(400).json({ error: "Employee record not found" }); return; }
     // Prefer the employee's local date (sent as ?date=YYYY-MM-DD) so a
     // punch made just after midnight IST is credited to the right day.
     const today = resolveAttendanceDate(req.query.date);
     const [record] = await db.select().from(attendanceRecordsTable)
-      .where(and(eq(attendanceRecordsTable.employeeId, empId), eq(attendanceRecordsTable.attendanceDate, today)));
-    const template = await getActiveShiftTemplate(empId, today);
+      .where(and(eq(attendanceRecordsTable.employeeId, empId), eq(attendanceRecordsTable.attendanceDate, today), eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)));
+    const template = await getActiveShiftTemplate(empId, today, req.hrmsUser!.tenantId);
     let attendanceStatus: "Not Clocked In" | "Clocked In" | "Clocked Out" = "Not Clocked In";
     if (record?.signInTime && record?.signOutTime) attendanceStatus = "Clocked Out";
     else if (record?.signInTime) attendanceStatus = "Clocked In";
@@ -676,7 +677,7 @@ router.get("/attendance/me/today", requireHrmsUser, requireRole(...ALL_ROLES), a
 
 router.post("/attendance/me/clock-in", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
-    const empId = await getCallerEmployeeId(req.hrmsUser!.id, req.hrmsUser!.employeeId);
+    const empId = await getCallerEmployeeId(req.hrmsUser!.id, req.hrmsUser!.employeeId, req.hrmsUser!.tenantId);
     if (!empId) { res.status(400).json({ error: "Employee record not found" }); return; }
     const today = resolveAttendanceDate((req.body as { clientDate?: unknown })?.clientDate);
     const period = new Date(today);
@@ -720,7 +721,7 @@ router.post("/attendance/me/clock-in", requireHrmsUser, requireRole(...ALL_ROLES
 
 router.post("/attendance/me/clock-out", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
-    const empId = await getCallerEmployeeId(req.hrmsUser!.id, req.hrmsUser!.employeeId);
+    const empId = await getCallerEmployeeId(req.hrmsUser!.id, req.hrmsUser!.employeeId, req.hrmsUser!.tenantId);
     if (!empId) { res.status(400).json({ error: "Employee record not found" }); return; }
     const today = resolveAttendanceDate((req.body as { clientDate?: unknown })?.clientDate);
     const period = new Date(today);
@@ -735,7 +736,7 @@ router.post("/attendance/me/clock-out", requireHrmsUser, requireRole(...ALL_ROLE
     const signOut = new Date();
     const breakMins = existing.breakDurationMinutes ?? 0;
     const totalMins = computeMinutesWorked(existing.signInTime, signOut, breakMins);
-    const template = await getActiveShiftTemplate(empId, today);
+    const template = await getActiveShiftTemplate(empId, today, req.hrmsUser!.tenantId);
     const minWorkingMins = template?.minWorkingHoursMinutes ?? 480;
     const overtimeThreshold = template?.overtimeThresholdMinutes ?? 30;
     const overtimeMins = template
@@ -827,7 +828,7 @@ router.patch("/attendance/:id", requireHrmsUser, requireRole(...HR_ROLES), async
     const signOut = body.signOutTime ? new Date(body.signOutTime) : existing.signOutTime;
     const breakMins: number = body.breakDurationMinutes ?? existing.breakDurationMinutes ?? 0;
     const totalMins = computeMinutesWorked(signIn, signOut, breakMins);
-    const template = await getActiveShiftTemplate(existing.employeeId, existing.attendanceDate);
+    const template = await getActiveShiftTemplate(existing.employeeId, existing.attendanceDate, req.hrmsUser!.tenantId);
     const minWorkingMins = template?.minWorkingHoursMinutes ?? 480;
     const overtimeThreshold = template?.overtimeThresholdMinutes ?? 30;
     const overtimeMins = template
@@ -867,7 +868,7 @@ router.get("/employees/:id/attendance", requireHrmsUser, requireRole(...ALL_ROLE
   try {
     const empId = Number(req.params.id);
     if (req.hrmsUser!.role === "employee") {
-      const [userRow] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(eq(hrmsUsersTable.id, req.hrmsUser!.id));
+      const [userRow] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, req.hrmsUser!.id), eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)));
       if (!userRow?.employeeId || userRow.employeeId !== empId) { res.status(403).json({ error: "Forbidden" }); return; }
     }
     const { month } = req.query;

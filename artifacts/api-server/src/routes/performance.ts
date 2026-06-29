@@ -166,7 +166,10 @@ router.get("/performance/goals", requireHrmsUser, requireRole(...PERF_ROLES), as
       createdAt: performanceGoalsTable.createdAt,
     }).from(performanceGoalsTable)
       .leftJoin(employeesTable, eq(performanceGoalsTable.employeeId, employeesTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(
+        conds.length ? and(...conds) : sql`TRUE`,
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(desc(performanceGoalsTable.createdAt));
 
     // Enrich with latest progress
@@ -177,7 +180,10 @@ router.get("/performance/goals", requireHrmsUser, requireRole(...PERF_ROLES), as
         goalId: goalProgressTable.goalId,
         progressPercent: goalProgressTable.progressPercent,
       }).from(goalProgressTable)
-        .where(inArray(goalProgressTable.goalId, goalIds))
+        .where(and(
+          inArray(goalProgressTable.goalId, goalIds),
+          eq(goalProgressTable.tenantId, req.hrmsUser!.tenantId)
+        ))
         .orderBy(desc(goalProgressTable.updatedAt));
       for (const p of latestProgress) {
         if (!(p.goalId in progressMap)) progressMap[p.goalId] = p.progressPercent;
@@ -330,7 +336,10 @@ router.get("/performance/goals/:id/progress", requireHrmsUser, requireRole(...MA
     if (!allowed) { res.status(403).json({ error: "Access denied" }); return; }
 
     const rows = await db.select().from(goalProgressTable)
-      .where(eq(goalProgressTable.goalId, goalId))
+      .where(and(
+        eq(goalProgressTable.goalId, goalId),
+        eq(goalProgressTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(desc(goalProgressTable.updatedAt));
     res.json(rows);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -375,44 +384,60 @@ router.get("/performance/self-appraisals", requireHrmsUser, requireRole(...PERF_
     const u = req.hrmsUser!;
     const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
 
-    const conds = [eq(selfAppraisalsTable.tenantId, req.hrmsUser!.tenantId)];
+    const conds: SQL[] = [eq(selfAppraisalsTable.tenantId, req.hrmsUser!.tenantId)];
     if (employeeId) conds.push(eq(selfAppraisalsTable.employeeId, Number(employeeId)));
 
     if (u.role === "employee") {
       const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable)
         .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
-        .where(eq(hrmsUsersTable.id, u.id));
+        .where(and(
+          eq(hrmsUsersTable.id, u.id),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+        ));
       if (!emp) { res.json([]); return; } // Fail closed — no linked employee record
       conds.push(eq(selfAppraisalsTable.employeeId, emp.id));
     } else if (!isHrRole) {
       // HOD: scope to direct reports only
       const [hodEmp] = await db.select({ id: employeesTable.id }).from(employeesTable)
         .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
-        .where(eq(hrmsUsersTable.id, u.id));
+        .where(and(
+          eq(hrmsUsersTable.id, u.id),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+        ));
       if (!hodEmp) { res.json([]); return; }
       const directReports = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(eq(employeesTable.managerId, hodEmp.id));
+        .where(and(
+          eq(employeesTable.managerId, hodEmp.id),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+        ));
       if (directReports.length === 0) { res.json([]); return; }
       conds.push(inArray(selfAppraisalsTable.employeeId, directReports.map(r => r.id)));
     }
 
-    let query = db.select({
+    const selectFields = {
       id: selfAppraisalsTable.id,
       goalId: selfAppraisalsTable.goalId,
       employeeId: selfAppraisalsTable.employeeId,
       rating: selfAppraisalsTable.rating,
       commentary: selfAppraisalsTable.commentary,
       submittedAt: selfAppraisalsTable.submittedAt,
-    }).from(selfAppraisalsTable);
+    };
 
+    let rows;
     if (cycleId) {
-      query = (query as typeof query).leftJoin(performanceGoalsTable, eq(selfAppraisalsTable.goalId, performanceGoalsTable.id))
-        .where(and(...conds, eq(performanceGoalsTable.cycleId, Number(cycleId)))) as typeof query;
-    } else if (conds.length) {
-      query = (query as typeof query).where(and(...conds)) as typeof query;
+      rows = await db.select(selectFields).from(selfAppraisalsTable)
+        .leftJoin(performanceGoalsTable, eq(selfAppraisalsTable.goalId, performanceGoalsTable.id))
+        .where(and(
+          ...conds,
+          eq(performanceGoalsTable.cycleId, Number(cycleId)),
+          eq(performanceGoalsTable.tenantId, req.hrmsUser!.tenantId)
+        ));
+    } else {
+      rows = await db.select(selectFields).from(selfAppraisalsTable)
+        .where(and(...conds));
     }
 
-    res.json(await query);
+    res.json(rows);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
@@ -870,7 +895,10 @@ router.get("/performance/outcomes", requireHrmsUser, requireRole(...PERF_ROLES),
       calculatedAt: appraisalOutcomesTable.calculatedAt,
     }).from(appraisalOutcomesTable)
       .leftJoin(employeesTable, eq(appraisalOutcomesTable.employeeId, employeesTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(
+        conds.length ? and(...conds) : sql`TRUE`,
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(desc(appraisalOutcomesTable.calculatedAt));
     res.json(rows);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -1115,6 +1143,7 @@ router.get("/ess/dashboard", requireHrmsUser, requireRole(...ALL_ROLES), async (
       .from(helpdeskTicketsTable)
       .where(and(
         eq(helpdeskTicketsTable.raisedByEmployeeId, emp.id),
+        eq(helpdeskTicketsTable.tenantId, req.hrmsUser!.tenantId),
         inArray(helpdeskTicketsTable.status, ["Open", "In Progress", "Pending Employee Response"]),
       ));
     const openTicketCount = openTicketRows.length;
@@ -1128,11 +1157,12 @@ router.get("/ess/dashboard", requireHrmsUser, requireRole(...ALL_ROLES), async (
       .from(attendanceRecordsTable)
       .where(and(
         eq(attendanceRecordsTable.employeeId, emp.id),
+        eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId),
         sql`to_char(${attendanceRecordsTable.attendanceDate}, 'YYYY-MM') = ${yearMonth}`
       ));
-    const presentDays = attRows.filter(r => ["Present", "Half-Day", "On Leave"].includes(r.status ?? "")).length;
+    const presentDays = attRows.filter(r => (["Present", "Half-Day", "On Leave", "On Permission"] as string[]).includes(r.status ?? "")).length;
     const absentDays = attRows.filter(r => r.status === "Absent").length;
-    const lateDays = attRows.filter(r => r.status === "Late").length;
+    const lateDays = attRows.filter(r => (r.status as string) === "Late").length;
 
     // Leave balances — lazy-init for any active leave types missing a row so
     // the ESS dashboard always reflects what the employee is entitled to.

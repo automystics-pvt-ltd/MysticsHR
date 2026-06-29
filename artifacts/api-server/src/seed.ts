@@ -1,6 +1,8 @@
 import { db } from "./lib/db";
+import bcrypt from "bcryptjs";
 import {
   tenantsTable,
+  platformAdminsTable,
   departmentsTable,
   designationsTable,
   employeesTable,
@@ -641,10 +643,10 @@ async function seed() {
   const existingNotifs = await db.select().from(notificationLogsTable).limit(1);
   if (existingNotifs.length === 0 && emp1) {
     await db.insert(notificationLogsTable).values([
-      { channel: "email", eventType: "leave_approved", module: "leave", recipientEmail: emp1.email, recipientName: `${emp1.firstName} ${emp1.lastName}`, subject: "Your leave has been approved", body: "Your earned leave from " + dateOffset(15) + " to " + dateOffset(19) + " has been approved.", status: "sent", entityType: "leave_application", entityId: 1 },
-      { channel: "email", eventType: "payslip_published", module: "payroll", recipientEmail: emp1.email, recipientName: `${emp1.firstName} ${emp1.lastName}`, subject: "Payslip available", body: "Your payslip for last month is now available in ESS.", status: "sent" },
-      { channel: "in_app", eventType: "ticket_assigned", module: "helpdesk", recipientEmail: "ravi.kumar@automystics.com", recipientName: "Ravi Kumar", subject: "Ticket assigned", body: "A new payroll ticket has been assigned to you.", status: "sent" },
-      { channel: "email", eventType: "onboarding_task_due", module: "onboarding", recipientEmail: emp8?.email ?? "", recipientName: "Lakshmi Iyer", subject: "Onboarding tasks pending", body: "Please complete pending onboarding tasks.", status: "sent" },
+      { tenantId: tenantId!, channel: "email", eventType: "leave_approved", module: "leave", recipientEmail: emp1.email, recipientName: `${emp1.firstName} ${emp1.lastName}`, subject: "Your leave has been approved", body: "Your earned leave from " + dateOffset(15) + " to " + dateOffset(19) + " has been approved.", status: "sent", entityType: "leave_application", entityId: 1 },
+      { tenantId: tenantId!, channel: "email", eventType: "payslip_published", module: "payroll", recipientEmail: emp1.email, recipientName: `${emp1.firstName} ${emp1.lastName}`, subject: "Payslip available", body: "Your payslip for last month is now available in ESS.", status: "sent" },
+      { tenantId: tenantId!, channel: "in_app", eventType: "ticket_assigned", module: "helpdesk", recipientEmail: "ravi.kumar@automystics.com", recipientName: "Ravi Kumar", subject: "Ticket assigned", body: "A new payroll ticket has been assigned to you.", status: "sent" },
+      { tenantId: tenantId!, channel: "email", eventType: "onboarding_task_due", module: "onboarding", recipientEmail: emp8?.email ?? "", recipientName: "Lakshmi Iyer", subject: "Onboarding tasks pending", body: "Please complete pending onboarding tasks.", status: "sent" },
     ]);
   }
   if (superUser) {
@@ -658,6 +660,21 @@ async function seed() {
     }
   }
   console.log("Notifications seeded.");
+
+  // ── Platform Admin ─────────────────────────────────────────────────────
+  const existingPlatformAdmins = await db.select({ id: platformAdminsTable.id }).from(platformAdminsTable).limit(1);
+  if (existingPlatformAdmins.length === 0) {
+    const passwordHash = await bcrypt.hash("Admin@1234", 12);
+    await db.insert(platformAdminsTable).values({
+      email: "platform@mysticshr.io",
+      name: "Platform Super Admin",
+      passwordHash,
+      isActive: true,
+    });
+    console.log("Platform admin seeded: platform@mysticshr.io / Admin@1234");
+  } else {
+    console.log("Platform admin already exists, skipping.");
+  }
 
   console.log("✅ Seed complete.");
 }

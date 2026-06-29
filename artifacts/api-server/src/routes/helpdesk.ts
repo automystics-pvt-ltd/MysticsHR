@@ -428,7 +428,7 @@ router.get("/helpdesk/tickets/:id", requireHrmsUser, requireRole(...ALL_ROLES), 
       createdAt: ticketCommentsTable.createdAt,
     }).from(ticketCommentsTable)
       .leftJoin(hrmsUsersTable, eq(ticketCommentsTable.authorId, hrmsUsersTable.id))
-      .where(eq(ticketCommentsTable.ticketId, id))
+      .where(and(eq(ticketCommentsTable.ticketId, id), eq(ticketCommentsTable.tenantId, u.tenantId)))
       .orderBy(ticketCommentsTable.createdAt);
 
     const visibleComments = isManagerRole ? comments : comments.filter(c => !c.isInternal);

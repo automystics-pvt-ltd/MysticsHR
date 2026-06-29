@@ -63,8 +63,8 @@ router.get("/onboarding/checklists", requireHrmsUser, requireRole(...HR_READ_ROL
     const query = db
       .select(checklistSelect)
       .from(onboardingChecklistsTable)
-      .leftJoin(employeesTable, eq(onboardingChecklistsTable.employeeId, employeesTable.id))
-      .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id));
+      .leftJoin(employeesTable, and(eq(onboardingChecklistsTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, tenantId)))
+      .leftJoin(departmentsTable, and(eq(employeesTable.departmentId, departmentsTable.id), eq(departmentsTable.tenantId, tenantId)));
     
     const conds = [eq(onboardingChecklistsTable.tenantId, tenantId)];
     if (status) conds.push(sql`${onboardingChecklistsTable.status} = ${status}`);
@@ -171,8 +171,8 @@ async function getChecklistWithTasks(checklistId: number, tenantId: number) {
   const [checklist] = await db
     .select(checklistSelect)
     .from(onboardingChecklistsTable)
-    .leftJoin(employeesTable, eq(onboardingChecklistsTable.employeeId, employeesTable.id))
-    .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
+    .leftJoin(employeesTable, and(eq(onboardingChecklistsTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, tenantId)))
+    .leftJoin(departmentsTable, and(eq(employeesTable.departmentId, departmentsTable.id), eq(departmentsTable.tenantId, tenantId)))
     .where(and(eq(onboardingChecklistsTable.id, checklistId), eq(onboardingChecklistsTable.tenantId, tenantId)))
     .limit(1);
   if (!checklist) return null;
@@ -511,8 +511,8 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
         departmentName: departmentsTable.name,
       })
       .from(employeesTable)
-      .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
-      .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
+      .leftJoin(designationsTable, and(eq(employeesTable.designationId, designationsTable.id), eq(designationsTable.tenantId, tenantId)))
+      .leftJoin(departmentsTable, and(eq(employeesTable.departmentId, departmentsTable.id), eq(departmentsTable.tenantId, tenantId)))
       .where(and(eq(employeesTable.id, id), eq(employeesTable.tenantId, tenantId)))
       .limit(1);
 
