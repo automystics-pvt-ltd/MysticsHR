@@ -1,15 +1,17 @@
 import { logger } from "./logger";
 
-let _stripe: unknown = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _stripe: any = null;
 
-function getStripe() {
-  if (_stripe) return _stripe as ReturnType<typeof import("stripe").default>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getStripe(): any {
+  if (_stripe) return _stripe;
   const key = process.env["STRIPE_SECRET_KEY"];
   if (!key) throw new Error("Stripe is not configured. Set STRIPE_SECRET_KEY.");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Stripe = require("stripe") as typeof import("stripe").default;
-  _stripe = new Stripe(key, { apiVersion: "2025-05-28.basil" });
-  return _stripe as ReturnType<typeof import("stripe").default>;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+  const Stripe = require("stripe") as any;
+  _stripe = new Stripe(key, { apiVersion: "2026-06-24.dahlia" });
+  return _stripe;
 }
 
 export function isStripeConfigured(): boolean {

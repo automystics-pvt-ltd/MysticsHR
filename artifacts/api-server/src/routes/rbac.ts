@@ -75,7 +75,7 @@ router.put("/rbac/permissions", requireHrmsUser, requireRole("customer_admin", "
 
     const tenantId = req.hrmsUser!.tenantId;
     const validActions = new Set(PERMISSION_ACTIONS);
-    const validModules = new Set(MODULE_REGISTRY.map((m) => m.key));
+    const validModules: Set<string> = new Set(MODULE_REGISTRY.map((m) => m.key));
 
     const rows = Object.entries(permissions)
       .filter(([moduleKey]) => validModules.has(moduleKey))

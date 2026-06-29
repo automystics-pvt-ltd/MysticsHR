@@ -112,7 +112,7 @@ router.post("/api-keys", requireHrmsUser, requireRole(...ADMIN), async (req, res
 
 router.post("/api-keys/:id/revoke", requireHrmsUser, requireRole(...ADMIN), async (req, res) => {
   try {
-    const id = Number.parseInt(req.params.id, 10);
+    const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id) || id <= 0) {
       res.status(400).json({ error: "Invalid id" });
       return;

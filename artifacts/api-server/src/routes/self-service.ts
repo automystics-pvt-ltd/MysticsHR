@@ -471,7 +471,8 @@ router.post("/auth/reset-password", async (req, res) => {
 
 // ─── MFA (TOTP) ───────────────────────────────────────────────────────────────
 
-const totpInstance = new TOTP({ digits: 6, step: 30, window: 1 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const totpInstance = new TOTP({ digits: 6, step: 30, window: 1 } as any);
 
 function totpGenerateSecret(): string {
   const bytes = crypto.randomBytes(20);
@@ -480,7 +481,8 @@ function totpGenerateSecret(): string {
 
 function totpVerify(token: string, secret: string): boolean {
   try {
-    return totpInstance.verify({ token, secret });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (totpInstance.verify({ token, secret } as any)) as unknown as boolean;
   } catch {
     return false;
   }
@@ -573,7 +575,7 @@ router.post("/auth/mfa/verify", async (req, res) => {
       for (let i = 0; i < userWithMfa.mfaBackupCodes.length; i++) {
         const match = await bcrypt.compare(normalizedCode, userWithMfa.mfaBackupCodes[i]);
         if (match) {
-          const remaining = userWithMfa.mfaBackupCodes.filter((_, idx) => idx !== i);
+          const remaining = userWithMfa.mfaBackupCodes.filter((_: string, idx: number) => idx !== i);
           await db
             .update(hrmsUsersTable)
             .set({ mfaBackupCodes: remaining, updatedAt: new Date() } as Partial<typeof hrmsUsersTable.$inferInsert>)

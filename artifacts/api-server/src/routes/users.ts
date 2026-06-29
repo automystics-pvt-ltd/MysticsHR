@@ -272,7 +272,7 @@ router.post(
         .where(and(eq(hrmsUsersTable.id, id), eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)))
         .returning();
       if (!user) { res.status(404).json({ error: "User not found" }); return; }
-      await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Users", recordId: id, ipAddress: req.ip, description: `Locked account: ${reason ?? "no reason given"}` });
+      await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Users", recordId: id, ipAddress: req.ip, newValue: `Locked account: ${reason ?? "no reason given"}` });
       res.json(safeUser(user));
     } catch (err) {
       console.error(err);
@@ -295,7 +295,7 @@ router.post(
         .where(and(eq(hrmsUsersTable.id, id), eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)))
         .returning();
       if (!user) { res.status(404).json({ error: "User not found" }); return; }
-      await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Users", recordId: id, ipAddress: req.ip, description: "Unlocked account" });
+      await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Users", recordId: id, ipAddress: req.ip, newValue: "Unlocked account" });
       res.json(safeUser(user));
     } catch (err) {
       console.error(err);
@@ -322,7 +322,7 @@ router.post(
         .returning();
       if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
-      await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Users", recordId: id, ipAddress: req.ip, description: "Generated password setup invitation" });
+      await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Users", recordId: id, ipAddress: req.ip, newValue: "Generated password setup invitation" });
 
       const inviteUrl = `${req.protocol}://${req.get("host")}/setup-password?token=${inviteToken}`;
       res.json({ ok: true, inviteUrl, expiresAt: inviteExpiry.toISOString() });
@@ -351,7 +351,7 @@ router.post(
         .returning();
       if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
-      await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Users", recordId: id, ipAddress: req.ip, description: "Admin-initiated password reset" });
+      await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Users", recordId: id, ipAddress: req.ip, newValue: "Admin-initiated password reset" });
 
       const resetUrl = `${req.protocol}://${req.get("host")}/setup-password?token=${inviteToken}`;
       res.json({ ok: true, resetUrl, expiresAt: inviteExpiry.toISOString() });

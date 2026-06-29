@@ -408,20 +408,24 @@ export default function PerformanceHistoryView({
   const subqueryError = outcomesError || goalsError || selfError || managerError;
 
   const cycleIdsWithData = new Set<number>();
-  goals.forEach(g => cycleIdsWithData.add(g.cycleId));
-  outcomes.forEach(o => cycleIdsWithData.add(o.cycleId));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (goals as any[]).forEach((g: any) => cycleIdsWithData.add(g.cycleId));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (outcomes as any[]).forEach((o: any) => cycleIdsWithData.add(o.cycleId));
 
-  const closedCycles = cycles
-    .filter(c => cycleIdsWithData.has(c.id))
-    .sort((a, b) => (b.endDate ?? "").localeCompare(a.endDate ?? ""));
+  const closedCycles = (cycles as any[])
+    .filter((c: any) => cycleIdsWithData.has(c.id))
+    .sort((a: any, b: any) => (b.endDate ?? "").localeCompare(a.endDate ?? ""));
 
-  const outcomeByCycle = new Map(outcomes.map(o => [o.cycleId, o]));
-  const averageByCycle = new Map(cycleAverages.map(a => [a.cycleId, a]));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const outcomeByCycle = new Map((outcomes as any[]).map((o: any) => [o.cycleId, o]));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const averageByCycle = new Map((cycleAverages as any[]).map((a: any) => [a.cycleId, a]));
 
-  const trendData = closedCycles
+  const trendData = (closedCycles as any[])
     .slice()
-    .sort((a, b) => (a.endDate ?? "").localeCompare(b.endDate ?? ""))
-    .map(c => {
+    .sort((a: any, b: any) => (a.endDate ?? "").localeCompare(b.endDate ?? ""))
+    .map((c: any) => {
       const o = outcomeByCycle.get(c.id);
       const score = o?.finalScore != null ? Number(o.finalScore) : NaN;
       const normalized = o?.normalizedScore != null ? Number(o.normalizedScore) : NaN;
@@ -438,7 +442,7 @@ export default function PerformanceHistoryView({
         peerSampleSize: avg ? avg.sampleSize : null,
       };
     })
-    .filter(d => d.finalScore !== null) as TrendPoint[];
+    .filter((d: any) => d.finalScore !== null) as TrendPoint[];
 
   const comparisonLabel = effectiveScope === "company"
     ? "Company average"
@@ -565,8 +569,8 @@ export default function PerformanceHistoryView({
           </Card>
         );
       })()}
-      {closedCycles.map(cycle => {
-        const cycleGoals = goals.filter(g => g.cycleId === cycle.id);
+      {(closedCycles as any[]).map((cycle: any) => {
+        const cycleGoals = (goals as any[]).filter((g: any) => g.cycleId === cycle.id);
         const cycleGoalIds = new Set(cycleGoals.map(g => g.id));
         return (
           <CycleHistoryCard
@@ -574,8 +578,8 @@ export default function PerformanceHistoryView({
             cycle={cycle}
             outcome={outcomeByCycle.get(cycle.id)}
             goals={cycleGoals}
-            selfAppraisals={selfAppraisals.filter(s => cycleGoalIds.has(s.goalId))}
-            managerEvaluations={managerEvaluations.filter(m => cycleGoalIds.has(m.goalId))}
+            selfAppraisals={(selfAppraisals as any[]).filter((s: any) => cycleGoalIds.has(s.goalId))}
+            managerEvaluations={(managerEvaluations as any[]).filter((m: any) => cycleGoalIds.has(m.goalId))}
           />
         );
       })}

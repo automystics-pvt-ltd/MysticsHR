@@ -332,9 +332,23 @@ export default function BillingPage() {
     setShowGstForm(true);
   }, [sub]);
 
-  const downloadInvoice = useCallback((invoiceId: number) => {
-    window.open(`${BASE}/api/billing/invoices/${invoiceId}/pdf`, "_blank");
-  }, []);
+  const downloadInvoice = useCallback(async (invoiceId: number) => {
+    try {
+      const res = await fetch(`${BASE}/api/billing/invoices/${invoiceId}/pdf`, { credentials: "include" });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Invoice-${invoiceId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Download failed", description: "Could not download the invoice PDF. Please try again.", variant: "destructive" });
+    }
+  }, [toast]);
 
   const status = sub?.subscriptionStatus ?? "inactive";
   const statusInfo = STATUS_MAP[status] ?? STATUS_MAP["inactive"]!;
@@ -558,7 +572,7 @@ export default function BillingPage() {
           {!plansData && <div className="animate-pulse grid grid-cols-2 md:grid-cols-4 gap-4">{[1,2,3,4].map(i => <div key={i} className="h-60 bg-muted rounded-xl" />)}</div>}
           {plansData && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {plansData.filter(p => p.isActive !== false).map(plan => (
+              {plansData.filter((p: any) => p.isActive !== false).map(plan => (
                 <PlanCard
                   key={plan.id}
                   plan={plan}

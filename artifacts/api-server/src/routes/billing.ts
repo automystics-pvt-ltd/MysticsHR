@@ -133,7 +133,7 @@ router.get("/billing/subscription", requireHrmsUser, async (req, res) => {
 router.post("/billing/razorpay/create-order", requireHrmsUser, async (req, res) => {
   try {
     if (!isRazorpayConfigured()) {
-      return res.status(503).json({ error: "Razorpay payment gateway is not configured." });
+      return void res.status(503).json({ error: "Razorpay payment gateway is not configured." });
     }
 
     const tenantId = req.hrmsUser!.tenantId;
@@ -145,13 +145,13 @@ router.post("/billing/razorpay/create-order", requireHrmsUser, async (req, res) 
       .where(and(eq(subscriptionPlansTable.id, planId), eq(subscriptionPlansTable.isActive, true)))
       .limit(1);
 
-    if (!plan) return res.status(404).json({ error: "Plan not found" });
+    if (!plan) return void res.status(404).json({ error: "Plan not found" });
     if (plan.type === "trial" || plan.type === "custom") {
-      return res.status(400).json({ error: "This plan cannot be purchased directly." });
+      return void res.status(400).json({ error: "This plan cannot be purchased directly." });
     }
 
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
-    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
 
     const baseAmountCents = planAmountCents(plan, billingCycle);
     const taxCents = Math.round(baseAmountCents * GST_RATE);
@@ -234,7 +234,7 @@ router.post("/billing/razorpay/create-order", requireHrmsUser, async (req, res) 
 router.post("/billing/razorpay/verify-payment", requireHrmsUser, async (req, res) => {
   try {
     if (!isRazorpayConfigured()) {
-      return res.status(503).json({ error: "Razorpay not configured" });
+      return void res.status(503).json({ error: "Razorpay not configured" });
     }
 
     const tenantId = req.hrmsUser!.tenantId;
@@ -249,7 +249,7 @@ router.post("/billing/razorpay/verify-payment", requireHrmsUser, async (req, res
 
     const valid = verifyRazorpaySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
     if (!valid) {
-      return res.status(400).json({ error: "Payment signature verification failed. Do not retry." });
+      return void res.status(400).json({ error: "Payment signature verification failed. Do not retry." });
     }
 
     const [invoice] = await db
@@ -258,7 +258,7 @@ router.post("/billing/razorpay/verify-payment", requireHrmsUser, async (req, res
       .where(and(eq(tenantInvoicesTable.id, invoiceId), eq(tenantInvoicesTable.tenantId, tenantId)))
       .limit(1);
 
-    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    if (!invoice) return void res.status(404).json({ error: "Invoice not found" });
 
     const now = new Date();
     const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId)).limit(1);
@@ -330,7 +330,7 @@ router.post("/billing/razorpay/verify-payment", requireHrmsUser, async (req, res
 router.post("/billing/stripe/create-checkout", requireHrmsUser, async (req, res) => {
   try {
     if (!isStripeConfigured()) {
-      return res.status(503).json({ error: "Stripe payment gateway is not configured." });
+      return void res.status(503).json({ error: "Stripe payment gateway is not configured." });
     }
     const { createStripeCustomer, createStripeCheckoutSession } = await import("../lib/stripe-client");
 
@@ -342,10 +342,10 @@ router.post("/billing/stripe/create-checkout", requireHrmsUser, async (req, res)
       returnUrl: string;
     };
 
-    if (!priceId) return res.status(400).json({ error: "Stripe price ID is required" });
+    if (!priceId) return void res.status(400).json({ error: "Stripe price ID is required" });
 
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
-    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
 
     let customerId = tenant.stripeCustomerId;
     if (!customerId) {
@@ -372,7 +372,7 @@ router.post("/billing/stripe/create-checkout", requireHrmsUser, async (req, res)
 router.post("/billing/stripe/portal", requireHrmsUser, async (req, res) => {
   try {
     if (!isStripeConfigured()) {
-      return res.status(503).json({ error: "Stripe not configured" });
+      return void res.status(503).json({ error: "Stripe not configured" });
     }
     const { createStripeBillingPortalSession } = await import("../lib/stripe-client");
 
@@ -381,7 +381,7 @@ router.post("/billing/stripe/portal", requireHrmsUser, async (req, res) => {
 
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
     if (!tenant?.stripeCustomerId) {
-      return res.status(400).json({ error: "No Stripe customer found for this account" });
+      return void res.status(400).json({ error: "No Stripe customer found for this account" });
     }
 
     const session = await createStripeBillingPortalSession(tenant.stripeCustomerId, returnUrl);
@@ -446,7 +446,7 @@ router.get("/billing/invoices/:id", requireHrmsUser, async (req, res) => {
       .where(and(eq(tenantInvoicesTable.id, id), eq(tenantInvoicesTable.tenantId, tenantId)))
       .limit(1);
 
-    if (!row) return res.status(404).json({ error: "Invoice not found" });
+    if (!row) return void res.status(404).json({ error: "Invoice not found" });
 
     const txns = await db
       .select()
@@ -478,7 +478,7 @@ router.get("/billing/invoices/:id/pdf", requireHrmsUser, async (req, res) => {
       .where(and(eq(tenantInvoicesTable.id, id), eq(tenantInvoicesTable.tenantId, tenantId)))
       .limit(1);
 
-    if (!row) return res.status(404).json({ error: "Invoice not found" });
+    if (!row) return void res.status(404).json({ error: "Invoice not found" });
 
     const { invoice, plan, tenant } = row;
     const doc = new PDFDocument({ size: "A4", margin: 50 });
@@ -584,7 +584,7 @@ router.post("/billing/cancel", requireHrmsUser, requireRole("customer_admin"), a
   try {
     const tenantId = req.hrmsUser!.tenantId;
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
-    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
 
     if (tenant.stripeSubscriptionId && isStripeConfigured()) {
       const { cancelStripeSubscription } = await import("../lib/stripe-client");
@@ -618,7 +618,7 @@ router.post("/billing/resume", requireHrmsUser, requireRole("customer_admin"), a
   try {
     const tenantId = req.hrmsUser!.tenantId;
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
-    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
 
     if (tenant.stripeSubscriptionId && isStripeConfigured()) {
       const { resumeStripeSubscription } = await import("../lib/stripe-client");

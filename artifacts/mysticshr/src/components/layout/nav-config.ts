@@ -24,7 +24,6 @@ import {
   BarChart3,
   Bell,
   Network,
-  Ticket as PermIcon,
   KeyRound,
   BookOpen,
   MapPin,

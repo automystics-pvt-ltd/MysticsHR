@@ -415,7 +415,7 @@ export default function SecuritySettingsPage() {
       <PageHeader
         title="Security"
         description="Manage your password and account security settings."
-        badge={{ label: "Personal", variant: "secondary" }}
+        badge={<Badge variant="secondary">Personal</Badge>}
       />
       <div className="max-w-2xl space-y-6">
         <ChangePasswordCard />

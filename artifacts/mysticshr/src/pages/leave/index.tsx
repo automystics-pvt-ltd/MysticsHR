@@ -35,6 +35,7 @@ import {
   CartesianGrid as RCCartesianGrid,
 } from "recharts";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
+import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -56,6 +57,7 @@ export default function LeavePage() {
   const { role: hrmsRole } = useCurrentHrmsUser();
   const role = hrmsRole ?? "employee";
   const isHr = ["customer_admin", "hr_manager", "hr_executive"].includes(role);
+  const { toast } = useToast();
 
   const qc = useQueryClient();
   const year = new Date().getFullYear();
@@ -92,10 +94,10 @@ export default function LeavePage() {
   }
   async function handleEditDates() {
     if (!editingApp) return;
-    if (!editForm.fromDate || !editForm.toDate) { alert("Both dates are required"); return; }
-    if (!editForm.reason.trim()) { alert("A reason is required for the edit"); return; }
+    if (!editForm.fromDate || !editForm.toDate) { toast({ title: "Validation error", description: "Both dates are required.", variant: "destructive" }); return; }
+    if (!editForm.reason.trim()) { toast({ title: "Validation error", description: "A reason is required for the edit.", variant: "destructive" }); return; }
     if (editForm.isHalfDay && editForm.fromDate !== editForm.toDate) {
-      alert("Half-day leave must have the same from and to date"); return;
+      toast({ title: "Validation error", description: "Half-day leave must have the same from and to date.", variant: "destructive" }); return;
     }
     try {
       await editDatesMutation.mutateAsync({
@@ -111,7 +113,7 @@ export default function LeavePage() {
       invalidate();
       setEditingApp(null);
     } catch (err: any) {
-      alert(err?.response?.data?.error ?? "Failed to update leave dates");
+      toast({ title: "Error", description: err?.response?.data?.error ?? "Failed to update leave dates", variant: "destructive" });
     }
   }
 
@@ -165,7 +167,7 @@ export default function LeavePage() {
         setLopInfo({ available: body.available, requested: body.requested });
         setShowLopWarning(true);
       } else {
-        alert(body?.error ?? "Failed to submit leave");
+        toast({ title: "Error", description: body?.error ?? "Failed to submit leave", variant: "destructive" });
       }
     }
   }
@@ -175,7 +177,7 @@ export default function LeavePage() {
     try {
       await cancelMutation.mutateAsync({ id, data: {} });
       invalidate();
-    } catch { alert("Failed to cancel"); }
+    } catch { toast({ title: "Error", description: "Failed to cancel leave application", variant: "destructive" }); }
   }
 
   return (

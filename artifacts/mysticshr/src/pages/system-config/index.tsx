@@ -678,7 +678,7 @@ function RolePermissionsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {Object.entries(matrix).map(([module, actions]) =>
+              {Object.entries(matrix as Record<string, Record<string, RolePermissionsItem[]>>).map(([module, actions]) =>
                 Object.entries(actions).map(([action, roles], idx) => (
                   <TableRow key={`${module}.${action}`}>
                     <TableCell className="text-xs">

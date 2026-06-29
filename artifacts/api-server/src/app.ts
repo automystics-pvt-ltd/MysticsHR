@@ -78,7 +78,7 @@ app.post("/api/webhooks/razorpay", express.raw({ type: "application/json" }), as
     const sig = req.headers["x-razorpay-signature"] as string;
     const raw = req.body as Buffer;
     if (!verifyRazorpayWebhookSignature(raw, sig)) {
-      return res.status(400).json({ error: "Invalid webhook signature" });
+      return void res.status(400).json({ error: "Invalid webhook signature" });
     }
     const event = JSON.parse(raw.toString()) as { event: string; payload?: { payment?: { entity?: { order_id?: string; id?: string; status?: string } } } };
     logger.info({ event: event.event }, "Razorpay webhook received");

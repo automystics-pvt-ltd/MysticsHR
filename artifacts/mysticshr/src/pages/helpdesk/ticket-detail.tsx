@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
 import {
   useGetHelpdeskTicket,
@@ -64,6 +64,13 @@ export default function TicketDetailPage() {
   const [comment, setComment] = useState("");
   const [isInternal, setIsInternal] = useState(false);
   const [commentAttachments, setCommentAttachments] = useState<UploadedAttachment[]>([]);
+
+  useEffect(() => {
+    if (ticket) {
+      setEditStatus(ticket.status as Status);
+      setEditPriority(ticket.priority as Priority);
+    }
+  }, [ticket?.id, ticket?.status, ticket?.priority]);
 
   function invalidateTicket() {
     qc.invalidateQueries({ queryKey: getGetHelpdeskTicketQueryKey(ticketId) });

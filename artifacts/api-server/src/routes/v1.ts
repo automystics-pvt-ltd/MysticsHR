@@ -101,7 +101,7 @@ router.get("/employees", requireScope("employees:read"), async (req, res) => {
 router.get("/employees/:id", requireScope("employees:read"), async (req, res) => {
   try {
     const tenantId = req.apiKey!.tenantId;
-    const id = Number.parseInt(req.params.id, 10);
+    const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id) || id <= 0) {
       res.status(400).json({ error: "Invalid id" });
       return;

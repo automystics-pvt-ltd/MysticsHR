@@ -255,6 +255,8 @@ function PipelineTab() {
   const moveStage = useMoveCandidateStage({
     mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getListCandidatesQueryKey() }) },
   });
+  const [rejectDialog, setRejectDialog] = useState<{ candidateId: number } | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   if (isLoading) return <div className="text-center py-12 text-muted-foreground">Loading...</div>;
 
@@ -264,6 +266,7 @@ function PipelineTab() {
   }, {} as Record<string, typeof candidates>);
 
   return (
+    <>
     <div className="overflow-x-auto pb-3">
       <div className="flex gap-3 min-w-max">
         {STAGES.map((stage) => {
@@ -293,12 +296,12 @@ function PipelineTab() {
                           value={stage}
                           onValueChange={(newStage) => {
                             if (newStage === stage) return;
-                            const reason = newStage === "Rejected" ? prompt("Rejection reason:") : null;
-                            if (newStage === "Rejected" && !reason) return;
-                            moveStage.mutate({
-                              id: c.id,
-                              data: { stage: newStage, rejectionReason: reason ?? null },
-                            });
+                            if (newStage === "Rejected") {
+                              setRejectDialog({ candidateId: c.id });
+                              setRejectionReason("");
+                              return;
+                            }
+                            moveStage.mutate({ id: c.id, data: { stage: newStage, rejectionReason: null } });
                           }}
                         >
                           <SelectTrigger className="h-7 text-xs mt-2"><SelectValue /></SelectTrigger>
@@ -321,6 +324,40 @@ function PipelineTab() {
         })}
       </div>
     </div>
+
+      {/* Rejection reason dialog */}
+      <Dialog open={!!rejectDialog} onOpenChange={(o) => { if (!o) setRejectDialog(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reject Candidate</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="rejection-reason">Reason for rejection <span className="text-destructive">*</span></Label>
+            <Textarea
+              id="rejection-reason"
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Enter a clear reason for rejection..."
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectDialog(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={!rejectionReason.trim() || moveStage.isPending}
+              onClick={() => {
+                if (!rejectDialog || !rejectionReason.trim()) return;
+                moveStage.mutate(
+                  { id: rejectDialog.candidateId, data: { stage: "Rejected", rejectionReason } },
+                  { onSuccess: () => { setRejectDialog(null); setRejectionReason(""); } },
+                );
+              }}
+            >
+              {moveStage.isPending ? "Saving..." : "Confirm Rejection"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

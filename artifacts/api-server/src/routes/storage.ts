@@ -305,7 +305,7 @@ router.put(
       res.status(404).json({ error: "Not found" });
       return;
     }
-    const { objectId } = req.params;
+    const objectId = String(req.params.objectId ?? "");
     const expiresRaw = String(req.query.expires ?? "");
     const token = String(req.query.token ?? "");
     const expiresAt = Number(expiresRaw);
