@@ -1,1 +1,4 @@
 - [Employee status enum casing](employee-status-enum.md) — DB enum values are Title-case ("Active", "Pre-Joining", etc.); lowercase query params cause PostgreSQL to reject the comparison silently returning empty results.
+- [DB push approach](db-push.md) — always use raw SQL via executeSql, never `pnpm db push` (TTY interactive prompt blocks agent)
+- [OSM iframe maps](osm-maps.md) — LocationMap uses OSM iframe embed, no package/API key; bbox+marker URL param pattern works without Leaflet/Mapbox
+- [API client branches gap](api-client-branches.md) — branches endpoints exist in API but have no generated React hooks; use useQuery + direct fetch("/api/branches") instead

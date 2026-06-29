@@ -1121,6 +1121,8 @@ export default function EmployeeDetailPage() {
                 <InfoRow label="Status" value={emp.status} />
                 <InfoRow label="Date of Joining" value={emp.dateOfJoining ? format(new Date(emp.dateOfJoining), "dd MMM yyyy") : null} />
                 <InfoRow label="CTC" value={emp.ctc ? `₹ ${Number(emp.ctc).toLocaleString("en-IN")}` : null} />
+                <InfoRow label="Branch / Office" value={(emp as any).branchName} />
+                <InfoRow label="Default Shift" value={(emp as any).defaultShiftTemplateName ?? null} />
                 <InfoRow label="Work Location" value={profile?.workLocation} />
                 <InfoRow label="Probation End Date" value={profile?.probationEndDate} />
                 <InfoRow label="Confirmation Date" value={profile?.confirmationDate} />

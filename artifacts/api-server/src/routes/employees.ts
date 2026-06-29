@@ -9,6 +9,8 @@ import {
   systemSettingsTable,
   employeeSkillsTable,
   employeeCertificationsTable,
+  branchesTable,
+  shiftTemplatesTable,
 } from "@workspace/db/schema";
 import { eq, isNull, and, sql, desc, asc } from "drizzle-orm";
 import { autoCreateOnboardingChecklist } from "../lib/onboarding-utils";
@@ -48,6 +50,10 @@ const employeeSelect = {
   ctc: employeesTable.ctc,
   managerId: employeesTable.managerId,
   location: employeesTable.location,
+  branchId: employeesTable.branchId,
+  branchName: branchesTable.name,
+  defaultShiftTemplateId: employeesTable.defaultShiftTemplateId,
+  defaultShiftTemplateName: shiftTemplatesTable.name,
   timezone: employeesTable.timezone,
   avatarUrl: employeesTable.avatarUrl,
   isActive: employeesTable.isActive,
@@ -143,6 +149,8 @@ router.get("/employees", requireHrmsUser, async (req, res) => {
       .from(employeesTable)
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
+      .leftJoin(branchesTable, eq(employeesTable.branchId, branchesTable.id))
+      .leftJoin(shiftTemplatesTable, eq(employeesTable.defaultShiftTemplateId, shiftTemplatesTable.id))
       .where(whereClause)
       .orderBy(desc(employeesTable.createdAt))
       .limit(parseInt(limit, 10))
@@ -170,6 +178,7 @@ router.post(
         employeeId, firstName, lastName, email, phone, dateOfBirth,
         gender, departmentId, designationId, employmentType, status,
         dateOfJoining, ctc, managerId, location, avatarUrl, timezone,
+        branchId, defaultShiftTemplateId,
       } = req.body;
 
       if (!employeeId || !firstName || !lastName || !email) {
@@ -193,6 +202,8 @@ router.post(
           employeeId, firstName, lastName, email, phone, dateOfBirth,
           gender, departmentId, designationId, employmentType, status,
           dateOfJoining, ctc, managerId, location, avatarUrl,
+          branchId: branchId ? Number(branchId) : undefined,
+          defaultShiftTemplateId: defaultShiftTemplateId ? Number(defaultShiftTemplateId) : undefined,
           timezone: resolvedTimezone,
           tenantId: req.hrmsUser!.tenantId,
         })
@@ -251,6 +262,8 @@ router.get("/employees/org-chart", requireHrmsUser, async (_req, res) => {
       .from(employeesTable)
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
+      .leftJoin(branchesTable, eq(employeesTable.branchId, branchesTable.id))
+      .leftJoin(shiftTemplatesTable, eq(employeesTable.defaultShiftTemplateId, shiftTemplatesTable.id))
       .where(and(isNull(employeesTable.deletedAt), eq(employeesTable.isActive, true), eq(employeesTable.tenantId, _req.hrmsUser!.tenantId)));
 
     res.json({ data: rows });
@@ -300,6 +313,8 @@ router.get("/employees/:id", requireHrmsUser, async (req, res) => {
       .from(employeesTable)
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
+      .leftJoin(branchesTable, eq(employeesTable.branchId, branchesTable.id))
+      .leftJoin(shiftTemplatesTable, eq(employeesTable.defaultShiftTemplateId, shiftTemplatesTable.id))
       .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
       .limit(1);
 
@@ -325,6 +340,7 @@ router.patch(
         firstName, lastName, email, phone, dateOfBirth, gender,
         departmentId, designationId, employmentType, status,
         dateOfJoining, ctc, managerId, location, avatarUrl, isActive, timezone,
+        branchId, defaultShiftTemplateId,
       } = req.body;
 
       if (timezone !== undefined && !isValidIanaTimezone(timezone)) {
@@ -349,6 +365,8 @@ router.patch(
           firstName, lastName, email, phone, dateOfBirth, gender,
           departmentId, designationId, employmentType, status,
           dateOfJoining, ctc, managerId, location, avatarUrl, isActive,
+          ...(branchId !== undefined ? { branchId: branchId ? Number(branchId) : null } : {}),
+          ...(defaultShiftTemplateId !== undefined ? { defaultShiftTemplateId: defaultShiftTemplateId ? Number(defaultShiftTemplateId) : null } : {}),
           ...(timezone !== undefined ? { timezone } : {}),
           updatedAt: new Date(),
         })

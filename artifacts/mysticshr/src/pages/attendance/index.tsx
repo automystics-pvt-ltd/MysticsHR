@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Pencil, Calendar, ArrowRight, AlertTriangle } from "lucide-react";
+import { LocationMap } from "@/components/ui/LocationMap";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
 import { Link } from "wouter";
 
@@ -416,36 +417,30 @@ function HrAttendanceView() {
             <div><Label>Override Reason *</Label><Textarea value={overrideForm.overrideReason} onChange={e => setOverrideForm({ ...overrideForm, overrideReason: e.target.value })} rows={2} placeholder="Required" /></div>
             <div><Label>Notes</Label><Textarea value={overrideForm.notes} onChange={e => setOverrideForm({ ...overrideForm, notes: e.target.value })} rows={2} /></div>
             {editingRecord && (editingRecord.signInLatitude || editingRecord.signInUserAgent || editingRecord.signOutLatitude || editingRecord.signOutUserAgent) && (
-              <div className="rounded border bg-muted/30 p-3 text-xs space-y-2">
-                <div className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">Captured by employee</div>
-                {(editingRecord.signInLatitude || editingRecord.signInUserAgent) && (
-                  <div>
-                    <div className="font-medium">At clock-in</div>
-                    {editingRecord.signInLatitude && editingRecord.signInLongitude && (
-                      <div>
-                        Location: <a className="text-primary underline" target="_blank" rel="noreferrer"
-                          href={`https://www.google.com/maps?q=${editingRecord.signInLatitude},${editingRecord.signInLongitude}`}>
-                          {editingRecord.signInLatitude}, {editingRecord.signInLongitude}
-                        </a>
-                        {editingRecord.signInAccuracyMeters != null && <> · ±{editingRecord.signInAccuracyMeters}m</>}
-                      </div>
-                    )}
-                    {editingRecord.signInUserAgent && <div className="text-muted-foreground break-all">Device: {editingRecord.signInUserAgent}</div>}
-                  </div>
+              <div className="space-y-3">
+                <div className="font-medium text-xs text-muted-foreground uppercase tracking-wide">Location & Device Info</div>
+                {editingRecord.signInLatitude && editingRecord.signInLongitude && (
+                  <LocationMap
+                    latitude={editingRecord.signInLatitude}
+                    longitude={editingRecord.signInLongitude}
+                    accuracy={editingRecord.signInAccuracyMeters}
+                    label="Clock-In Location"
+                    height={160}
+                  />
                 )}
-                {(editingRecord.signOutLatitude || editingRecord.signOutUserAgent) && (
-                  <div>
-                    <div className="font-medium">At clock-out</div>
-                    {editingRecord.signOutLatitude && editingRecord.signOutLongitude && (
-                      <div>
-                        Location: <a className="text-primary underline" target="_blank" rel="noreferrer"
-                          href={`https://www.google.com/maps?q=${editingRecord.signOutLatitude},${editingRecord.signOutLongitude}`}>
-                          {editingRecord.signOutLatitude}, {editingRecord.signOutLongitude}
-                        </a>
-                        {editingRecord.signOutAccuracyMeters != null && <> · ±{editingRecord.signOutAccuracyMeters}m</>}
-                      </div>
-                    )}
-                    {editingRecord.signOutUserAgent && <div className="text-muted-foreground break-all">Device: {editingRecord.signOutUserAgent}</div>}
+                {editingRecord.signOutLatitude && editingRecord.signOutLongitude && (
+                  <LocationMap
+                    latitude={editingRecord.signOutLatitude}
+                    longitude={editingRecord.signOutLongitude}
+                    accuracy={editingRecord.signOutAccuracyMeters}
+                    label="Clock-Out Location"
+                    height={160}
+                  />
+                )}
+                {(editingRecord.signInUserAgent || editingRecord.signOutUserAgent) && (
+                  <div className="rounded border bg-muted/30 p-2 text-[11px] text-muted-foreground space-y-0.5">
+                    {editingRecord.signInUserAgent && <p className="break-all"><strong>Clock-in device:</strong> {editingRecord.signInUserAgent}</p>}
+                    {editingRecord.signOutUserAgent && <p className="break-all"><strong>Clock-out device:</strong> {editingRecord.signOutUserAgent}</p>}
                   </div>
                 )}
               </div>

@@ -1,0 +1,11 @@
+Perform a comprehensive review and enhancement of the HRMS modules to ensure all workflows are complete, accurate, and production-ready.
+
+* Implement location-based **Check-In/Check-Out** by capturing GPS coordinates, address, timestamp, and device details. Display employee check-in/check-out locations on maps, attendance records, and reports.
+* Implement a configurable **Approval Workflow** for Leave, Attendance Regularization, Permissions, Shift Changes, Overtime, Work From Home, Expense Claims, and other employee requests. Requests should automatically route to the Reporting Manager, HR, or Admin based on organizational hierarchy, with Approve, Reject, Send Back, Comments, Notifications, and Audit Trail support.
+* Complete **Organization Mapping** during employee onboarding by assigning Company, Branch, Department, Designation, Reporting Manager, Project, Team, Shift, and Location. Allow authorized users to update mappings later without affecting historical records.
+* Review and fix all **Administration** modules, ensuring every screen, workflow, configuration, validation, permission, and CRUD operation works correctly without errors.
+* Enhance **Payroll** with a complete, user-friendly workflow including salary structure, attendance integration, leave deduction, overtime, allowances, deductions, reimbursements, statutory compliance, payslips, payroll approvals, and reports.
+* Review and fix **Attendance, Shift Management, Leave Management, Permissions, Holidays, Employee Profiles, and HR workflows** to ensure accurate calculations, validations, approvals, and reporting.
+* Resolve all functional bugs, logical issues, validation gaps, data inconsistencies, and workflow problems across HRMS modules.
+* Improve UI/UX with consistent layouts, aligned controls, modern forms, responsive screens, intuitive navigation, professional menus, properly aligned buttons, search, filters, pagination, and enterprise-grade design.
+* Optimize performance while preserving all existing functionality and ensure the entire HRMS operates smoothly across mobile, tablet, desktop, and web.

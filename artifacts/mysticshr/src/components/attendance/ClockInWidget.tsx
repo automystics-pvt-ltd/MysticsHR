@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Clock, LogIn, LogOut, CheckCircle2 } from "lucide-react";
+import { LocationMap } from "@/components/ui/LocationMap";
 
 function localDateStr(d: Date): string {
   const y = d.getFullYear();
@@ -238,6 +239,33 @@ export function ClockInWidget() {
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
             <CheckCircle2 className="w-4 h-4 text-green-600" />
             You're done for today.
+          </div>
+        )}
+
+        {/* Location indicators */}
+        {(record as { signInLatitude?: string | null; signInLongitude?: string | null; signOutLatitude?: string | null; signOutLongitude?: string | null } | null)?.signInLatitude && (
+          <div className="mt-3 space-y-2">
+            {(record as { signInLatitude?: string | null; signInLongitude?: string | null; signInAccuracyMeters?: number | null })?.signInLatitude &&
+              (record as { signInLatitude?: string | null; signInLongitude?: string | null })?.signInLongitude && (
+              <LocationMap
+                latitude={(record as { signInLatitude?: string | null }).signInLatitude}
+                longitude={(record as { signInLongitude?: string | null }).signInLongitude}
+                accuracy={(record as { signInAccuracyMeters?: number | null }).signInAccuracyMeters}
+                label="Clock-In Location"
+                height={150}
+              />
+            )}
+            {status === "Clocked Out" &&
+              (record as { signOutLatitude?: string | null })?.signOutLatitude &&
+              (record as { signOutLongitude?: string | null })?.signOutLongitude && (
+              <LocationMap
+                latitude={(record as { signOutLatitude?: string | null }).signOutLatitude}
+                longitude={(record as { signOutLongitude?: string | null }).signOutLongitude}
+                accuracy={(record as { signOutAccuracyMeters?: number | null }).signOutAccuracyMeters}
+                label="Clock-Out Location"
+                height={150}
+              />
+            )}
           </div>
         )}
       </CardContent>

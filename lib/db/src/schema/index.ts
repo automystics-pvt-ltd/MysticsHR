@@ -43,3 +43,5 @@ export * from "./branches";
 export * from "./role-permissions";
 export * from "./tenant_registrations";
 export * from "./password_reset_tokens";
+export * from "./wfh_requests";
+export * from "./expense_claims";

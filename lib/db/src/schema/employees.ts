@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { departmentsTable } from "./departments";
 import { designationsTable } from "./designations";
 import { tenantsTable } from "./tenants";
+import { branchesTable } from "./branches";
 
 export const employmentTypeEnum = pgEnum("employment_type", [
   "Permanent",
@@ -42,6 +43,8 @@ export const employeesTable = pgTable("employees", {
   ctc: numeric("ctc", { precision: 14, scale: 2 }),
   managerId: integer("manager_id"),
   location: text("location"),
+  branchId: integer("branch_id").references(() => branchesTable.id),
+  defaultShiftTemplateId: integer("default_shift_template_id"),
   timezone: text("timezone").notNull().default("Asia/Kolkata"),
   avatarUrl: text("avatar_url"),
   isActive: boolean("is_active").notNull().default(true),

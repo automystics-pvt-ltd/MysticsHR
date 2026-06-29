@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useListDepartments,
   useListDesignations,
   useListEmployees,
+  useGetShiftsTemplates,
   getListEmployeesQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,8 @@ interface FormState {
   ctc: string;
   managerId: string;
   location: string;
+  branchId: string;
+  defaultShiftTemplateId: string;
   notes: string;
 }
 
@@ -54,6 +57,8 @@ const initialState: FormState = {
   dateOfBirth: "",
   gender: "",
   departmentId: "",
+  branchId: "",
+  defaultShiftTemplateId: "",
   designationId: "",
   employmentType: "Permanent",
   status: "Pre-Joining",
@@ -81,9 +86,16 @@ export default function NewEmployeePage() {
   const { data: deptResp } = useListDepartments();
   const { data: desigResp } = useListDesignations();
   const { data: empResp } = useListEmployees({ limit: 100 });
+  const { data: branchList = [] } = useQuery<any[]>({
+    queryKey: ["branches"],
+    queryFn: () => fetch(`${BASE_URL}/api/branches`, { credentials: "include" }).then((r) => r.json()),
+  });
+  const { data: shiftResp } = useGetShiftsTemplates();
   const departments = (Array.isArray(deptResp) ? deptResp : (deptResp as any)?.data) ?? [];
   const designations = (Array.isArray(desigResp) ? desigResp : (desigResp as any)?.data) ?? [];
   const employees = (Array.isArray(empResp) ? empResp : (empResp as any)?.data) ?? [];
+  const branches = Array.isArray(branchList) ? branchList : [];
+  const shiftTemplates = (Array.isArray(shiftResp) ? shiftResp : (shiftResp as any)?.data) ?? [];
 
   const filteredDesignations = form.departmentId
     ? designations.filter((d: any) => String(d.departmentId) === form.departmentId)
@@ -131,6 +143,8 @@ export default function NewEmployeePage() {
       if (form.ctc) payload.ctc = form.ctc;
       if (form.managerId) payload.managerId = Number(form.managerId);
       if (form.location) payload.location = form.location.trim();
+      if (form.branchId) payload.branchId = Number(form.branchId);
+      if (form.defaultShiftTemplateId) payload.defaultShiftTemplateId = Number(form.defaultShiftTemplateId);
 
       const resp = await fetch(`${BASE_URL}/api/employees`, {
         method: "POST",
@@ -279,6 +293,32 @@ export default function NewEmployeePage() {
                   {employees.map((e: any) => (
                     <SelectItem key={e.id} value={String(e.id)}>
                       {e.firstName} {e.lastName} — {e.employeeId}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Branch / Office</Label>
+              <Select value={form.branchId || undefined} onValueChange={(v) => update("branchId", v)}>
+                <SelectTrigger><SelectValue placeholder="Select branch (optional)" /></SelectTrigger>
+                <SelectContent>
+                  {branches.map((b: any) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.name}{b.city ? ` — ${b.city}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Default Shift</Label>
+              <Select value={form.defaultShiftTemplateId || undefined} onValueChange={(v) => update("defaultShiftTemplateId", v)}>
+                <SelectTrigger><SelectValue placeholder="Select shift template (optional)" /></SelectTrigger>
+                <SelectContent>
+                  {shiftTemplates.map((s: any) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}{s.startTime ? ` (${s.startTime}–${s.endTime})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -77,6 +77,9 @@ const SystemConfigPage = lazy(() => import("@/pages/system-config/index"));
 const ApiKeysPage = lazy(() => import("@/pages/settings/api-keys"));
 const ApiDocsPage = lazy(() => import("@/pages/settings/api-docs"));
 const BillingPage = lazy(() => import("@/pages/billing/index"));
+const WfhPage = lazy(() => import("@/pages/wfh/index"));
+const ExpensePage = lazy(() => import("@/pages/expense/index"));
+const ApprovalsHubPage = lazy(() => import("@/pages/approvals/index"));
 
 const PayrollChartHarnessLazy = lazy(() => import("./pages/__test__/payroll-chart-harness"));
 const PayrollReportsHarnessLazy = lazy(() => import("./pages/__test__/payroll-reports-harness"));
@@ -183,9 +186,7 @@ function NotFound() {
       <div className="text-center">
         <h1 className="text-4xl font-bold mb-4">404</h1>
         <p className="text-muted-foreground mb-4">Page not found</p>
-        <Link href="/">
-          <a className="text-primary hover:underline">Return Home</a>
-        </Link>
+        <Link href="/" className="text-primary hover:underline">Return Home</Link>
       </div>
     </div>
   );
@@ -443,6 +444,26 @@ function AppRoutes() {
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
               <PermissionsPage />
+            </RoleProtectedRoute>
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/wfh">
+          <ProtectedRoute>
+            <WfhPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/expense">
+          <ProtectedRoute>
+            <ExpensePage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/approvals">
+          <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
+              <ApprovalsHubPage />
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>

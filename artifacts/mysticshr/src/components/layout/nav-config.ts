@@ -28,6 +28,8 @@ import {
   BookOpen,
   MapPin,
   Lock,
+  Receipt,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 
@@ -203,6 +205,22 @@ export const NAV_GROUPS: NavGroup[] = [
         moduleKey: "work-permissions",
         keywords: ["short leave", "outdoor", "comp off"],
       },
+      {
+        name: "Work From Home",
+        href: "/wfh",
+        icon: Home,
+        roles: ALL_ROLES,
+        moduleKey: "wfh",
+        keywords: ["wfh", "remote", "work from home"],
+      },
+      {
+        name: "Approvals",
+        href: "/approvals",
+        icon: Inbox,
+        roles: ["customer_admin", "hr_manager", "hr_executive", "hod"],
+        moduleKey: "approvals",
+        keywords: ["pending", "approve", "reject", "inbox"],
+      },
     ],
   },
   {
@@ -255,6 +273,14 @@ export const NAV_GROUPS: NavGroup[] = [
         roles: ALL_ROLES,
         moduleKey: "documents",
         keywords: ["files", "letters", "certificates"],
+      },
+      {
+        name: "Expense Claims",
+        href: "/expense",
+        icon: Receipt,
+        roles: ALL_ROLES,
+        moduleKey: "expense-claims",
+        keywords: ["expense", "reimbursement", "claims", "bills"],
       },
       {
         name: "Communications",
