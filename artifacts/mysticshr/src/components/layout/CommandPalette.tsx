@@ -9,7 +9,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
-import { filterNavByRole, type Role } from "./nav-config";
+import { useMyPermissions } from "@/lib/useMyPermissions";
+import { filterNavByRole, filterNavByPermissions, type Role } from "./nav-config";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -20,10 +21,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [, setLocation] = useLocation();
   const { role: hrmsRole } = useCurrentHrmsUser();
   const role = (hrmsRole ?? "employee") as Role;
+  const { data: permissionsMap } = useMyPermissions();
 
-  const groups = useMemo(() => filterNavByRole(role), [role]);
+  const groups = useMemo(() => {
+    if (permissionsMap && Object.keys(permissionsMap).length > 0) {
+      return filterNavByPermissions(permissionsMap as Record<string, string[]>);
+    }
+    return filterNavByRole(role);
+  }, [permissionsMap, role]);
 
-  // Global ⌘/Ctrl+K shortcut.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {

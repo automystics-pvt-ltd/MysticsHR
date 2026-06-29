@@ -1,10 +1,2 @@
-- [Multi-tenant schema strategy](multi-tenant-schema.md) — tenantId: add nullable, backfill all rows, then notNull via push; super_admin removed from enum; platform admin in separate table
-- [Multi-tenant auth login design](multi-tenant-auth.md) — login accepts optional tenantSlug; falls back to bcrypt-comparing all email candidates across tenants
-- [Scheduler tenant isolation pattern](scheduler-tenant-pattern.md) — background jobs must group records by tenantId and fetch per-tenant config, never hardcode tenantId=1
-- [Platform Admin architecture](platform-admin-arch.md) — portal at /admin/, httpOnly cookie JWT separate from tenant auth; subscription_plans table seeded with 5 tiers; tenant status (active/trial/suspended/archived) auto-syncs isActive boolean
-- [Billing SQL raw alias pitfall](billing-sql-alias.md) — drizzle-orm raw sql`` blocks don't support table aliases (ti.col); always use the actual table name (tenant_invoices.col) in raw SQL fragments
-- [HRMS user extended fields](hrms-user-security-fields.md) — hrms_users extended with is_locked, failed_login_attempts, invite_token (48h TTL); safeUser() strips passwordHash + inviteToken and adds hasPassword/hasPendingInvite computed booleans
-- [Port 8080 conflict pattern](port-8080-conflict.md) — duplicate legacy "API Server" workflow races artifacts workflow for 8080; remove the legacy workflow first, then kill stale PID via /proc/net/tcp inode lookup.
-- [API server route prefix](api-route-prefix.md) — all Express routes mount under /api (app.use("/api", router)); shell curl tests must use /api/... not bare paths.
-- [Sidebar required exports](sidebar-exports.md) — Sidebar.tsx must export both Sidebar and SidebarMenuButton; TopBar.tsx imports SidebarMenuButton from ./Sidebar for mobile menu toggle.
-- [UX shared components](ux-shared-components.md) — PageHeader, StatCard, NotificationBell in layout/ and ui/; apply to every new page for consistent header, KPI, and notification patterns.
+- [RBAC & nav filtering](rbac-nav-filtering.md) — Sidebar+CommandPalette both use filterNavByPermissions; PermissionProtectedRoute added to key routes.
+- [Dashboard role-split](dashboard-role-split.md) — Dashboard has 4 distinct role views; KPI/chart APIs gated by needsKpis flag so employees never fire them.

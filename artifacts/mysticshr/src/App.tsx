@@ -6,6 +6,7 @@ import { ShieldAlert } from "lucide-react";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useCurrentHrmsUser, type HrmsRole, hasRole } from "@/lib/useCurrentHrmsUser";
+import { useMyPermissions } from "@/lib/useMyPermissions";
 
 const LandingPage = lazy(() => import("@/pages/landing"));
 const LoginPage = lazy(() => import("@/pages/login"));
@@ -155,6 +156,27 @@ function RoleProtectedRoute({
   return <>{children}</>;
 }
 
+/**
+ * Guards a route by checking a live RBAC permission (module + action).
+ * Falls back to allowing access while permissions are still loading so there
+ * is no flash of the Forbidden screen on first paint.
+ */
+function PermissionProtectedRoute({
+  children,
+  module,
+  action = "view",
+}: {
+  children: React.ReactNode;
+  module: string;
+  action?: string;
+}) {
+  const { data: permissionsMap, isLoading } = useMyPermissions();
+  if (isLoading || !permissionsMap) return <>{children}</>;
+  const allowed = (permissionsMap[module] ?? []).includes(action);
+  if (!allowed) return <Forbidden />;
+  return <>{children}</>;
+}
+
 function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center">
@@ -216,21 +238,27 @@ function AppRoutes() {
         <Route path="/employees/new">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
-              <NewEmployeePage />
+              <PermissionProtectedRoute module="employees" action="create">
+                <NewEmployeePage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/employees/:id">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
-              <EmployeeDetailPage />
+              <PermissionProtectedRoute module="employees">
+                <EmployeeDetailPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/employees">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
-              <EmployeesPage />
+              <PermissionProtectedRoute module="employees">
+                <EmployeesPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
@@ -276,21 +304,27 @@ function AppRoutes() {
         <Route path="/recruitment/requisitions/:id">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
-              <RequisitionDetailPage />
+              <PermissionProtectedRoute module="recruitment">
+                <RequisitionDetailPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/recruitment/candidates/:id">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
-              <CandidateDetailPage />
+              <PermissionProtectedRoute module="recruitment">
+                <CandidateDetailPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/recruitment">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
-              <RecruitmentPage />
+              <PermissionProtectedRoute module="recruitment">
+                <RecruitmentPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
@@ -416,49 +450,63 @@ function AppRoutes() {
         <Route path="/payroll/salary-structures">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
-              <SalaryStructuresPage />
+              <PermissionProtectedRoute module="payroll">
+                <SalaryStructuresPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/payroll/runs/:id">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "payroll_admin"]}>
-              <PayrollRunDetailPage />
+              <PermissionProtectedRoute module="payroll">
+                <PayrollRunDetailPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/payroll/payslips">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
-              <PayslipsPage />
+              <PermissionProtectedRoute module="payroll">
+                <PayslipsPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/payroll/tax-declaration">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
-              <TaxDeclarationPage />
+              <PermissionProtectedRoute module="payroll">
+                <TaxDeclarationPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/payroll/reports">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "payroll_admin"]}>
-              <StatutoryReportsPage />
+              <PermissionProtectedRoute module="payroll" action="reports">
+                <StatutoryReportsPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/payroll/salary-revisions">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
-              <SalaryRevisionsPage />
+              <PermissionProtectedRoute module="payroll">
+                <SalaryRevisionsPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
         <Route path="/payroll">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
-              <PayrollDashboardPage />
+              <PermissionProtectedRoute module="payroll">
+                <PayrollDashboardPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
@@ -569,7 +617,9 @@ function AppRoutes() {
         <Route path="/analytics">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
-              <AnalyticsDashboard />
+              <PermissionProtectedRoute module="analytics">
+                <AnalyticsDashboard />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
@@ -577,7 +627,9 @@ function AppRoutes() {
         <Route path="/reports">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
-              <ReportsPage />
+              <PermissionProtectedRoute module="reports">
+                <ReportsPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
@@ -600,7 +652,9 @@ function AppRoutes() {
         <Route path="/audit-logs">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager"]}>
-              <AuditLogsPage />
+              <PermissionProtectedRoute module="audit-logs">
+                <AuditLogsPage />
+              </PermissionProtectedRoute>
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
