@@ -57,7 +57,7 @@ const emptyForm = {
   name: "", type: "starter", priceMonthly: 0, priceYearly: 0,
   maxUsers: 10, maxEmployees: 50, maxBranches: 1, maxApiCalls: 10000,
   enabledModules: ["core"] as string[], enabledFeatures: [] as string[],
-  description: "",
+  description: "", offerText: "", badgeText: "", isFeatured: false, sortOrder: 0,
 };
 
 export function SubscriptionPlansPage() {
@@ -105,6 +105,8 @@ export function SubscriptionPlansPage() {
       enabledModules: Array.isArray(p.enabledModules) ? p.enabledModules : [],
       enabledFeatures: Array.isArray(p.enabledFeatures) ? p.enabledFeatures : [],
       description: p.description ?? "",
+      offerText: p.offerText ?? "", badgeText: p.badgeText ?? "",
+      isFeatured: p.isFeatured ?? false, sortOrder: p.sortOrder ?? 0,
     });
     setFormError(null);
   }
@@ -153,14 +155,23 @@ export function SubscriptionPlansPage() {
                 {/* Header */}
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <Badge variant="outline" className={`text-xs capitalize ${PLAN_COLORS[plan.type] ?? ""}`}>
                         {plan.type}
                       </Badge>
+                      {plan.isFeatured && (
+                        <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-400 border-amber-500/25">★ Featured</Badge>
+                      )}
+                      {plan.badgeText && (
+                        <Badge variant="outline" className="text-xs bg-sky-500/15 text-sky-400 border-sky-500/25">{plan.badgeText}</Badge>
+                      )}
                       {plan.tenantCount !== undefined && (
                         <span className="text-xs text-muted-foreground">{plan.tenantCount} tenant{plan.tenantCount !== 1 ? "s" : ""}</span>
                       )}
                     </div>
+                    {plan.offerText && (
+                      <p className="text-xs text-emerald-400 font-medium mt-1">{plan.offerText}</p>
+                    )}
                     <h3 className="text-base font-semibold text-foreground">{plan.name}</h3>
                     {plan.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{plan.description}</p>}
                   </div>
@@ -329,6 +340,36 @@ export function SubscriptionPlansPage() {
               <Label>Description</Label>
               <Textarea placeholder="Brief description shown to tenants…" rows={2} value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </div>
+
+            {/* Landing Page Controls */}
+            <div className="border border-border rounded-lg p-4 space-y-4">
+              <p className="text-sm font-semibold text-foreground">🌐 Landing Page Controls</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Badge Text <span className="text-muted-foreground font-normal text-xs">(shown on plan card)</span></Label>
+                  <Input placeholder='e.g. "Most Popular" or "Best Value"' value={form.badgeText}
+                    onChange={(e) => setForm({ ...form, badgeText: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Sort Order <span className="text-muted-foreground font-normal text-xs">(lower = first)</span></Label>
+                  <Input type="number" min={0} value={form.sortOrder}
+                    onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Offer Text <span className="text-muted-foreground font-normal text-xs">(promotional callout, optional)</span></Label>
+                <Input placeholder='e.g. "🎉 Limited time: 3 months free on annual plan!"' value={form.offerText}
+                  onChange={(e) => setForm({ ...form, offerText: e.target.value })} />
+              </div>
+              <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                <Checkbox checked={form.isFeatured}
+                  onCheckedChange={(v) => setForm({ ...form, isFeatured: !!v })} />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Featured / Highlighted</span>
+                  <p className="text-xs text-muted-foreground">Visually emphasise this plan on the landing page pricing section</p>
+                </div>
+              </label>
             </div>
           </div>
 

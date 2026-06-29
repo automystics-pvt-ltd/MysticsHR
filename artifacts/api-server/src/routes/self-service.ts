@@ -152,6 +152,7 @@ router.get("/auth/plans", async (_req, res) => {
       .select({
         id: subscriptionPlansTable.id,
         name: subscriptionPlansTable.name,
+        type: subscriptionPlansTable.type,
         description: subscriptionPlansTable.description,
         priceMonthly: subscriptionPlansTable.priceMonthly,
         priceYearly: subscriptionPlansTable.priceYearly,
@@ -160,10 +161,14 @@ router.get("/auth/plans", async (_req, res) => {
         maxBranches: subscriptionPlansTable.maxBranches,
         enabledModules: subscriptionPlansTable.enabledModules,
         enabledFeatures: subscriptionPlansTable.enabledFeatures,
+        offerText: subscriptionPlansTable.offerText,
+        badgeText: subscriptionPlansTable.badgeText,
+        isFeatured: subscriptionPlansTable.isFeatured,
+        sortOrder: subscriptionPlansTable.sortOrder,
       })
       .from(subscriptionPlansTable)
       .where(eq(subscriptionPlansTable.isActive, true))
-      .orderBy(subscriptionPlansTable.priceMonthly);
+      .orderBy(subscriptionPlansTable.sortOrder, subscriptionPlansTable.priceMonthly);
     res.json(plans);
   } catch (err) {
     console.error(err);

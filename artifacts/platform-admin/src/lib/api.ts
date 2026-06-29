@@ -139,6 +139,7 @@ export interface SubscriptionPlan {
   maxUsers: number; maxEmployees: number; maxBranches: number; maxApiCalls: number;
   enabledModules: string[]; enabledFeatures: string[];
   description?: string; isActive: boolean;
+  offerText?: string; badgeText?: string; isFeatured: boolean; sortOrder: number;
   tenantCount?: number;
   createdAt: string; updatedAt: string;
 }

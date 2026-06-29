@@ -179,7 +179,13 @@ function PlanCard({ plan, selected, onSelect }: { plan: Plan; selected: boolean;
 export default function LoginPage() {
   const { isSignedIn, isLoading, login } = useAuth();
   const [, setLocation] = useLocation();
-  const [mode, setMode] = useState<Mode>("login");
+  const initialMode = (): Mode => {
+    const params = new URLSearchParams(window.location.search);
+    const m = params.get("mode");
+    if (m === "signup" || m === "forgot") return m;
+    return "login";
+  };
+  const [mode, setMode] = useState<Mode>(initialMode);
 
   // ── Login ──
   const [loginEmail, setLoginEmail] = useState("");
