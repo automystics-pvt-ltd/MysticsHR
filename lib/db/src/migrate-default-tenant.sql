@@ -23,6 +23,22 @@
 --   VALUES ('admin@example.com','Platform Admin','<hash>',true);
 -- ============================================================
 
+-- ── Pre-migration: ensure customer_admin enum value exists ───────────────────
+-- ALTER TYPE ... ADD VALUE cannot be used inside a BEGIN...COMMIT transaction
+-- and then have the new value read in the same transaction (PostgreSQL restriction).
+-- Running it here, before BEGIN, means it commits in its own auto-commit transaction
+-- so the value is fully visible when Step B runs inside the transaction below.
+--
+-- The DO block guard handles two safe cases:
+--   • hrms_role doesn't exist yet (fresh DB, drizzle-kit push not yet run) → skipped
+--   • customer_admin already in enum (post-push or re-run) → IF NOT EXISTS no-op
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'hrms_role') THEN
+    EXECUTE 'ALTER TYPE hrms_role ADD VALUE IF NOT EXISTS ''customer_admin''';
+  END IF;
+END $$;
+
 BEGIN;
 
 -- ── 0. Bootstrap: create tenant infrastructure tables if missing ──────────────
