@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, numeric, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, numeric, date, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { candidatesTable } from "./candidates";
 import { hrmsUsersTable } from "./hrms_users";
 import { tenantsTable } from "./tenants";
@@ -30,6 +30,8 @@ export const offerLettersTable = pgTable("offer_letters", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("offer_letters_tenant_code_idx").on(table.tenantId, table.offerCode),
+]);
 
 export type OfferLetter = typeof offerLettersTable.$inferSelect;

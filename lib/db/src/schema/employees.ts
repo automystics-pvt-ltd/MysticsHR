@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, integer, timestamp, date, numeric, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, timestamp, date, numeric, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { departmentsTable } from "./departments";
@@ -48,7 +48,10 @@ export const employeesTable = pgTable("employees", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   deletedAt: timestamp("deleted_at"),
-});
+}, (table) => [
+  uniqueIndex("employees_tenant_employee_id_idx").on(table.tenantId, table.employeeId),
+  uniqueIndex("employees_tenant_email_idx").on(table.tenantId, table.email),
+]);
 
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({
   id: true,

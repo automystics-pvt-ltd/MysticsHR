@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, boolean, timestamp, date, numeric, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, timestamp, date, numeric, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
 import { hrmsUsersTable } from "./hrms_users";
 import { departmentsTable } from "./departments";
@@ -33,7 +33,9 @@ export const leaveTypesTable = pgTable("leave_types", {
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("leave_types_tenant_code_idx").on(table.tenantId, table.code),
+]);
 
 export const leavePoliciesTable = pgTable("leave_policies", {
   id: serial("id").primaryKey(),

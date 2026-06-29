@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, pgEnum, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, pgEnum, numeric, uniqueIndex } from "drizzle-orm/pg-core";
 import { departmentsTable } from "./departments";
 import { designationsTable } from "./designations";
 import { hrmsUsersTable } from "./hrms_users";
@@ -46,6 +46,8 @@ export const jobRequisitionsTable = pgTable("job_requisitions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
-});
+}, (table) => [
+  uniqueIndex("job_requisitions_tenant_code_idx").on(table.tenantId, table.requisitionCode),
+]);
 
 export type JobRequisition = typeof jobRequisitionsTable.$inferSelect;

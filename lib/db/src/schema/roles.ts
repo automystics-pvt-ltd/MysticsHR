@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tenantsTable } from "./tenants";
@@ -12,7 +12,9 @@ export const rolesTable = pgTable("roles", {
   level: integer("level").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex("roles_tenant_slug_idx").on(table.tenantId, table.slug),
+]);
 
 export const selectRoleSchema = createSelectSchema(rolesTable);
 export type Role = typeof rolesTable.$inferSelect;

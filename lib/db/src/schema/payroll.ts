@@ -1,5 +1,5 @@
 import {
-  pgTable, serial, integer, boolean, timestamp, date, numeric, pgEnum, text, jsonb,
+  pgTable, serial, integer, boolean, timestamp, date, numeric, pgEnum, text, jsonb, uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
 import { hrmsUsersTable } from "./hrms_users";
@@ -229,7 +229,9 @@ export const payrollSettingsTable = pgTable("payroll_settings", {
   updatedById: integer("updated_by_id").references(() => hrmsUsersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("payroll_settings_tenant_key_idx").on(table.tenantId, table.settingKey),
+]);
 
 // ─── LOAN REPAYMENTS ──────────────────────────────────────────────────────────
 export const loanRepaymentsTable = pgTable("loan_repayments", {

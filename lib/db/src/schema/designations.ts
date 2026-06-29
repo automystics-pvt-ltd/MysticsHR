@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { departmentsTable } from "./departments";
@@ -15,7 +15,9 @@ export const designationsTable = pgTable("designations", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   deletedAt: timestamp("deleted_at"),
-});
+}, (table) => [
+  uniqueIndex("designations_tenant_code_idx").on(table.tenantId, table.code),
+]);
 
 export const insertDesignationSchema = createInsertSchema(designationsTable).omit({
   id: true,
