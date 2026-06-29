@@ -12,6 +12,8 @@ import { AdminsPage } from "@/pages/AdminsPage";
 import { AuditLogsPage } from "@/pages/AuditLogsPage";
 import { SubscriptionPlansPage } from "@/pages/SubscriptionPlansPage";
 import { AnalyticsPage } from "@/pages/AnalyticsPage";
+import { InvoicesPage } from "@/pages/InvoicesPage";
+import { BillingReportsPage } from "@/pages/BillingReportsPage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -41,6 +43,8 @@ function Router() {
       <Route path="/tenants/:id"><ProtectedRoute><TenantDetailPage /></ProtectedRoute></Route>
       <Route path="/tenants"><ProtectedRoute><TenantsPage /></ProtectedRoute></Route>
       <Route path="/subscription-plans"><ProtectedRoute><SubscriptionPlansPage /></ProtectedRoute></Route>
+      <Route path="/invoices"><ProtectedRoute><InvoicesPage /></ProtectedRoute></Route>
+      <Route path="/billing-reports"><ProtectedRoute><BillingReportsPage /></ProtectedRoute></Route>
       <Route path="/admins"><ProtectedRoute><AdminsPage /></ProtectedRoute></Route>
       <Route path="/analytics"><ProtectedRoute><AnalyticsPage /></ProtectedRoute></Route>
       <Route path="/audit-logs"><ProtectedRoute><AuditLogsPage /></ProtectedRoute></Route>

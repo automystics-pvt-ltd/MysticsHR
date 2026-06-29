@@ -14,6 +14,8 @@ export const tenantsTable = pgTable("tenants", {
   website: text("website"),
   country: text("country"),
   notes: text("notes"),
+  billingCycle: text("billing_cycle").notNull().default("monthly"),
+  gracePeriodDays: integer("grace_period_days").notNull().default(7),
   trialEndsAt: timestamp("trial_ends_at"),
   subscriptionStartsAt: timestamp("subscription_starts_at"),
   subscriptionEndsAt: timestamp("subscription_ends_at"),

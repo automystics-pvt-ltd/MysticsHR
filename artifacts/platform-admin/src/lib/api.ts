@@ -83,6 +83,47 @@ export const api = {
       `/platform/audit-logs?${qs}`
     );
   },
+
+  // ─── Billing ───────────────────────────────────────────────────────────────
+
+  // Tenant invoices
+  listTenantInvoices: (tenantId: number) =>
+    apiFetch<{ data: Invoice[]; total: number }>(`/platform/tenants/${tenantId}/invoices`),
+  createTenantInvoice: (tenantId: number, data: CreateInvoiceInput) =>
+    apiFetch<Invoice>(`/platform/tenants/${tenantId}/invoices`, { method: "POST", body: JSON.stringify(data) }),
+
+  // Platform-wide invoices
+  listInvoices: (params?: { status?: string; tenantId?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status && params.status !== "all") qs.set("status", params.status);
+    if (params?.tenantId) qs.set("tenantId", String(params.tenantId));
+    const q = qs.toString();
+    return apiFetch<{ data: Invoice[]; total: number }>(`/platform/invoices${q ? `?${q}` : ""}`);
+  },
+
+  // Invoice operations
+  getInvoice: (id: number) => apiFetch<InvoiceDetail>(`/platform/invoices/${id}`),
+  updateInvoice: (id: number, data: Partial<Invoice>) =>
+    apiFetch<Invoice>(`/platform/invoices/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  payInvoice: (id: number, data: RecordPaymentInput) =>
+    apiFetch<{ ok: boolean; payment: Payment }>(`/platform/invoices/${id}/pay`, { method: "POST", body: JSON.stringify(data) }),
+  voidInvoice: (id: number) =>
+    apiFetch<{ ok: boolean }>(`/platform/invoices/${id}`, { method: "DELETE" }),
+
+  // Tenant billing summary
+  getTenantBillingSummary: (tenantId: number) =>
+    apiFetch<BillingSummary>(`/platform/tenants/${tenantId}/billing-summary`),
+
+  // Billing reports
+  getBillingReports: () => apiFetch<BillingReport>("/platform/billing/reports"),
+
+  // Enforce subscriptions
+  enforceSubscriptions: () =>
+    apiFetch<EnforceResult>("/platform/billing/enforce-subscriptions", { method: "POST" }),
+
+  // Update tenant billing settings
+  updateTenantBilling: (id: number, data: { billingCycle?: string; gracePeriodDays?: number }) =>
+    apiFetch<Tenant>(`/platform/tenants/${id}/billing`, { method: "PATCH", body: JSON.stringify(data) }),
 };
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -108,6 +149,7 @@ export interface Tenant {
   planId?: number | null; planName?: string | null; planType?: string | null;
   contactEmail?: string | null; industry?: string | null;
   website?: string | null; country?: string | null;
+  billingCycle?: string; gracePeriodDays?: number;
   trialEndsAt?: string | null; subscriptionEndsAt?: string | null;
   userCount?: number; employeeCount?: number;
   createdAt: string; updatedAt: string;
@@ -160,4 +202,119 @@ export interface AuditLog {
   module?: string; userEmail?: string;
   performedByUserId?: number; createdAt: string;
   metadata?: Record<string, unknown>;
+}
+
+// ─── Billing Types ─────────────────────────────────────────────────────────────
+
+export interface Invoice {
+  id: number;
+  tenantId: number;
+  tenantName?: string;
+  planId?: number | null;
+  planName?: string | null;
+  invoiceNumber: string;
+  billingCycle: string;
+  amountCents: number;
+  currency: string;
+  billingPeriodStart?: string | null;
+  billingPeriodEnd?: string | null;
+  dueDate?: string | null;
+  status: string; // pending | paid | overdue | void | cancelled
+  issuedAt: string;
+  paidAt?: string | null;
+  paymentMethod?: string | null;
+  paymentReference?: string | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface Payment {
+  id: number;
+  tenantId: number;
+  invoiceId?: number | null;
+  amountCents: number;
+  currency: string;
+  paymentDate: string;
+  paymentMethod?: string | null;
+  referenceNumber?: string | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface InvoiceDetail extends Invoice {
+  tenantSlug?: string;
+  tenantContactEmail?: string | null;
+  updatedAt: string;
+  payments: Payment[];
+}
+
+export interface CreateInvoiceInput {
+  billingCycle?: string;
+  amountCents?: number;
+  currency?: string;
+  billingPeriodStart?: string;
+  billingPeriodEnd?: string;
+  dueDate?: string;
+  notes?: string;
+  planId?: number;
+  autoGenerate?: boolean;
+}
+
+export interface RecordPaymentInput {
+  paymentDate?: string;
+  paymentMethod?: string;
+  referenceNumber?: string;
+  notes?: string;
+  amountCents?: number;
+}
+
+export interface BillingSummary {
+  tenant: {
+    id: number; status: string; billingCycle: string;
+    planId?: number | null; planName?: string | null;
+    planPriceMonthly?: number | null; planPriceYearly?: number | null;
+    subscriptionEndsAt?: string | null; gracePeriodDays: number;
+  };
+  stats: {
+    totalInvoiced: number; totalPaid: number; totalOutstanding: number;
+    totalOverdue: number; invoiceCount: number;
+    overdueCount: number; pendingCount: number; paidCount: number;
+  };
+  gracePeriodInfo?: {
+    isExpired: boolean; daysOverdue: number; isInGrace: boolean; gracePeriodDays: number;
+  } | null;
+  recentPayments: Payment[];
+}
+
+export interface BillingReport {
+  overall: {
+    totalInvoiced: number; totalCollected: number; totalOverdue: number;
+    totalPending: number; invoiceCount: number; paidCount: number; overdueCount: number;
+  };
+  monthly: { month: string; invoiced: number; collected: number; count: number }[];
+  byPlan: { planName: string; planType: string; invoiced: number; collected: number; count: number }[];
+  topTenants: { tenantId: number; tenantName: string; tenantStatus: string; totalPaid: number; totalInvoiced: number }[];
+}
+
+export interface EnforceResult {
+  ok: boolean;
+  invoicesMarkedOverdue: number;
+  tenantsSuspended: number;
+  tenantsInGrace: number;
+  suspendedIds: number[];
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+export function fmtMoney(cents: number, currency = "INR"): string {
+  const amount = cents / 100;
+  if (currency === "INR") {
+    return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 }).format(amount);
+  }
+  return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0 }).format(amount);
+}
+
+export function fmtDate(iso?: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }

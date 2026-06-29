@@ -8,8 +8,10 @@ import {
   employeesTable,
   auditLogsTable,
   subscriptionPlansTable,
+  tenantInvoicesTable,
+  tenantPaymentsTable,
 } from "@workspace/db/schema";
-import { and, eq, sql, desc, inArray, ne } from "drizzle-orm";
+import { and, eq, sql, desc, ne, lt, lte, or, isNull } from "drizzle-orm";
 import {
   signPlatformToken,
   setPlatformAuthCookie,
@@ -568,6 +570,491 @@ router.get("/platform/audit-logs", async (req, res) => {
     const logs = await db.select().from(auditLogsTable).where(where)
       .orderBy(desc(auditLogsTable.createdAt)).limit(limit).offset(offset);
     res.json({ data: logs, total: count ?? 0, limit, offset });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Billing Helpers ───────────────────────────────────────────────────────────
+
+async function genInvoiceNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const [{ c }] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(tenantInvoicesTable)
+    .where(sql`extract(year from created_at) = ${year}`);
+  return `INV-${year}-${String((c ?? 0) + 1).padStart(5, "0")}`;
+}
+
+function fmtCents(cents: number) { return cents; }
+
+// ─── Platform-wide Invoices ────────────────────────────────────────────────────
+
+router.get("/platform/invoices", async (req, res) => {
+  try {
+    const statusFilter = req.query.status as string | undefined;
+    const tenantIdFilter = req.query.tenantId ? Number(req.query.tenantId) : undefined;
+    const conditions = [];
+    if (statusFilter && statusFilter !== "all") conditions.push(eq(tenantInvoicesTable.status, statusFilter));
+    if (tenantIdFilter) conditions.push(eq(tenantInvoicesTable.tenantId, tenantIdFilter));
+    const invoices = await db.select({
+      id: tenantInvoicesTable.id,
+      tenantId: tenantInvoicesTable.tenantId,
+      tenantName: tenantsTable.name,
+      planId: tenantInvoicesTable.planId,
+      planName: subscriptionPlansTable.name,
+      invoiceNumber: tenantInvoicesTable.invoiceNumber,
+      billingCycle: tenantInvoicesTable.billingCycle,
+      amountCents: tenantInvoicesTable.amountCents,
+      currency: tenantInvoicesTable.currency,
+      billingPeriodStart: tenantInvoicesTable.billingPeriodStart,
+      billingPeriodEnd: tenantInvoicesTable.billingPeriodEnd,
+      dueDate: tenantInvoicesTable.dueDate,
+      status: tenantInvoicesTable.status,
+      issuedAt: tenantInvoicesTable.issuedAt,
+      paidAt: tenantInvoicesTable.paidAt,
+      paymentMethod: tenantInvoicesTable.paymentMethod,
+      paymentReference: tenantInvoicesTable.paymentReference,
+      notes: tenantInvoicesTable.notes,
+      createdAt: tenantInvoicesTable.createdAt,
+    }).from(tenantInvoicesTable)
+      .leftJoin(tenantsTable, eq(tenantInvoicesTable.tenantId, tenantsTable.id))
+      .leftJoin(subscriptionPlansTable, eq(tenantInvoicesTable.planId, subscriptionPlansTable.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(tenantInvoicesTable.createdAt));
+    res.json({ data: invoices, total: invoices.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenant Invoices ───────────────────────────────────────────────────────────
+
+router.get("/platform/tenants/:id/invoices", async (req, res) => {
+  try {
+    const tenantId = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(tenantId)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const invoices = await db.select({
+      id: tenantInvoicesTable.id,
+      tenantId: tenantInvoicesTable.tenantId,
+      planId: tenantInvoicesTable.planId,
+      planName: subscriptionPlansTable.name,
+      invoiceNumber: tenantInvoicesTable.invoiceNumber,
+      billingCycle: tenantInvoicesTable.billingCycle,
+      amountCents: tenantInvoicesTable.amountCents,
+      currency: tenantInvoicesTable.currency,
+      billingPeriodStart: tenantInvoicesTable.billingPeriodStart,
+      billingPeriodEnd: tenantInvoicesTable.billingPeriodEnd,
+      dueDate: tenantInvoicesTable.dueDate,
+      status: tenantInvoicesTable.status,
+      issuedAt: tenantInvoicesTable.issuedAt,
+      paidAt: tenantInvoicesTable.paidAt,
+      paymentMethod: tenantInvoicesTable.paymentMethod,
+      paymentReference: tenantInvoicesTable.paymentReference,
+      notes: tenantInvoicesTable.notes,
+      createdAt: tenantInvoicesTable.createdAt,
+    }).from(tenantInvoicesTable)
+      .leftJoin(subscriptionPlansTable, eq(tenantInvoicesTable.planId, subscriptionPlansTable.id))
+      .where(eq(tenantInvoicesTable.tenantId, tenantId))
+      .orderBy(desc(tenantInvoicesTable.createdAt));
+    res.json({ data: invoices, total: invoices.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/platform/tenants/:id/invoices", async (req, res) => {
+  try {
+    const tenantId = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(tenantId)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [tenant] = await db.select({
+      id: tenantsTable.id, planId: tenantsTable.planId, billingCycle: tenantsTable.billingCycle,
+    }).from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const {
+      billingCycle, amountCents, currency = "INR",
+      billingPeriodStart, billingPeriodEnd, dueDate, notes, planId, autoGenerate = false,
+    } = req.body as {
+      billingCycle?: string; amountCents?: number; currency?: string;
+      billingPeriodStart?: string; billingPeriodEnd?: string; dueDate?: string;
+      notes?: string; planId?: number; autoGenerate?: boolean;
+    };
+
+    const cycle = billingCycle ?? tenant.billingCycle ?? "monthly";
+    const finalPlanId = planId ?? tenant.planId ?? null;
+    let finalAmount = amountCents;
+
+    if (autoGenerate && finalPlanId) {
+      const [plan] = await db.select().from(subscriptionPlansTable)
+        .where(eq(subscriptionPlansTable.id, finalPlanId)).limit(1);
+      if (plan) finalAmount = cycle === "yearly" ? plan.priceYearly : plan.priceMonthly;
+    }
+    if (finalAmount == null) { res.status(400).json({ error: "amountCents is required (or use autoGenerate=true with a plan)" }); return; }
+
+    const today = new Date().toISOString().split("T")[0];
+    const start = billingPeriodStart ?? today;
+    let end = billingPeriodEnd;
+    let due = dueDate;
+    if (!end) {
+      const d = new Date(start);
+      if (cycle === "yearly") { d.setFullYear(d.getFullYear() + 1); d.setDate(d.getDate() - 1); }
+      else { d.setMonth(d.getMonth() + 1); d.setDate(d.getDate() - 1); }
+      end = d.toISOString().split("T")[0];
+    }
+    if (!due) {
+      const d = new Date(start); d.setDate(d.getDate() + 30);
+      due = d.toISOString().split("T")[0];
+    }
+
+    const invoiceNumber = await genInvoiceNumber();
+    const [invoice] = await db.insert(tenantInvoicesTable).values({
+      tenantId, planId: finalPlanId, invoiceNumber, billingCycle: cycle,
+      amountCents: finalAmount, currency, billingPeriodStart: start, billingPeriodEnd: end,
+      dueDate: due, status: "pending", notes: notes ?? null,
+    }).returning();
+    res.status(201).json(invoice);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Invoice Detail, Update, Pay, Void ────────────────────────────────────────
+
+router.get("/platform/invoices/:id", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [invoice] = await db.select({
+      id: tenantInvoicesTable.id,
+      tenantId: tenantInvoicesTable.tenantId,
+      tenantName: tenantsTable.name,
+      tenantSlug: tenantsTable.slug,
+      tenantContactEmail: tenantsTable.contactEmail,
+      planId: tenantInvoicesTable.planId,
+      planName: subscriptionPlansTable.name,
+      invoiceNumber: tenantInvoicesTable.invoiceNumber,
+      billingCycle: tenantInvoicesTable.billingCycle,
+      amountCents: tenantInvoicesTable.amountCents,
+      currency: tenantInvoicesTable.currency,
+      billingPeriodStart: tenantInvoicesTable.billingPeriodStart,
+      billingPeriodEnd: tenantInvoicesTable.billingPeriodEnd,
+      dueDate: tenantInvoicesTable.dueDate,
+      status: tenantInvoicesTable.status,
+      issuedAt: tenantInvoicesTable.issuedAt,
+      paidAt: tenantInvoicesTable.paidAt,
+      paymentMethod: tenantInvoicesTable.paymentMethod,
+      paymentReference: tenantInvoicesTable.paymentReference,
+      notes: tenantInvoicesTable.notes,
+      createdAt: tenantInvoicesTable.createdAt,
+      updatedAt: tenantInvoicesTable.updatedAt,
+    }).from(tenantInvoicesTable)
+      .leftJoin(tenantsTable, eq(tenantInvoicesTable.tenantId, tenantsTable.id))
+      .leftJoin(subscriptionPlansTable, eq(tenantInvoicesTable.planId, subscriptionPlansTable.id))
+      .where(eq(tenantInvoicesTable.id, id)).limit(1);
+    if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
+    const payments = await db.select().from(tenantPaymentsTable)
+      .where(eq(tenantPaymentsTable.invoiceId, id))
+      .orderBy(desc(tenantPaymentsTable.createdAt));
+    res.json({ ...invoice, payments });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.patch("/platform/invoices/:id", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const body = req.body as Record<string, unknown>;
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const textFields = ["status","currency","billingPeriodStart","billingPeriodEnd","dueDate","paymentMethod","paymentReference","notes","billingCycle"] as const;
+    for (const f of textFields) if (f in body) updates[f] = body[f] === null ? null : String(body[f]);
+    if ("amountCents" in body) updates.amountCents = Number(body.amountCents);
+    const [updated] = await db.update(tenantInvoicesTable).set(updates as never)
+      .where(eq(tenantInvoicesTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Invoice not found" }); return; }
+    res.json(updated);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/platform/invoices/:id/pay", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [invoice] = await db.select().from(tenantInvoicesTable)
+      .where(eq(tenantInvoicesTable.id, id)).limit(1);
+    if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
+    if (invoice.status === "paid") { res.status(409).json({ error: "Invoice is already paid" }); return; }
+    if (invoice.status === "void") { res.status(409).json({ error: "Cannot pay a voided invoice" }); return; }
+
+    const {
+      paymentDate, paymentMethod = "Bank Transfer", referenceNumber, notes, amountCents,
+    } = req.body as {
+      paymentDate?: string; paymentMethod?: string; referenceNumber?: string;
+      notes?: string; amountCents?: number;
+    };
+    const today = new Date().toISOString().split("T")[0];
+    const paidAmountCents = amountCents ?? invoice.amountCents;
+
+    // Record payment
+    const [payment] = await db.insert(tenantPaymentsTable).values({
+      tenantId: invoice.tenantId,
+      invoiceId: invoice.id,
+      amountCents: paidAmountCents,
+      currency: invoice.currency,
+      paymentDate: paymentDate ?? today,
+      paymentMethod,
+      referenceNumber: referenceNumber ?? null,
+      notes: notes ?? null,
+    }).returning();
+
+    // Mark invoice paid
+    const now = new Date();
+    await db.update(tenantInvoicesTable).set({
+      status: "paid",
+      paidAt: now,
+      paymentMethod,
+      paymentReference: referenceNumber ?? null,
+      updatedAt: now,
+    }).where(eq(tenantInvoicesTable.id, id));
+
+    // Restore tenant if suspended/overdue — check for any remaining overdue invoices
+    const [overdueCount] = await db.select({ c: sql<number>`count(*)::int` })
+      .from(tenantInvoicesTable)
+      .where(and(
+        eq(tenantInvoicesTable.tenantId, invoice.tenantId),
+        eq(tenantInvoicesTable.status, "overdue"),
+      ));
+    const [tenant] = await db.select({ status: tenantsTable.status, billingCycle: tenantsTable.billingCycle })
+      .from(tenantsTable).where(eq(tenantsTable.id, invoice.tenantId)).limit(1);
+
+    if (tenant && tenant.status === "suspended" && (overdueCount?.c ?? 0) === 0) {
+      // Extend subscription and restore
+      const cycle = tenant.billingCycle ?? "monthly";
+      const newEnd = new Date();
+      if (cycle === "yearly") newEnd.setFullYear(newEnd.getFullYear() + 1);
+      else newEnd.setMonth(newEnd.getMonth() + 1);
+      await db.update(tenantsTable).set({
+        status: "active", isActive: true,
+        subscriptionEndsAt: newEnd, updatedAt: new Date(),
+      }).where(eq(tenantsTable.id, invoice.tenantId));
+    }
+
+    res.json({ ok: true, payment });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.delete("/platform/invoices/:id", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [invoice] = await db.select({ status: tenantInvoicesTable.status })
+      .from(tenantInvoicesTable).where(eq(tenantInvoicesTable.id, id)).limit(1);
+    if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
+    if (invoice.status === "paid") { res.status(409).json({ error: "Cannot void a paid invoice" }); return; }
+    await db.update(tenantInvoicesTable).set({ status: "void", updatedAt: new Date() })
+      .where(eq(tenantInvoicesTable.id, id));
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenant Billing Summary ────────────────────────────────────────────────────
+
+router.get("/platform/tenants/:id/billing-summary", async (req, res) => {
+  try {
+    const tenantId = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(tenantId)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [tenant] = await db.select({
+      id: tenantsTable.id, status: tenantsTable.status,
+      subscriptionEndsAt: tenantsTable.subscriptionEndsAt,
+      gracePeriodDays: tenantsTable.gracePeriodDays,
+      billingCycle: tenantsTable.billingCycle,
+      planId: tenantsTable.planId,
+      planName: subscriptionPlansTable.name,
+      planPriceMonthly: subscriptionPlansTable.priceMonthly,
+      planPriceYearly: subscriptionPlansTable.priceYearly,
+    }).from(tenantsTable)
+      .leftJoin(subscriptionPlansTable, eq(tenantsTable.planId, subscriptionPlansTable.id))
+      .where(eq(tenantsTable.id, tenantId)).limit(1);
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const [stats] = await db.select({
+      totalInvoiced: sql<number>`coalesce(sum(amount_cents), 0)::int`,
+      totalPaid: sql<number>`coalesce(sum(case when status = 'paid' then amount_cents else 0 end), 0)::int`,
+      totalOverdue: sql<number>`coalesce(sum(case when status = 'overdue' then amount_cents else 0 end), 0)::int`,
+      invoiceCount: sql<number>`count(*)::int`,
+      overdueCount: sql<number>`sum(case when status = 'overdue' then 1 else 0 end)::int`,
+      pendingCount: sql<number>`sum(case when status = 'pending' then 1 else 0 end)::int`,
+      paidCount: sql<number>`sum(case when status = 'paid' then 1 else 0 end)::int`,
+    }).from(tenantInvoicesTable)
+      .where(and(eq(tenantInvoicesTable.tenantId, tenantId), ne(tenantInvoicesTable.status, "void")));
+
+    const recentPayments = await db.select().from(tenantPaymentsTable)
+      .where(eq(tenantPaymentsTable.tenantId, tenantId))
+      .orderBy(desc(tenantPaymentsTable.createdAt)).limit(5);
+
+    // Grace period info
+    const now = new Date();
+    let gracePeriodInfo: { isExpired: boolean; daysOverdue: number; isInGrace: boolean; gracePeriodDays: number } | null = null;
+    if (tenant.subscriptionEndsAt) {
+      const endDate = new Date(tenant.subscriptionEndsAt);
+      const daysOverdue = Math.floor((now.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24));
+      gracePeriodInfo = {
+        isExpired: daysOverdue > 0,
+        daysOverdue: Math.max(0, daysOverdue),
+        isInGrace: daysOverdue > 0 && daysOverdue <= (tenant.gracePeriodDays ?? 7),
+        gracePeriodDays: tenant.gracePeriodDays ?? 7,
+      };
+    }
+
+    res.json({
+      tenant: {
+        id: tenant.id, status: tenant.status, billingCycle: tenant.billingCycle,
+        planId: tenant.planId, planName: tenant.planName,
+        planPriceMonthly: tenant.planPriceMonthly, planPriceYearly: tenant.planPriceYearly,
+        subscriptionEndsAt: tenant.subscriptionEndsAt, gracePeriodDays: tenant.gracePeriodDays,
+      },
+      stats: {
+        totalInvoiced: stats?.totalInvoiced ?? 0,
+        totalPaid: stats?.totalPaid ?? 0,
+        totalOutstanding: (stats?.totalInvoiced ?? 0) - (stats?.totalPaid ?? 0),
+        totalOverdue: stats?.totalOverdue ?? 0,
+        invoiceCount: stats?.invoiceCount ?? 0,
+        overdueCount: stats?.overdueCount ?? 0,
+        pendingCount: stats?.pendingCount ?? 0,
+        paidCount: stats?.paidCount ?? 0,
+      },
+      gracePeriodInfo,
+      recentPayments,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Billing Reports ───────────────────────────────────────────────────────────
+
+router.get("/platform/billing/reports", async (_req, res) => {
+  try {
+    // Overall stats
+    const [overall] = await db.select({
+      totalInvoiced: sql<number>`coalesce(sum(amount_cents), 0)::int`,
+      totalCollected: sql<number>`coalesce(sum(case when status = 'paid' then amount_cents else 0 end), 0)::int`,
+      totalOverdue: sql<number>`coalesce(sum(case when status = 'overdue' then amount_cents else 0 end), 0)::int`,
+      totalPending: sql<number>`coalesce(sum(case when status = 'pending' then amount_cents else 0 end), 0)::int`,
+      invoiceCount: sql<number>`count(*)::int`,
+      paidCount: sql<number>`sum(case when status = 'paid' then 1 else 0 end)::int`,
+      overdueCount: sql<number>`sum(case when status = 'overdue' then 1 else 0 end)::int`,
+    }).from(tenantInvoicesTable).where(ne(tenantInvoicesTable.status, "void"));
+
+    // Monthly revenue (last 12 months)
+    const monthly = await db.select({
+      month: sql<string>`to_char(date_trunc('month', issued_at), 'YYYY-MM')`,
+      invoiced: sql<number>`coalesce(sum(amount_cents), 0)::int`,
+      collected: sql<number>`coalesce(sum(case when status = 'paid' then amount_cents else 0 end), 0)::int`,
+      count: sql<number>`count(*)::int`,
+    }).from(tenantInvoicesTable)
+      .where(and(
+        ne(tenantInvoicesTable.status, "void"),
+        sql`issued_at >= now() - interval '12 months'`,
+      ))
+      .groupBy(sql`date_trunc('month', issued_at)`)
+      .orderBy(sql`date_trunc('month', issued_at)`);
+
+    // Revenue by plan
+    const byPlan = await db.select({
+      planName: subscriptionPlansTable.name,
+      planType: subscriptionPlansTable.type,
+      invoiced: sql<number>`coalesce(sum(tenant_invoices.amount_cents), 0)::int`,
+      collected: sql<number>`coalesce(sum(case when tenant_invoices.status = 'paid' then tenant_invoices.amount_cents else 0 end), 0)::int`,
+      count: sql<number>`count(tenant_invoices.id)::int`,
+    }).from(subscriptionPlansTable)
+      .leftJoin(tenantInvoicesTable, and(
+        eq(tenantInvoicesTable.planId, subscriptionPlansTable.id),
+        ne(tenantInvoicesTable.status, "void"),
+      ))
+      .groupBy(subscriptionPlansTable.id, subscriptionPlansTable.name, subscriptionPlansTable.type)
+      .orderBy(desc(sql`coalesce(sum(tenant_invoices.amount_cents), 0)`));
+
+    // Top tenants by revenue
+    const topTenants = await db.select({
+      tenantId: tenantsTable.id,
+      tenantName: tenantsTable.name,
+      tenantStatus: tenantsTable.status,
+      totalPaid: sql<number>`coalesce(sum(case when tenant_invoices.status = 'paid' then tenant_invoices.amount_cents else 0 end), 0)::int`,
+      totalInvoiced: sql<number>`coalesce(sum(tenant_invoices.amount_cents), 0)::int`,
+    }).from(tenantsTable)
+      .leftJoin(tenantInvoicesTable, and(
+        eq(tenantInvoicesTable.tenantId, tenantsTable.id),
+        ne(tenantInvoicesTable.status, "void"),
+      ))
+      .groupBy(tenantsTable.id, tenantsTable.name, tenantsTable.status)
+      .orderBy(desc(sql`coalesce(sum(case when tenant_invoices.status = 'paid' then tenant_invoices.amount_cents else 0 end), 0)`))
+      .limit(10);
+
+    res.json({ overall, monthly, byPlan, topTenants });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Enforce Subscription Rules ────────────────────────────────────────────────
+
+router.post("/platform/billing/enforce-subscriptions", async (_req, res) => {
+  try {
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+
+    // 1. Mark overdue invoices (pending, past due_date)
+    const overdueResult = await db.update(tenantInvoicesTable)
+      .set({ status: "overdue", updatedAt: now })
+      .where(and(
+        eq(tenantInvoicesTable.status, "pending"),
+        lt(tenantInvoicesTable.dueDate, todayStr),
+      )).returning({ id: tenantInvoicesTable.id });
+
+    // 2. Auto-suspend tenants where subscriptionEndsAt + gracePeriodDays < now and status is active/trial
+    const tenants = await db.select({
+      id: tenantsTable.id,
+      status: tenantsTable.status,
+      subscriptionEndsAt: tenantsTable.subscriptionEndsAt,
+      gracePeriodDays: tenantsTable.gracePeriodDays,
+    }).from(tenantsTable)
+      .where(and(
+        sql`status IN ('active', 'trial')`,
+        sql`subscription_ends_at IS NOT NULL`,
+        sql`subscription_ends_at < now()`,
+      ));
+
+    const suspended: number[] = [];
+    const warned: number[] = [];
+    for (const t of tenants) {
+      if (!t.subscriptionEndsAt) continue;
+      const endDate = new Date(t.subscriptionEndsAt);
+      const graceDays = t.gracePeriodDays ?? 7;
+      const graceEnd = new Date(endDate);
+      graceEnd.setDate(graceEnd.getDate() + graceDays);
+      if (now > graceEnd) {
+        // Past grace period — suspend
+        await db.update(tenantsTable).set({ status: "suspended", isActive: false, updatedAt: now })
+          .where(eq(tenantsTable.id, t.id));
+        suspended.push(t.id);
+      } else {
+        // Within grace period — just note
+        warned.push(t.id);
+      }
+    }
+
+    res.json({
+      ok: true,
+      invoicesMarkedOverdue: overdueResult.length,
+      tenantsSuspended: suspended.length,
+      tenantsInGrace: warned.length,
+      suspendedIds: suspended,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenant Billing Cycle Update ──────────────────────────────────────────────
+
+router.patch("/platform/tenants/:id/billing", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const { billingCycle, gracePeriodDays } = req.body as { billingCycle?: string; gracePeriodDays?: number };
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (billingCycle) updates.billingCycle = billingCycle;
+    if (gracePeriodDays != null) updates.gracePeriodDays = Number(gracePeriodDays);
+    const [updated] = await db.update(tenantsTable).set(updates as never)
+      .where(eq(tenantsTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    res.json(updated);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

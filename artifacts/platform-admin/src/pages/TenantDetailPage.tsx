@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, TenantDetail, SubscriptionPlan } from "@/lib/api";
+import { api, TenantDetail, SubscriptionPlan, Invoice, fmtMoney } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ import {
   ChevronLeft, Plus, Users, BarChart2, Settings, CreditCard,
   Activity, Building2, Globe, Mail, Briefcase, FileText,
   CheckCircle2, XCircle, Clock, Zap, GitBranch,
+  Receipt, AlertTriangle, DollarSign, TrendingUp, Ban,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -779,6 +780,451 @@ function HealthTab({ tenantId }: { tenantId: number }) {
   );
 }
 
+// ─── Billing Tab ──────────────────────────────────────────────────────────────
+
+const INVOICE_STATUS_STYLES: Record<string, string> = {
+  pending: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  paid: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  overdue: "bg-red-500/15 text-red-400 border-red-500/20",
+  void: "bg-muted text-muted-foreground border-border",
+};
+
+const PAYMENT_METHODS = ["Bank Transfer", "NEFT", "RTGS", "UPI", "Credit Card", "Cheque", "Cash", "Other"];
+
+function BillingTab({ tenantId }: { tenantId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [payDialog, setPayDialog] = useState<{ open: boolean; invoice: Invoice | null }>({ open: false, invoice: null });
+  const [editBilling, setEditBilling] = useState(false);
+
+  const [createForm, setCreateForm] = useState({
+    billingCycle: "monthly", amountCents: "", currency: "INR",
+    billingPeriodStart: "", billingPeriodEnd: "", dueDate: "",
+    notes: "", autoGenerate: true,
+  });
+  const [payForm, setPayForm] = useState({
+    paymentMethod: "Bank Transfer", referenceNumber: "", notes: "",
+    paymentDate: new Date().toISOString().split("T")[0],
+  });
+  const [billingForm, setBillingForm] = useState({ billingCycle: "monthly", gracePeriodDays: "7" });
+
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ["tenant-billing-summary", tenantId],
+    queryFn: () => api.getTenantBillingSummary(tenantId),
+  });
+  const { data: invoicesData, isLoading: invoicesLoading } = useQuery({
+    queryKey: ["tenant-invoices", tenantId],
+    queryFn: () => api.listTenantInvoices(tenantId),
+  });
+
+  const createM = useMutation({
+    mutationFn: () => api.createTenantInvoice(tenantId, {
+      billingCycle: createForm.billingCycle,
+      amountCents: createForm.autoGenerate ? undefined : Number(createForm.amountCents),
+      currency: createForm.currency,
+      billingPeriodStart: createForm.billingPeriodStart || undefined,
+      billingPeriodEnd: createForm.billingPeriodEnd || undefined,
+      dueDate: createForm.dueDate || undefined,
+      notes: createForm.notes || undefined,
+      autoGenerate: createForm.autoGenerate,
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tenant-invoices", tenantId] });
+      void qc.invalidateQueries({ queryKey: ["tenant-billing-summary", tenantId] });
+      toast({ title: "Invoice created successfully" });
+      setCreateOpen(false);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const payM = useMutation({
+    mutationFn: ({ id }: { id: number }) => api.payInvoice(id, {
+      paymentMethod: payForm.paymentMethod,
+      referenceNumber: payForm.referenceNumber || undefined,
+      notes: payForm.notes || undefined,
+      paymentDate: payForm.paymentDate || undefined,
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tenant-invoices", tenantId] });
+      void qc.invalidateQueries({ queryKey: ["tenant-billing-summary", tenantId] });
+      void qc.invalidateQueries({ queryKey: ["platform-tenant", tenantId] });
+      toast({ title: "Payment recorded", description: "Invoice marked as paid. Access restored if applicable." });
+      setPayDialog({ open: false, invoice: null });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const voidM = useMutation({
+    mutationFn: (id: number) => api.voidInvoice(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tenant-invoices", tenantId] });
+      void qc.invalidateQueries({ queryKey: ["tenant-billing-summary", tenantId] });
+      toast({ title: "Invoice voided" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const billingM = useMutation({
+    mutationFn: () => api.updateTenantBilling(tenantId, {
+      billingCycle: billingForm.billingCycle,
+      gracePeriodDays: Number(billingForm.gracePeriodDays),
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tenant-billing-summary", tenantId] });
+      void qc.invalidateQueries({ queryKey: ["platform-tenant", tenantId] });
+      toast({ title: "Billing settings updated" });
+      setEditBilling(false);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const invoices = invoicesData?.data ?? [];
+  const stats = summary?.stats;
+  const grace = summary?.gracePeriodInfo;
+
+  return (
+    <div className="space-y-5">
+      {/* Grace Period Warning */}
+      {grace?.isExpired && (
+        <div className={`flex items-start gap-3 p-4 rounded-lg border ${
+          grace.isInGrace
+            ? "bg-amber-500/10 border-amber-500/20"
+            : "bg-red-500/10 border-red-500/20"
+        }`}>
+          <AlertTriangle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${grace.isInGrace ? "text-amber-400" : "text-red-400"}`} />
+          <div>
+            <p className={`text-sm font-medium ${grace.isInGrace ? "text-amber-300" : "text-red-300"}`}>
+              {grace.isInGrace
+                ? `Subscription expired — ${grace.gracePeriodDays - grace.daysOverdue} day(s) of grace period remaining`
+                : `Subscription expired ${grace.daysOverdue} day(s) ago — grace period exceeded`}
+            </p>
+            <p className={`text-xs mt-0.5 ${grace.isInGrace ? "text-amber-400/70" : "text-red-400/70"}`}>
+              {grace.isInGrace
+                ? "Access is still active during grace period. Record a payment to restore the subscription."
+                : "Tenant access should be suspended. Record a payment to restore full access immediately."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Billing Stats */}
+      <div className="grid grid-cols-4 gap-3">
+        {summaryLoading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-card border border-card-border rounded-lg p-4">
+                <Skeleton className="h-3 w-20 mb-2" /><Skeleton className="h-6 w-28" />
+              </div>
+            ))
+          : [
+              { label: "Total Invoiced", value: fmtMoney(stats?.totalInvoiced ?? 0), icon: DollarSign, color: "text-foreground" },
+              { label: "Total Paid", value: fmtMoney(stats?.totalPaid ?? 0), icon: CheckCircle2, color: "text-emerald-400" },
+              { label: "Outstanding", value: fmtMoney(stats?.totalOutstanding ?? 0), icon: TrendingUp, color: "text-blue-400" },
+              { label: "Overdue", value: `${fmtMoney(stats?.totalOverdue ?? 0)} (${stats?.overdueCount ?? 0})`, icon: AlertTriangle, color: (stats?.overdueCount ?? 0) > 0 ? "text-red-400" : "text-muted-foreground" },
+            ].map(({ label, value, icon: Icon, color }) => (
+              <div key={label} className="bg-card border border-card-border rounded-lg p-4">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Icon className={`w-3 h-3 ${color}`} />
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                </div>
+                <p className={`text-base font-bold ${color}`}>{value}</p>
+              </div>
+            ))}
+      </div>
+
+      {/* Billing Settings */}
+      <div className="bg-card border border-card-border rounded-lg">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+          <p className="text-sm font-semibold">Billing Settings</p>
+          {!editBilling ? (
+            <Button size="sm" variant="outline" className="h-7 text-xs"
+              onClick={() => {
+                setBillingForm({
+                  billingCycle: summary?.tenant.billingCycle ?? "monthly",
+                  gracePeriodDays: String(summary?.tenant.gracePeriodDays ?? 7),
+                });
+                setEditBilling(true);
+              }}>
+              Edit
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditBilling(false)}>Cancel</Button>
+              <Button size="sm" className="h-7 text-xs" onClick={() => billingM.mutate()} disabled={billingM.isPending}>
+                {billingM.isPending ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          )}
+        </div>
+        <div className="p-5 grid grid-cols-3 gap-5">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Billing Cycle</p>
+            {editBilling ? (
+              <Select value={billingForm.billingCycle} onValueChange={v => setBillingForm(f => ({ ...f, billingCycle: v }))}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-sm text-foreground capitalize">{summary?.tenant.billingCycle ?? "monthly"}</p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Grace Period (days)</p>
+            {editBilling ? (
+              <Input type="number" min={0} max={90} className="h-8 text-sm"
+                value={billingForm.gracePeriodDays}
+                onChange={e => setBillingForm(f => ({ ...f, gracePeriodDays: e.target.value }))} />
+            ) : (
+              <p className="text-sm text-foreground">{summary?.tenant.gracePeriodDays ?? 7} days</p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Plan Price</p>
+            <p className="text-sm text-foreground">
+              {summary?.tenant.planName
+                ? `${summary.tenant.planName} — ${fmtMoney(
+                    (summary.tenant.billingCycle ?? "monthly") === "yearly"
+                      ? (summary.tenant.planPriceYearly ?? 0)
+                      : (summary.tenant.planPriceMonthly ?? 0)
+                  )}/${(summary.tenant.billingCycle ?? "monthly") === "yearly" ? "yr" : "mo"}`
+                : "No plan assigned"}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Invoices */}
+      <div className="bg-card border border-card-border rounded-lg">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+          <p className="text-sm font-semibold">Invoices ({invoices.length})</p>
+          <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => {
+            setCreateForm(f => ({
+              ...f, autoGenerate: true, billingCycle: summary?.tenant.billingCycle ?? "monthly",
+              billingPeriodStart: new Date().toISOString().split("T")[0], billingPeriodEnd: "", dueDate: "", amountCents: "", notes: "",
+            }));
+            setCreateOpen(true);
+          }}>
+            <Plus className="w-3 h-3" />Generate Invoice
+          </Button>
+        </div>
+
+        {invoicesLoading ? (
+          <div className="p-4 space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        ) : invoices.length === 0 ? (
+          <div className="py-10 text-center">
+            <Receipt className="w-7 h-7 text-muted-foreground/40 mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">No invoices yet</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Generate the first invoice for this tenant</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {invoices.map(inv => (
+              <div key={inv.id} className="flex items-center justify-between px-5 py-3 hover:bg-muted/20 transition-colors">
+                <div className="flex items-center gap-4 min-w-0">
+                  <div>
+                    <p className="text-sm font-mono font-medium text-foreground">{inv.invoiceNumber}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {inv.billingPeriodStart && inv.billingPeriodEnd
+                        ? `${fmtDate(inv.billingPeriodStart)} – ${fmtDate(inv.billingPeriodEnd)}`
+                        : fmtDate(inv.issuedAt)}
+                      {inv.planName ? ` • ${inv.planName}` : ""}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className={`text-xs capitalize ${INVOICE_STATUS_STYLES[inv.status] ?? ""}`}>
+                    {inv.status}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-4 flex-shrink-0">
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-foreground">{fmtMoney(inv.amountCents, inv.currency)}</p>
+                    {inv.status !== "paid" && (
+                      <p className={`text-xs ${inv.status === "overdue" ? "text-red-400" : "text-muted-foreground"}`}>
+                        Due {fmtDate(inv.dueDate)}
+                      </p>
+                    )}
+                    {inv.status === "paid" && <p className="text-xs text-emerald-400">Paid {fmtDate(inv.paidAt)}</p>}
+                  </div>
+                  <div className="flex gap-1">
+                    {(inv.status === "pending" || inv.status === "overdue") && (
+                      <Button size="sm" className="h-6 text-xs px-2 bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => {
+                          setPayForm({ paymentMethod: "Bank Transfer", referenceNumber: "", notes: "", paymentDate: new Date().toISOString().split("T")[0] });
+                          setPayDialog({ open: true, invoice: inv });
+                        }}>
+                        Pay
+                      </Button>
+                    )}
+                    {inv.status !== "paid" && inv.status !== "void" && (
+                      <Button size="sm" variant="ghost" className="h-6 text-xs px-1.5 text-muted-foreground hover:text-red-400"
+                        onClick={() => { if (confirm(`Void ${inv.invoiceNumber}?`)) voidM.mutate(inv.id); }}>
+                        <Ban className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Payments */}
+      {(summary?.recentPayments?.length ?? 0) > 0 && (
+        <div className="bg-card border border-card-border rounded-lg">
+          <div className="px-5 py-3 border-b border-border">
+            <p className="text-sm font-semibold">Recent Payments</p>
+          </div>
+          <div className="divide-y divide-border">
+            {summary!.recentPayments.map(p => (
+              <div key={p.id} className="flex items-center justify-between px-5 py-2.5 hover:bg-muted/20">
+                <div>
+                  <p className="text-sm text-foreground">{p.paymentMethod ?? "Payment"}</p>
+                  <p className="text-xs text-muted-foreground">{fmtDate(p.paymentDate)}{p.referenceNumber ? ` • ${p.referenceNumber}` : ""}</p>
+                </div>
+                <p className="text-sm font-semibold text-emerald-400">{fmtMoney(p.amountCents, p.currency)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Create Invoice Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generate Invoice</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+              <Switch
+                checked={createForm.autoGenerate}
+                onCheckedChange={v => setCreateForm(f => ({ ...f, autoGenerate: v }))}
+              />
+              <div>
+                <p className="text-sm font-medium">Auto-generate from plan</p>
+                <p className="text-xs text-muted-foreground">Use plan price and billing cycle</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Billing Cycle</Label>
+                <Select value={createForm.billingCycle} onValueChange={v => setCreateForm(f => ({ ...f, billingCycle: v }))}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {!createForm.autoGenerate && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Amount (paise)</Label>
+                  <Input type="number" className="h-8 text-sm" placeholder="e.g. 790000 = ₹7900"
+                    value={createForm.amountCents}
+                    onChange={e => setCreateForm(f => ({ ...f, amountCents: e.target.value }))} />
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Period Start</Label>
+                <Input type="date" className="h-8 text-sm"
+                  value={createForm.billingPeriodStart}
+                  onChange={e => setCreateForm(f => ({ ...f, billingPeriodStart: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Due Date (optional)</Label>
+                <Input type="date" className="h-8 text-sm"
+                  value={createForm.dueDate}
+                  onChange={e => setCreateForm(f => ({ ...f, dueDate: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes (optional)</Label>
+              <Textarea className="text-sm min-h-[60px] resize-none" placeholder="Invoice notes…"
+                value={createForm.notes}
+                onChange={e => setCreateForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={() => createM.mutate()} disabled={createM.isPending}>
+              {createM.isPending ? "Creating…" : "Create Invoice"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Payment Dialog */}
+      <Dialog open={payDialog.open} onOpenChange={o => !o && setPayDialog({ open: false, invoice: null })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+          </DialogHeader>
+          {payDialog.invoice && (
+            <div className="space-y-4 py-2">
+              <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Invoice</span>
+                  <span className="font-mono font-medium">{payDialog.invoice.invoiceNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Amount Due</span>
+                  <span className="font-semibold text-foreground">{fmtMoney(payDialog.invoice.amountCents, payDialog.invoice.currency)}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Payment Date</Label>
+                  <Input type="date" className="h-8 text-sm"
+                    value={payForm.paymentDate}
+                    onChange={e => setPayForm(f => ({ ...f, paymentDate: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Payment Method</Label>
+                  <Select value={payForm.paymentMethod} onValueChange={v => setPayForm(f => ({ ...f, paymentMethod: v }))}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Reference / Transaction ID</Label>
+                <Input className="h-8 text-sm" placeholder="UTR / TXN number"
+                  value={payForm.referenceNumber}
+                  onChange={e => setPayForm(f => ({ ...f, referenceNumber: e.target.value }))} />
+              </div>
+              {payDialog.invoice.status === "overdue" && (
+                <div className="flex items-start gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-emerald-300">
+                    Payment will clear overdue status and restore full tenant access immediately.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setPayDialog({ open: false, invoice: null })}>Cancel</Button>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={payM.isPending}
+              onClick={() => payDialog.invoice && payM.mutate({ id: payDialog.invoice.id })}>
+              {payM.isPending ? "Recording…" : "Confirm Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -877,6 +1323,9 @@ export function TenantDetailPage() {
           <TabsTrigger value="users" className="gap-1.5 text-xs">
             <Users className="w-3.5 h-3.5" />Users
           </TabsTrigger>
+          <TabsTrigger value="billing" className="gap-1.5 text-xs">
+            <Receipt className="w-3.5 h-3.5" />Billing
+          </TabsTrigger>
           <TabsTrigger value="health" className="gap-1.5 text-xs">
             <Activity className="w-3.5 h-3.5" />Health
           </TabsTrigger>
@@ -893,6 +1342,9 @@ export function TenantDetailPage() {
         </TabsContent>
         <TabsContent value="users" className="mt-5">
           <UsersTab tenantId={tenantId} />
+        </TabsContent>
+        <TabsContent value="billing" className="mt-5">
+          <BillingTab tenantId={tenantId} />
         </TabsContent>
         <TabsContent value="health" className="mt-5">
           <HealthTab tenantId={tenantId} />

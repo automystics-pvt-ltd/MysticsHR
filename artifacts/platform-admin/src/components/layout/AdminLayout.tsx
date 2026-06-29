@@ -4,13 +4,15 @@ import { usePlatformAuth } from "@/contexts/PlatformAuthContext";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Building2, ShieldCheck, ScrollText,
-  LogOut, ChevronRight, CreditCard, BarChart3,
+  LogOut, ChevronRight, CreditCard, BarChart3, Receipt, TrendingUp,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/tenants", icon: Building2, label: "Tenants" },
   { href: "/subscription-plans", icon: CreditCard, label: "Subscription Plans" },
+  { href: "/invoices", icon: Receipt, label: "Invoices" },
+  { href: "/billing-reports", icon: TrendingUp, label: "Billing Reports" },
   { href: "/admins", icon: ShieldCheck, label: "Platform Admins" },
   { href: "/analytics", icon: BarChart3, label: "Analytics" },
   { href: "/audit-logs", icon: ScrollText, label: "Audit Logs" },

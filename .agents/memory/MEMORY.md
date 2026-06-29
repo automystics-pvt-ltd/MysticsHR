@@ -2,3 +2,4 @@
 - [Multi-tenant auth login design](multi-tenant-auth.md) — login accepts optional tenantSlug; falls back to bcrypt-comparing all email candidates across tenants
 - [Scheduler tenant isolation pattern](scheduler-tenant-pattern.md) — background jobs must group records by tenantId and fetch per-tenant config, never hardcode tenantId=1
 - [Platform Admin architecture](platform-admin-arch.md) — portal at /admin/, httpOnly cookie JWT separate from tenant auth; subscription_plans table seeded with 5 tiers; tenant status (active/trial/suspended/archived) auto-syncs isActive boolean
+- [Billing SQL raw alias pitfall](billing-sql-alias.md) — drizzle-orm raw sql`` blocks don't support table aliases (ti.col); always use the actual table name (tenant_invoices.col) in raw SQL fragments
