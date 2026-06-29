@@ -91,6 +91,7 @@ export function TenantsPage() {
               <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Slug</TableHead>
               <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Status</TableHead>
               <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Users</TableHead>
+              <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Employees</TableHead>
               <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Created</TableHead>
               <TableHead className="w-10" />
             </TableRow>
@@ -121,6 +122,7 @@ export function TenantsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{t.userCount ?? "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{t.employeeCount ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{fmtDate(t.createdAt)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">

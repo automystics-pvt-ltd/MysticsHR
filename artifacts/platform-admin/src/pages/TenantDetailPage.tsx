@@ -206,7 +206,7 @@ export function TenantDetailPage() {
         </TabsContent>
 
         <TabsContent value="stats" className="mt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="bg-card border-card-border">
               <CardContent className="p-5">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Employees</p>
@@ -215,16 +215,24 @@ export function TenantDetailPage() {
             </Card>
             <Card className="bg-card border-card-border">
               <CardContent className="p-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Active Users</p>
-                <p className="text-3xl font-bold text-foreground mt-1.5">
-                  {users?.data.filter((u) => u.isActive).length ?? 0}
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Users</p>
+                <p className="text-3xl font-bold text-foreground mt-1.5">{users?.total ?? 0}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {users?.data.filter((u) => u.isActive).length ?? 0} active
                 </p>
               </CardContent>
             </Card>
             <Card className="bg-card border-card-border">
               <CardContent className="p-5">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Last Activity</p>
+                <p className="text-sm font-semibold text-foreground mt-1.5">{fmtDate(tenant.updatedAt)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Record last updated</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-card border-card-border">
+              <CardContent className="p-5">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Created</p>
-                <p className="text-base font-semibold text-foreground mt-1.5">{fmtDate(tenant.createdAt)}</p>
+                <p className="text-sm font-semibold text-foreground mt-1.5">{fmtDate(tenant.createdAt)}</p>
               </CardContent>
             </Card>
           </div>
