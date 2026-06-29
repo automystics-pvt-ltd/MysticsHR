@@ -1081,8 +1081,8 @@ function AdminPayrollDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
 
 export default function PayrollDashboardPage() {
   const { role } = useCurrentHrmsUser();
-  const isAdmin = ["super_admin", "payroll_admin"].includes(role ?? "");
-  const isSuperAdmin = role === "super_admin";
+  const isAdmin = ["customer_admin", "payroll_admin"].includes(role ?? "");
+  const isSuperAdmin = role === "customer_admin";
 
   if (!isAdmin) {
     return <EmployeePayrollPortal />;

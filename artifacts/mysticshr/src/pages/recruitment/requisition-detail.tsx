@@ -130,7 +130,7 @@ export default function RequisitionDetailPage() {
   const { data: req, isLoading } = useGetRequisition(id);
   const { data: candidates } = useListCandidates({ requisitionId: id });
   const { role } = useCurrentHrmsUser();
-  const canAdd = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const canAdd = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
 
   if (isLoading) return <div className="text-center py-12 text-muted-foreground">Loading...</div>;
   if (!req) return <div className="text-center py-12 text-muted-foreground">Requisition not found</div>;

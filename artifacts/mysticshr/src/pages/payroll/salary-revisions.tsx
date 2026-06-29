@@ -35,8 +35,8 @@ function fmtDate(d: string | null | undefined) {
 
 export default function SalaryRevisionsPage() {
   const { role } = useCurrentHrmsUser();
-  const isHr = ["super_admin", "hr_manager", "hr_executive", "payroll_admin"].includes(role ?? "");
-  const isSuperAdmin = role === "super_admin";
+  const isHr = ["customer_admin", "hr_manager", "hr_executive", "payroll_admin"].includes(role ?? "");
+  const isSuperAdmin = role === "customer_admin";
 
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("_all");

@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 export type Role =
-  | "super_admin"
+  | "customer_admin"
   | "hr_manager"
   | "hr_executive"
   | "hod"
@@ -38,7 +38,7 @@ export type Role =
   | "employee";
 
 export const ALL_ROLES: Role[] = [
-  "super_admin",
+  "customer_admin",
   "hr_manager",
   "hr_executive",
   "hod",
@@ -99,7 +99,7 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Employees",
         href: "/employees",
         icon: Users,
-        roles: ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
+        roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
         keywords: ["staff", "people", "team"],
       },
       {
@@ -113,14 +113,14 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Departments",
         href: "/departments",
         icon: Building2,
-        roles: ["super_admin", "hr_manager", "hr_executive"],
+        roles: ["customer_admin", "hr_manager", "hr_executive"],
         keywords: ["division", "unit"],
       },
       {
         name: "Designations",
         href: "/designations",
         icon: Briefcase,
-        roles: ["super_admin", "hr_manager", "hr_executive"],
+        roles: ["customer_admin", "hr_manager", "hr_executive"],
         keywords: ["job title", "role", "position"],
       },
     ],
@@ -134,21 +134,21 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Recruitment",
         href: "/recruitment",
         icon: UserPlus,
-        roles: ["super_admin", "hr_manager", "hr_executive", "hod"],
+        roles: ["customer_admin", "hr_manager", "hr_executive", "hod"],
         keywords: ["hiring", "requisition", "candidate", "job"],
       },
       {
         name: "Pre-Onboarding",
         href: "/pre-onboarding",
         icon: ClipboardCheck,
-        roles: ["super_admin", "hr_manager", "hr_executive"],
+        roles: ["customer_admin", "hr_manager", "hr_executive"],
         keywords: ["offer", "joining", "documents"],
       },
       {
         name: "Onboarding",
         href: "/onboarding",
         icon: ClipboardList,
-        roles: ["super_admin", "hr_manager", "hr_executive", "hod"],
+        roles: ["customer_admin", "hr_manager", "hr_executive", "hod"],
         keywords: ["induction", "joinee", "checklist"],
       },
     ],
@@ -162,7 +162,7 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Shifts",
         href: "/shifts",
         icon: Clock,
-        roles: ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
+        roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
         keywords: ["roster", "schedule"],
       },
       {
@@ -197,7 +197,7 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Payroll",
         href: "/payroll",
         icon: Banknote,
-        roles: ["super_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"],
+        roles: ["customer_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"],
         keywords: ["salary", "payslip", "tax", "ctc"],
       },
     ],
@@ -211,7 +211,7 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Performance",
         href: "/performance",
         icon: Target,
-        roles: ["super_admin", "hr_manager", "hr_executive", "hod", "employee"],
+        roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "employee"],
         keywords: ["goals", "appraisal", "review", "kra"],
       },
     ],
@@ -239,7 +239,7 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Communications",
         href: "/communications",
         icon: Bell,
-        roles: ["super_admin", "hr_manager"],
+        roles: ["customer_admin", "hr_manager"],
         keywords: ["announcements", "notifications", "broadcast"],
       },
     ],
@@ -267,14 +267,14 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Analytics",
         href: "/analytics",
         icon: BarChart3,
-        roles: ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
+        roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
         keywords: ["dashboard", "metrics", "charts"],
       },
       {
         name: "Reports",
         href: "/reports",
         icon: FileText,
-        roles: ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
+        roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
         keywords: ["export", "download", "summary"],
       },
     ],
@@ -288,35 +288,35 @@ export const NAV_GROUPS: NavGroup[] = [
         name: "Users",
         href: "/users",
         icon: ShieldCheck,
-        roles: ["super_admin", "hr_manager"],
+        roles: ["customer_admin", "hr_manager"],
         keywords: ["roles", "access", "rbac"],
       },
       {
         name: "Audit Logs",
         href: "/audit-logs",
         icon: FileText,
-        roles: ["super_admin", "hr_manager"],
+        roles: ["customer_admin", "hr_manager"],
         keywords: ["activity", "trail", "history"],
       },
       {
         name: "Settings",
         href: "/settings",
         icon: Settings,
-        roles: ["super_admin", "hr_manager"],
+        roles: ["customer_admin", "hr_manager"],
         keywords: ["configuration", "preferences", "system"],
       },
       {
         name: "API Keys",
         href: "/settings/api-keys",
         icon: KeyRound,
-        roles: ["super_admin"],
+        roles: ["customer_admin"],
         keywords: ["integration", "external", "token", "developer"],
       },
       {
         name: "API Docs",
         href: "/settings/api-docs",
         icon: BookOpen,
-        roles: ["super_admin"],
+        roles: ["customer_admin"],
         keywords: ["openapi", "swagger", "reference", "developer", "integration"],
       },
     ],

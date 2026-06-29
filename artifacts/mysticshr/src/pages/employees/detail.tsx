@@ -895,10 +895,10 @@ export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const search = useSearch();
   const { role, hrmsUser } = useCurrentHrmsUser();
-  const canEdit = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const canEdit = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
   const isSelf = hrmsUser?.employeeId === parseInt(id, 10);
   const canEditOwnTimezone = isSelf;
-  const canViewPerformanceHistory = hasRole(role, ["super_admin", "hr_manager", "hr_executive", "hod"]);
+  const canViewPerformanceHistory = hasRole(role, ["customer_admin", "hr_manager", "hr_executive", "hod"]);
   const empId = parseInt(id, 10);
 
   const validTabs = [

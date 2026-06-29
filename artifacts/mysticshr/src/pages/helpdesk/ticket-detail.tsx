@@ -52,7 +52,7 @@ export default function TicketDetailPage() {
   const qc = useQueryClient();
   const { role, hrmsUser } = useCurrentHrmsUser();
 
-  const isManager = ["super_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
+  const isManager = ["customer_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
 
   const { data: ticket, isLoading } = useGetHelpdeskTicket(ticketId);
   const updateTicket = useUpdateHelpdeskTicket();

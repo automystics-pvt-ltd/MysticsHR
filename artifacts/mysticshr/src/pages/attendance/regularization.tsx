@@ -42,7 +42,7 @@ function buildTS(date: string, time: string, signInTime?: string): string {
 export default function RegularizationPage() {
   const qc = useQueryClient();
   const { role } = useCurrentUser();
-  const canApprove = ["super_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
+  const canApprove = ["customer_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
   const isEmployee = role === "employee";
 
   const [filterStatus, setFilterStatus] = useState("all");

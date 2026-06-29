@@ -396,7 +396,7 @@ function DocumentRequestsHrPanel({
 
 export default function DocumentsPage() {
   const { role } = useCurrentHrmsUser();
-  const isHr = ["super_admin", "hr_manager", "hr_executive"].includes(role ?? "");
+  const isHr = ["customer_admin", "hr_manager", "hr_executive"].includes(role ?? "");
 
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);

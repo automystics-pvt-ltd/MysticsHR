@@ -17,7 +17,7 @@ function fmt(n: string | number | null | undefined) {
 
 export default function PayslipsPage() {
   const { role } = useCurrentHrmsUser();
-  const isHr = ["super_admin", "hr_manager", "hr_executive", "payroll_admin"].includes(role ?? "");
+  const isHr = ["customer_admin", "hr_manager", "hr_executive", "payroll_admin"].includes(role ?? "");
 
   const now = new Date();
   const [yearFilter, setYearFilter] = useState(String(now.getFullYear()));

@@ -326,7 +326,7 @@ export default function CandidateDetailPage() {
   const { data: interviews } = useListCandidateInterviews(id);
   const { data: offers } = useListOffers({ candidateId: id });
   const { role } = useCurrentHrmsUser();
-  const canEdit = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const canEdit = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
 
   const moveStage = useMoveCandidateStage({
     mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetCandidateQueryKey(id) }) },

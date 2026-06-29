@@ -49,7 +49,7 @@ function monthKey(d: Date) {
 export default function PermissionsPage() {
   const { role: hrmsRole } = useCurrentHrmsUser();
   const role = hrmsRole ?? "employee";
-  const isHr = ["super_admin", "hr_manager", "hr_executive"].includes(role);
+  const isHr = ["customer_admin", "hr_manager", "hr_executive"].includes(role);
   const isHod = role === "hod";
   const canAction = isHr || isHod;
 

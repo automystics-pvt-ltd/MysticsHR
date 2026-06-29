@@ -364,7 +364,7 @@ export default function PerformanceHistoryView({
   enabled?: boolean;
 }) {
   const { role } = useCurrentHrmsUser();
-  const isHrRole = role === "super_admin" || role === "hr_manager" || role === "hr_executive";
+  const isHrRole = role === "customer_admin" || role === "hr_manager" || role === "hr_executive";
   const isHodRole = role === "hod";
   const canCompare = isHrRole || isHodRole;
 

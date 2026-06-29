@@ -33,7 +33,7 @@ const STATUS_COLORS: Record<string, string> = {
   Withdrawn: "bg-gray-100 text-gray-500",
 };
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
 
 function StatusBadge({ status }: { status: string }) {
   return (

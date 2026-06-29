@@ -54,7 +54,7 @@ function fmtDate(d: string | null | undefined) {
 export default function LeavePage() {
   const { role: hrmsRole } = useCurrentHrmsUser();
   const role = hrmsRole ?? "employee";
-  const isHr = ["super_admin", "hr_manager", "hr_executive"].includes(role);
+  const isHr = ["customer_admin", "hr_manager", "hr_executive"].includes(role);
 
   const qc = useQueryClient();
   const year = new Date().getFullYear();

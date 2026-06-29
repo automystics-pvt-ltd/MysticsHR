@@ -18,7 +18,7 @@ import { ClockInWidget } from "@/components/attendance/ClockInWidget";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
 import { Link } from "wouter";
 
-const HR_READ_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
+const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
 
 const STATUS_COLORS: Record<string, string> = {
   "Active": "hsl(145 58% 36%)",

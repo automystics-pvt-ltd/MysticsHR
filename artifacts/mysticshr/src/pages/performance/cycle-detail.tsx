@@ -50,7 +50,7 @@ export default function CycleDetailPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { role } = useCurrentHrmsUser();
-  const isHR = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const isHR = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
 
   const cycleId = Number(params?.id);
   const { data: cycle, isLoading } = useGetPerformanceCycle(cycleId);

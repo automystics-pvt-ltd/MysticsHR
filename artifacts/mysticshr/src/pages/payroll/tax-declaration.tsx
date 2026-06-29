@@ -61,8 +61,8 @@ function buildApiBase() {
 
 export default function TaxDeclarationPage() {
   const { role, hrmsUser } = useCurrentHrmsUser();
-  const isHr = ["super_admin", "hr_manager", "hr_executive", "payroll_admin"].includes(role ?? "");
-  const isPayrollAdmin = ["super_admin", "payroll_admin"].includes(role ?? "");
+  const isHr = ["customer_admin", "hr_manager", "hr_executive", "payroll_admin"].includes(role ?? "");
+  const isPayrollAdmin = ["customer_admin", "payroll_admin"].includes(role ?? "");
   const isEmployee = role === "employee";
 
   const qc = useQueryClient();

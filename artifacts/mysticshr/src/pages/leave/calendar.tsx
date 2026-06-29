@@ -34,7 +34,7 @@ function firstDayOfMonth(year: number, month: number) {
 export default function LeaveCalendarPage() {
   const { role: hrmsRole } = useCurrentHrmsUser();
   const role = hrmsRole ?? "employee";
-  const isHr = ["super_admin", "hr_manager", "hr_executive"].includes(role);
+  const isHr = ["customer_admin", "hr_manager", "hr_executive"].includes(role);
   const qc = useQueryClient();
 
   const [currentDate, setCurrentDate] = useState(new Date());

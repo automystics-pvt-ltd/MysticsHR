@@ -154,8 +154,8 @@ function NewRequisitionDialog() {
 
 function RequisitionsTab() {
   const { role } = useCurrentHrmsUser();
-  const canApprove = hasRole(role, ["super_admin", "hr_manager", "hod"]);
-  const canCreate = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const canApprove = hasRole(role, ["customer_admin", "hr_manager", "hod"]);
+  const canCreate = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
 
   const [statusFilter, setStatusFilter] = useState<string>("");
   const qc = useQueryClient();
@@ -250,7 +250,7 @@ function PipelineTab() {
   const qc = useQueryClient();
   const { data: candidates, isLoading } = useListCandidates({});
   const { role } = useCurrentHrmsUser();
-  const canMove = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const canMove = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
   const moveStage = useMoveCandidateStage({
     mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getListCandidatesQueryKey() }) },
   });

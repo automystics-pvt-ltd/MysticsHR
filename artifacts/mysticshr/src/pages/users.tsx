@@ -12,9 +12,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Pencil, ShieldCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-const ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Super Admin",
+  customer_admin: "Admin",
   hr_manager: "HR Manager",
   hr_executive: "HR Executive",
   hod: "Head of Department",
@@ -22,7 +22,7 @@ const ROLE_LABELS: Record<string, string> = {
   employee: "Employee",
 };
 const ROLE_COLORS: Record<string, string> = {
-  super_admin: "bg-red-100 text-red-800",
+  customer_admin: "bg-red-100 text-red-800",
   hr_manager: "bg-blue-100 text-blue-800",
   hr_executive: "bg-sky-100 text-sky-800",
   hod: "bg-purple-100 text-purple-800",

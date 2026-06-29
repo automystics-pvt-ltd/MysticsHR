@@ -159,8 +159,8 @@ function TemplateForm({ initial, departments, onSave, onCancel, saving, error }:
 export default function ShiftsPage() {
   const qc = useQueryClient();
   const { role } = useCurrentUser();
-  const canManage = ["super_admin", "hr_manager", "hr_executive"].includes(role ?? "");
-  const canApproveHod = ["super_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
+  const canManage = ["customer_admin", "hr_manager", "hr_executive"].includes(role ?? "");
+  const canApproveHod = ["customer_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
 
   const { data: templates = [], isLoading: tLoading } = useGetShiftsTemplates();
   const { data: swaps = [], isLoading: swapLoading } = useGetShiftSwaps({});

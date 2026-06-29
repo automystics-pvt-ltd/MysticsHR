@@ -39,7 +39,7 @@ function DocumentRow({ doc, recordId }: { doc: PreOnboardingDocument; recordId: 
   const qc = useQueryClient();
   const [url, setUrl] = useState(doc.fileUrl ?? "");
   const { role } = useCurrentHrmsUser();
-  const canManage = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const canManage = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getListPreOnboardingDocumentsQueryKey(recordId) });
@@ -127,7 +127,7 @@ export default function PreOnboardingDetailPage() {
   const { data: record, isLoading } = useGetPreOnboardingRecord(id);
   const { data: docs } = useListPreOnboardingDocuments(id);
   const { role } = useCurrentHrmsUser();
-  const canEdit = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const canEdit = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
 
   const updateRecord = useUpdatePreOnboardingRecord({
     mutation: {

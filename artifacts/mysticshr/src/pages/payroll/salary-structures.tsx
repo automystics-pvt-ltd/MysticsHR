@@ -59,7 +59,7 @@ const DEFAULT_COMPONENTS: Component[] = [
 
 export default function SalaryStructuresPage() {
   const { role } = useCurrentHrmsUser();
-  const isHr = ["super_admin", "hr_manager", "hr_executive", "payroll_admin"].includes(role ?? "");
+  const isHr = ["customer_admin", "hr_manager", "hr_executive", "payroll_admin"].includes(role ?? "");
 
   const qc = useQueryClient();
   const [employeeFilter, setEmployeeFilter] = useState("");

@@ -34,7 +34,7 @@ import {
   FileText, Download,
 } from "lucide-react";
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
 
 const STATUS_FLOW = [
   "Submitted", "HR Reviewing", "Notice Period", "Clearance Pending", "FnF Pending", "FnF Approved", "Separated",
@@ -340,7 +340,7 @@ export default function ExitDetailPage() {
                         <CheckCircle2 className="w-4 h-4" />
                         Approved
                       </div>
-                    ) : isHr && (hrmsUser?.role === "hr_manager" || hrmsUser?.role === "super_admin") ? (
+                    ) : isHr && (hrmsUser?.role === "hr_manager" || hrmsUser?.role === "customer_admin") ? (
                       <Button size="sm" className="mt-2 h-7 text-xs" onClick={() => handleApproveFnf()}>
                         Approve (HR)
                       </Button>
@@ -355,7 +355,7 @@ export default function ExitDetailPage() {
                         <CheckCircle2 className="w-4 h-4" />
                         Approved
                       </div>
-                    ) : hrmsUser?.role === "payroll_admin" || hrmsUser?.role === "super_admin" ? (
+                    ) : hrmsUser?.role === "payroll_admin" || hrmsUser?.role === "customer_admin" ? (
                       <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => handleApproveFnf()}>
                         Approve (Finance)
                       </Button>

@@ -1,7 +1,7 @@
 import { useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "./auth";
 
-export type HrmsRole = "super_admin" | "hr_manager" | "hr_executive" | "hod" | "payroll_admin" | "employee";
+export type HrmsRole = "customer_admin" | "hr_manager" | "hr_executive" | "hod" | "payroll_admin" | "employee";
 
 interface ApiError {
   response?: { status?: number };

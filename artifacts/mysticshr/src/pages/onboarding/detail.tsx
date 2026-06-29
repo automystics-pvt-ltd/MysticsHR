@@ -91,7 +91,7 @@ export default function OnboardingDetailPage() {
   const checklistId = parseInt(id, 10);
   const qc = useQueryClient();
   const { role } = useCurrentHrmsUser();
-  const canManage = hasRole(role, ["super_admin", "hr_manager", "hr_executive", "hod"]);
+  const canManage = hasRole(role, ["customer_admin", "hr_manager", "hr_executive", "hod"]);
   const isEmployee = role === "employee";
 
   const { data: detail, isLoading } = useGetOnboardingChecklistsId(checklistId);

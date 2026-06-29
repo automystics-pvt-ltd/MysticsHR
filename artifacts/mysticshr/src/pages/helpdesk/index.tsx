@@ -191,7 +191,7 @@ export default function HelpdeskPage() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
 
-  const isManager = ["super_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
+  const isManager = ["customer_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
 
   const { data: tickets = [], isLoading } = useListHelpdeskTickets({
     status: filterStatus !== "all" ? filterStatus : undefined,

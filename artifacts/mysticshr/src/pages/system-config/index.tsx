@@ -358,7 +358,7 @@ const APPROVER_ROLES = [
   { value: "hr_executive", label: "HR Executive" },
   { value: "hr_manager", label: "HR Manager" },
   { value: "payroll_admin", label: "Payroll Admin" },
-  { value: "super_admin", label: "Super Admin" },
+  { value: "customer_admin", label: "Super Admin" },
 ];
 
 function ApprovalChainsTab() {
@@ -623,7 +623,7 @@ function PayrollSettingsTab() {
 
 // ─── RBAC Permissions Tab ─────────────────────────────────────────────────────
 
-const ALL_ROLES: RolePermissionsItem[] = ["super_admin","hr_manager","hr_executive","hod","payroll_admin","employee"];
+const ALL_ROLES: RolePermissionsItem[] = ["customer_admin","hr_manager","hr_executive","hod","payroll_admin","employee"];
 
 function RolePermissionsTab() {
   const queryClient = useQueryClient();
@@ -692,8 +692,8 @@ function RolePermissionsTab() {
                           checked={roles.includes(role)}
                           onChange={() => toggleRole(module, action, role)}
                           className="h-4 w-4 cursor-pointer"
-                          disabled={role === "super_admin"}
-                          title={role === "super_admin" ? "Super admin always has full access" : `Toggle ${role} for ${module}.${action}`}
+                          disabled={role === "customer_admin"}
+                          title={role === "customer_admin" ? "Super admin always has full access" : `Toggle ${role} for ${module}.${action}`}
                         />
                       </TableCell>
                     ))}
@@ -1415,7 +1415,7 @@ function AttendanceSuspicionTab() {
   const { data, isLoading } = useGetAttendanceSuspicionConfig();
   const update = useUpdateAttendanceSuspicionConfig();
   const { role } = useCurrentHrmsUser();
-  const canWrite = role === "super_admin" || role === "hr_manager";
+  const canWrite = role === "customer_admin" || role === "hr_manager";
 
   const [maxAccuracy, setMaxAccuracy] = useState<string>("200");
   const [maxRadius, setMaxRadius] = useState<string>("500");
@@ -1584,8 +1584,8 @@ function NotificationCredentialsTab() {
 
 export default function SystemConfigPage() {
   const { role } = useCurrentHrmsUser();
-  const isSuperAdmin = role === "super_admin";
-  const canSeeAttendanceSuspicion = ["super_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
+  const isSuperAdmin = role === "customer_admin";
+  const canSeeAttendanceSuspicion = ["customer_admin", "hr_manager", "hr_executive", "hod"].includes(role ?? "");
   return (
     <div className="space-y-6">
         <div>

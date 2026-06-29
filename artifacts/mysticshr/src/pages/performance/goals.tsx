@@ -266,8 +266,8 @@ function AssignGoalModal({ open, onClose, cycleId }: { open: boolean; onClose: (
 
 export default function GoalsPage() {
   const { role } = useCurrentHrmsUser();
-  const isManager = hasRole(role, ["super_admin", "hr_manager", "hr_executive", "hod"]);
-  const isHR = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const isManager = hasRole(role, ["customer_admin", "hr_manager", "hr_executive", "hod"]);
+  const isHR = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
 
   const [selectedCycle, setSelectedCycle] = useState<string>("all");
   const [showAssign, setShowAssign] = useState(false);

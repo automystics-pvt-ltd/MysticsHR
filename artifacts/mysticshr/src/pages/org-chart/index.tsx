@@ -366,8 +366,8 @@ export default function OrgChartPage() {
   const [search, setSearch] = useState("");
 
   const { role } = useCurrentHrmsUser();
-  const canViewDetail = hasRole(role, ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]);
-  const canViewPerformanceHistory = hasRole(role, ["super_admin", "hr_manager", "hr_executive", "hod"]);
+  const canViewDetail = hasRole(role, ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]);
+  const canViewPerformanceHistory = hasRole(role, ["customer_admin", "hr_manager", "hr_executive", "hod"]);
 
   // Use the dedicated org-chart endpoint which returns only the safe subset of fields.
   const { data, isLoading } = useListOrgChart();

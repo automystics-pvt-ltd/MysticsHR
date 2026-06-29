@@ -182,7 +182,7 @@ function AppRoutes() {
 
       <Route path="/org-chart">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <OrgChartPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -190,21 +190,21 @@ function AppRoutes() {
 
       <Route path="/employees/new">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <NewEmployee />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/employees/:id">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
             <EmployeeDetailPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/employees">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
             <EmployeesPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -212,14 +212,14 @@ function AppRoutes() {
 
       <Route path="/departments">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <DepartmentsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/designations">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <DesignationsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -227,7 +227,7 @@ function AppRoutes() {
 
       <Route path="/users">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager"]}>
             <UsersPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -235,21 +235,21 @@ function AppRoutes() {
 
       <Route path="/recruitment/requisitions/:id">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
             <RequisitionDetailPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/recruitment/candidates/:id">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
             <CandidateDetailPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/recruitment">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
             <RecruitmentPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -257,14 +257,14 @@ function AppRoutes() {
 
       <Route path="/pre-onboarding/:id">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <PreOnboardingDetailPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/pre-onboarding">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <PreOnboardingPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -272,14 +272,14 @@ function AppRoutes() {
 
       <Route path="/onboarding/:id">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
             <OnboardingDetailPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/onboarding">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
             <OnboardingPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -287,14 +287,14 @@ function AppRoutes() {
 
       <Route path="/shifts/calendar">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
             <ShiftCalendarPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/shifts">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
             <ShiftsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -302,28 +302,28 @@ function AppRoutes() {
 
       <Route path="/attendance/regularization">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <AttendanceRegularizationPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/attendance/summary">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"]}>
             <AttendanceSummaryPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/attendance">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <AttendancePage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/my-attendance">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <AttendancePage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -331,35 +331,35 @@ function AppRoutes() {
 
       <Route path="/leave/types">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <LeaveTypesPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/leave/calendar">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <LeaveCalendarPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/leave/approvals">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
             <LeaveApprovalsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/leave/policies">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <LeavePoliciesPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/leave">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <LeavePage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -367,7 +367,7 @@ function AppRoutes() {
 
       <Route path="/permissions">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <PermissionsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -375,49 +375,49 @@ function AppRoutes() {
 
       <Route path="/payroll/salary-structures">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
             <SalaryStructuresPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/payroll/runs/:id">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "payroll_admin"]}>
             <PayrollRunDetailPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/payroll/payslips">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
             <PayslipsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/payroll/tax-declaration">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
             <TaxDeclarationPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/payroll/reports">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "payroll_admin"]}>
             <StatutoryReportsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/payroll/salary-revisions">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
             <SalaryRevisionsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/payroll">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"]}>
             <PayrollDashboardPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -425,49 +425,49 @@ function AppRoutes() {
 
       <Route path="/performance/goals">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
             <GoalsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/performance/appraisals">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
             <AppraisalsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/performance/evaluations">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod"]}>
             <EvaluationsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/performance/calibration">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <CalibrationPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/performance/history">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
             <PerformanceHistoryPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/performance/cycles/:id">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
             <CycleDetailPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/performance">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
             <PerformancePage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -475,7 +475,7 @@ function AppRoutes() {
 
       <Route path="/ess">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <EssPortalPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -483,21 +483,21 @@ function AppRoutes() {
 
       <Route path="/helpdesk/tickets/:id">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <TicketDetailPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/helpdesk/sla-report">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <SlaReportPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/helpdesk">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <HelpdeskPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -505,7 +505,7 @@ function AppRoutes() {
 
       <Route path="/documents">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <DocumentsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -513,14 +513,14 @@ function AppRoutes() {
 
       <Route path="/exit/:id">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
             <ExitDetailPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/exit">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "employee"]}>
             <ExitPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -528,7 +528,7 @@ function AppRoutes() {
 
       <Route path="/analytics">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
             <AnalyticsDashboard />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -536,7 +536,7 @@ function AppRoutes() {
 
       <Route path="/reports">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "payroll_admin"]}>
             <ReportsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -544,7 +544,7 @@ function AppRoutes() {
 
       <Route path="/communications">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <CommunicationsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -552,28 +552,28 @@ function AppRoutes() {
 
       <Route path="/system-config">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin"]}>
             <SystemConfigPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/audit-logs">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager"]}>
             <AuditLogsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/settings/api-keys">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin"]}>
             <ApiKeysPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>
       <Route path="/settings/api-docs">
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
             <ApiDocsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>

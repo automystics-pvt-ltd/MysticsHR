@@ -200,7 +200,7 @@ export default function PerformancePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const isHR = hasRole(role, ["super_admin", "hr_manager", "hr_executive"]);
+  const isHR = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
 
   const { data: cycles = [], isLoading: loadingCycles } = useListPerformanceCycles({
     status: statusFilter !== "all" ? statusFilter : undefined,
@@ -299,7 +299,7 @@ export default function PerformancePage() {
             </CardContent>
           </Card>
         </Link>
-        {hasRole(role, ["super_admin", "hr_manager", "hr_executive", "hod"]) && (
+        {hasRole(role, ["customer_admin", "hr_manager", "hr_executive", "hod"]) && (
           <Link href="/performance/evaluations">
             <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
               <CardContent className="p-4 text-center">

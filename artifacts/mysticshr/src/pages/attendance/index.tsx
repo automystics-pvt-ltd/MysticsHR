@@ -81,7 +81,7 @@ function buildTS(date: string, time: string, signInTime?: string): string {
 function HrAttendanceView() {
   const qc = useQueryClient();
   const { role } = useCurrentHrmsUser();
-  const canManage = ["super_admin", "hr_manager", "hr_executive"].includes(role ?? "");
+  const canManage = ["customer_admin", "hr_manager", "hr_executive"].includes(role ?? "");
 
   const today = new Date().toISOString().split("T")[0];
   const [filterDate, setFilterDate] = useState(today);
