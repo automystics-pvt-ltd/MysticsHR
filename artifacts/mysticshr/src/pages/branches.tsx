@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Pencil, Trash2, MapPin, Star } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -124,15 +125,11 @@ export default function BranchesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Branches</h1>
-          <p className="text-muted-foreground mt-1">
-            {branches.length} branch{branches.length !== 1 ? "es" : ""} &middot; {active.length} active
-          </p>
-        </div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />New Branch</Button>
-      </div>
+      <PageHeader
+        title="Branches"
+        description={`${branches.length} branch${branches.length !== 1 ? "es" : ""} · ${active.length} active`}
+        actions={<Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />New Branch</Button>}
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

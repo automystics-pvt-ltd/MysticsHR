@@ -11,12 +11,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend 
 } from "recharts";
-import { Users, UserCheck, TrendingDown, Calendar, BriefcaseBusiness, Clock, UserX, Activity, BadgeCheck, type LucideIcon } from "lucide-react";
+import { Users, UserCheck, TrendingDown, Calendar, BriefcaseBusiness, Clock, UserX, Activity, BadgeCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatCard } from "@/components/ui/stat-card";
 import { ClockInWidget } from "@/components/attendance/ClockInWidget";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
 import { Link } from "wouter";
+import { Badge } from "@/components/ui/badge";
 
 const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
 
@@ -29,26 +31,17 @@ const STATUS_COLORS: Record<string, string> = {
   "Separated": "hsl(0 0% 60%)",
 };
 
-function KPICard({ title, value, icon: Icon, sub, loading }: { title: string; value: string; icon: LucideIcon; sub?: string; loading?: boolean }) {
-  return (
-    <Card className="border-border hover:shadow-md transition-shadow">
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <Icon className="w-5 h-5" />
-          </div>
-        </div>
-        {loading ? (
-          <Skeleton className="h-9 w-24" />
-        ) : (
-          <p className="text-3xl font-bold text-foreground">{value}</p>
-        )}
-        {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-      </CardContent>
-    </Card>
-  );
-}
+const MODULE_COLORS: Record<string, string> = {
+  Employees: "bg-blue-500",
+  Leave: "bg-green-500",
+  Payroll: "bg-violet-500",
+  Attendance: "bg-amber-500",
+  Recruitment: "bg-pink-500",
+  Performance: "bg-cyan-500",
+  Onboarding: "bg-orange-500",
+  Helpdesk: "bg-red-500",
+  Documents: "bg-teal-500",
+};
 
 export default function DashboardPage() {
   const { data: kpis, isLoading: kpisLoading } = useGetDashboardKpis();
@@ -67,13 +60,28 @@ export default function DashboardPage() {
   );
   const expiringCerts = Array.isArray(expiringCertsRaw) ? expiringCertsRaw : [];
 
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  })();
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Live HR operations overview</p>
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
+            {greeting}{hrmsUser?.name ? `, ${hrmsUser.name.split(" ")[0]}` : ""}
+          </h1>
+          <p className="text-muted-foreground mt-0.5 text-sm">
+            Here's your HR operations overview for today.
+          </p>
+        </div>
       </div>
 
+      {/* Clock-in widget */}
       {showClockWidget && (
         <div className="grid md:grid-cols-2 gap-4">
           <ClockInWidget />
@@ -82,40 +90,101 @@ export default function DashboardPage() {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard title="Total Headcount" value={kpisLoading ? "—" : String(kpis?.totalHeadcount ?? 0)} icon={Users} loading={kpisLoading} sub="All employees" />
-        <KPICard title="Active Employees" value={kpisLoading ? "—" : String(kpis?.activeEmployees ?? 0)} icon={UserCheck} loading={kpisLoading} sub="Currently active" />
-        <KPICard title="New Joiners" value={kpisLoading ? "—" : String(kpis?.newJoinersThisMonth ?? 0)} icon={Calendar} loading={kpisLoading} sub="This month" />
-        <KPICard title="On Leave Today" value={kpisLoading ? "—" : String(kpis?.onLeaveToday ?? 0)} icon={Clock} loading={kpisLoading} sub="Currently on leave" />
-        <KPICard title="Attrition Rate" value={kpisLoading ? "—" : `${kpis?.attritionRate ?? 0}%`} icon={TrendingDown} loading={kpisLoading} sub="Separated / Total" />
-        <KPICard title="Attendance Rate" value={kpisLoading ? "—" : `${kpis?.attendanceRateToday ?? 0}%`} icon={Activity} loading={kpisLoading} sub="Active / Total" />
-        <KPICard title="Open Positions" value={kpisLoading ? "—" : String(kpis?.openPositions ?? 0)} icon={BriefcaseBusiness} loading={kpisLoading} sub="Unfilled vacancies" />
-        <KPICard title="Pending Approvals" value={kpisLoading ? "—" : String(kpis?.pendingApprovals ?? 0)} icon={UserX} loading={kpisLoading} sub="Awaiting action" />
+        <StatCard
+          title="Total Headcount"
+          value={kpisLoading ? "—" : String(kpis?.totalHeadcount ?? 0)}
+          icon={Users}
+          description="All employees"
+          loading={kpisLoading}
+          accent="blue"
+        />
+        <StatCard
+          title="Active Employees"
+          value={kpisLoading ? "—" : String(kpis?.activeEmployees ?? 0)}
+          icon={UserCheck}
+          description="Currently active"
+          loading={kpisLoading}
+          accent="green"
+        />
+        <StatCard
+          title="New Joiners"
+          value={kpisLoading ? "—" : String(kpis?.newJoinersThisMonth ?? 0)}
+          icon={Calendar}
+          description="This month"
+          loading={kpisLoading}
+          accent="violet"
+        />
+        <StatCard
+          title="On Leave Today"
+          value={kpisLoading ? "—" : String(kpis?.onLeaveToday ?? 0)}
+          icon={Clock}
+          description="Currently on leave"
+          loading={kpisLoading}
+          accent="amber"
+        />
+        <StatCard
+          title="Attrition Rate"
+          value={kpisLoading ? "—" : `${kpis?.attritionRate ?? 0}%`}
+          icon={TrendingDown}
+          description="Separated / Total"
+          loading={kpisLoading}
+          accent="red"
+        />
+        <StatCard
+          title="Attendance Rate"
+          value={kpisLoading ? "—" : `${kpis?.attendanceRateToday ?? 0}%`}
+          icon={Activity}
+          description="Active / Total today"
+          loading={kpisLoading}
+          accent="green"
+        />
+        <StatCard
+          title="Open Positions"
+          value={kpisLoading ? "—" : String(kpis?.openPositions ?? 0)}
+          icon={BriefcaseBusiness}
+          description="Unfilled vacancies"
+          loading={kpisLoading}
+          accent="blue"
+        />
+        <StatCard
+          title="Pending Approvals"
+          value={kpisLoading ? "—" : String(kpis?.pendingApprovals ?? 0)}
+          icon={UserX}
+          description="Awaiting action"
+          loading={kpisLoading}
+          accent={kpis?.pendingApprovals ? "amber" : "default"}
+        />
       </div>
 
       {/* Charts Row */}
       <div className="grid md:grid-cols-2 gap-6">
         <Card className="border-border">
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Headcount by Department</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-foreground">Headcount by Department</CardTitle>
           </CardHeader>
           <CardContent>
             {!headcount?.length ? (
-              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data available</div>
+              <div className="h-48 flex flex-col items-center justify-center text-muted-foreground gap-2">
+                <Users className="w-8 h-8 opacity-30" />
+                <span className="text-sm">No department data yet</span>
+              </div>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={headcount} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="departmentName" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} />
+                <BarChart data={headcount} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="departmentName" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} axisLine={false} tickLine={false} />
                   <Tooltip 
                     contentStyle={{ 
                       backgroundColor: "hsl(var(--card))", 
                       border: "1px solid hsl(var(--border))",
                       borderRadius: 8,
-                      fontSize: 13
-                    }} 
+                      fontSize: 13,
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
+                    }}
+                    cursor={{ fill: "hsl(var(--muted))" }}
                   />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Headcount" />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Headcount" maxBarSize={48} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -123,12 +192,15 @@ export default function DashboardPage() {
         </Card>
 
         <Card className="border-border">
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Employee Status Breakdown</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-foreground">Employee Status Breakdown</CardTitle>
           </CardHeader>
           <CardContent>
             {!statusBreakdown?.length ? (
-              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data available</div>
+              <div className="h-48 flex flex-col items-center justify-center text-muted-foreground gap-2">
+                <Activity className="w-8 h-8 opacity-30" />
+                <span className="text-sm">No status data yet</span>
+              </div>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -136,11 +208,12 @@ export default function DashboardPage() {
                     data={statusBreakdown}
                     cx="50%"
                     cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
+                    innerRadius={55}
+                    outerRadius={82}
                     dataKey="count"
                     nameKey="status"
-                    paddingAngle={3}
+                    paddingAngle={2}
+                    strokeWidth={0}
                   >
                     {statusBreakdown.map((entry) => (
                       <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? "hsl(var(--muted-foreground))"} />
@@ -151,10 +224,11 @@ export default function DashboardPage() {
                       backgroundColor: "hsl(var(--card))", 
                       border: "1px solid hsl(var(--border))",
                       borderRadius: 8,
-                      fontSize: 13
+                      fontSize: 13,
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
                     }} 
                   />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -164,87 +238,114 @@ export default function DashboardPage() {
 
       {/* Expiring Certifications */}
       {canSeeExpiringCerts && (
-      <Card className="border-border">
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <BadgeCheck className="w-4 h-4 text-primary" />
-            Expiring Certifications
-            <span className="text-xs font-normal text-muted-foreground">next 60 days</span>
-          </CardTitle>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Expired {expiringCerts.filter(c => c.bucket === "expired").length}</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> ≤7d {expiringCerts.filter(c => c.bucket === "7").length}</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> ≤30d {expiringCerts.filter(c => c.bucket === "30").length}</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500" /> ≤60d {expiringCerts.filter(c => c.bucket === "60").length}</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {expiringLoading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : !expiringCerts.length ? (
-            <p className="text-muted-foreground text-sm py-8 text-center">No certifications expiring in the next 60 days</p>
-          ) : (
-            <div className="divide-y divide-border max-h-80 overflow-y-auto">
-              {expiringCerts.map((c) => {
-                const badgeClass =
-                  c.bucket === "expired" ? "bg-red-500/10 text-red-600 border-red-500/30" :
-                  c.bucket === "7" ? "bg-orange-500/10 text-orange-600 border-orange-500/30" :
-                  c.bucket === "30" ? "bg-amber-500/10 text-amber-700 border-amber-500/30" :
-                  "bg-yellow-500/10 text-yellow-700 border-yellow-500/30";
-                const label =
-                  c.daysUntilExpiry < 0 ? `Expired ${Math.abs(c.daysUntilExpiry)}d ago` :
-                  c.daysUntilExpiry === 0 ? "Expires today" :
-                  `In ${c.daysUntilExpiry}d`;
-                return (
-                  <div key={c.id} className="py-3 flex items-start gap-4">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 mt-0.5">
-                      <BadgeCheck className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {c.name} <span className="text-muted-foreground font-normal">· {c.issuingOrganization}</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                        <Link href={`/employees/${c.employeeId}`} className="hover:underline text-primary">
-                          {c.employeeName} ({c.employeeCode})
-                        </Link>
-                        {c.departmentName ? ` · ${c.departmentName}` : ""} · expires {c.expiryDate}
-                      </p>
-                    </div>
-                    <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 font-medium border ${badgeClass}`}>{label}</span>
-                  </div>
-                );
-              })}
+        <Card className="border-border">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <BadgeCheck className="w-4 h-4 text-primary" />
+              Expiring Certifications
+            </CardTitle>
+            <div className="flex items-center gap-3 flex-wrap">
+              {[
+                { bucket: "expired", color: "bg-red-500", label: "Expired", count: expiringCerts.filter(c => c.bucket === "expired").length },
+                { bucket: "7", color: "bg-orange-500", label: "≤7d", count: expiringCerts.filter(c => c.bucket === "7").length },
+                { bucket: "30", color: "bg-amber-500", label: "≤30d", count: expiringCerts.filter(c => c.bucket === "30").length },
+                { bucket: "60", color: "bg-yellow-500", label: "≤60d", count: expiringCerts.filter(c => c.bucket === "60").length },
+              ].map(({ bucket, color, label, count }) => count > 0 && (
+                <span key={bucket} className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <span className={`w-2 h-2 rounded-full ${color}`} />
+                  {label} <span className="font-medium text-foreground">{count}</span>
+                </span>
+              ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            {expiringLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <Skeleton className="w-8 h-8 rounded-full" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-48" />
+                      <Skeleton className="h-2.5 w-36" />
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            ) : !expiringCerts.length ? (
+              <div className="py-10 flex flex-col items-center justify-center text-muted-foreground gap-2">
+                <BadgeCheck className="w-8 h-8 opacity-30" />
+                <span className="text-sm">No certifications expiring in the next 60 days</span>
+              </div>
+            ) : (
+              <div className="divide-y divide-border max-h-80 overflow-y-auto">
+                {expiringCerts.map((c) => {
+                  const badgeClass =
+                    c.bucket === "expired" ? "bg-red-500/10 text-red-600 border-red-500/30" :
+                    c.bucket === "7" ? "bg-orange-500/10 text-orange-600 border-orange-500/30" :
+                    c.bucket === "30" ? "bg-amber-500/10 text-amber-700 border-amber-500/30" :
+                    "bg-yellow-500/10 text-yellow-700 border-yellow-500/30";
+                  const label =
+                    c.daysUntilExpiry < 0 ? `Expired ${Math.abs(c.daysUntilExpiry)}d ago` :
+                    c.daysUntilExpiry === 0 ? "Expires today" :
+                    `In ${c.daysUntilExpiry}d`;
+                  return (
+                    <div key={c.id} className="py-3 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                        <BadgeCheck className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {c.name}
+                          <span className="text-muted-foreground font-normal"> · {c.issuingOrganization}</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          <Link href={`/employees/${c.employeeId}`} className="hover:underline text-primary font-medium">
+                            {c.employeeName}
+                          </Link>
+                          {c.departmentName ? ` · ${c.departmentName}` : ""} · expires {c.expiryDate}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className={`text-xs shrink-0 font-medium border ${badgeClass}`}>{label}</Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Recent Activity */}
       <Card className="border-border">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
         </CardHeader>
         <CardContent>
           {!activity?.length ? (
-            <p className="text-muted-foreground text-sm py-8 text-center">No recent activity</p>
+            <div className="py-10 flex flex-col items-center justify-center text-muted-foreground gap-2">
+              <Activity className="w-8 h-8 opacity-30" />
+              <span className="text-sm">No recent activity</span>
+            </div>
           ) : (
             <div className="divide-y divide-border">
-              {activity.map((item) => (
-                <div key={item.id} className="py-3 flex items-start gap-4">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 mt-0.5">
-                    <Activity className="w-4 h-4" />
+              {activity.map((item) => {
+                const dotColor = MODULE_COLORS[item.module] ?? "bg-muted-foreground";
+                return (
+                  <div key={item.id} className="py-3 flex items-start gap-3">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${dotColor}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground leading-snug">{item.description}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {item.actorName} · {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded font-medium shrink-0 mt-0.5">
+                      {item.module}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">{item.description}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {item.actorName} · {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full flex-shrink-0 font-mono">{item.module}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

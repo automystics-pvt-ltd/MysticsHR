@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import {
   useListLeaveApplications,
   useHodActionLeave,
@@ -131,39 +132,39 @@ export default function LeaveApprovalsPage() {
   const isMutating = hodMutation.isPending || hrMutation.isPending || cancelActionMutation.isPending;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Leave Approvals</h1>
-          <p className="text-sm text-gray-500 mt-1">Review and approve leave applications</p>
-        </div>
-        <div className="flex gap-2">
-          {isHr && (
-            <>
-              <Button size="sm" variant="outline" onClick={() => setShowInit(true)}>
-                <RefreshCw className="w-4 h-4 mr-1" />Initialize Balances
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setShowCarryForward(true)}>
-                <RefreshCw className="w-4 h-4 mr-1" />Carry Forward
-              </Button>
-            </>
-          )}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-44 h-8 text-xs">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="Pending">Pending</SelectItem>
-              <SelectItem value="HOD Approved">HOD Approved</SelectItem>
-              <SelectItem value="Approved">Approved</SelectItem>
-              <SelectItem value="Cancel Requested">Cancel Requested</SelectItem>
-              <SelectItem value="Rejected">Rejected</SelectItem>
-              <SelectItem value="Cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Leave Approvals"
+        description="Review and approve leave applications"
+        actions={
+          <>
+            {isHr && (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setShowInit(true)}>
+                  <RefreshCw className="w-4 h-4 mr-1" />Initialize Balances
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setShowCarryForward(true)}>
+                  <RefreshCw className="w-4 h-4 mr-1" />Carry Forward
+                </Button>
+              </>
+            )}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-44 h-8 text-xs">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="Pending">Pending</SelectItem>
+                <SelectItem value="HOD Approved">HOD Approved</SelectItem>
+                <SelectItem value="Approved">Approved</SelectItem>
+                <SelectItem value="Cancel Requested">Cancel Requested</SelectItem>
+                <SelectItem value="Rejected">Rejected</SelectItem>
+                <SelectItem value="Cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
+      />
 
       {isLoading ? (
         <div className="text-sm text-gray-400">Loading...</div>

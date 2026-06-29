@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Pencil, Trash2, Building2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListDepartmentsQueryKey } from "@workspace/api-client-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 interface DeptFormState { name: string; code: string; description: string; }
 type Department = ListDepartmentsQueryResult[number];
@@ -68,13 +69,11 @@ export default function DepartmentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Departments</h1>
-          <p className="text-muted-foreground mt-1">{departments?.length ?? 0} departments</p>
-        </div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />New Department</Button>
-      </div>
+      <PageHeader
+        title="Departments"
+        description={`${departments?.length ?? 0} departments configured`}
+        actions={<Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />New Department</Button>}
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -17,6 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Search, Plus, ChevronLeft, ChevronRight, Upload, FileDown, CheckCircle2, AlertCircle, X, FileSpreadsheet } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -173,24 +174,20 @@ export default function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Employees</h1>
-          <p className="text-muted-foreground mt-1">{total} employees total</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleOpenImport}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import Excel
-          </Button>
-          <Link href="/employees/new">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Employee
+      <PageHeader
+        title="Employees"
+        description={`${total} employees`}
+        actions={
+          <>
+            <Button variant="outline" onClick={handleOpenImport}>
+              <Upload className="w-4 h-4 mr-2" />Import
             </Button>
-          </Link>
-        </div>
-      </div>
+            <Link href="/employees/new">
+              <Button><Plus className="w-4 h-4 mr-2" />Add Employee</Button>
+            </Link>
+          </>
+        }
+      />
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

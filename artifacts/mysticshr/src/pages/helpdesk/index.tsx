@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Ticket, AlertTriangle, Clock, CheckCircle2, BarChart3 } from "lucide-react";
 import { SlaReportContent } from "./sla-report";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const CATEGORIES = ["IT", "HR", "Finance", "Payroll", "Admin", "Other"] as const;
 const PRIORITIES = ["Low", "Medium", "High", "Urgent"] as const;
@@ -200,21 +201,16 @@ export default function HelpdeskPage() {
   });
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Helpdesk</h1>
-          <p className="text-muted-foreground text-sm">
-            {isManager ? "Manage and resolve tickets" : "View and raise support tickets"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="space-y-6">
+      <PageHeader
+        title="Helpdesk"
+        description={isManager ? "Manage and resolve support tickets" : "View and raise support tickets"}
+        actions={
           <Button onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Raise Ticket
+            <Plus className="w-4 h-4 mr-2" />Raise Ticket
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {isManager ? (
         <Tabs defaultValue="tickets" className="space-y-6">

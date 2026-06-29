@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2, Briefcase } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 interface DesigForm { title: string; code: string; departmentId: string; level: string; }
 type Designation = ListDesignationsQueryResult[number];
@@ -75,13 +76,11 @@ export default function DesignationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Designations</h1>
-          <p className="text-muted-foreground mt-1">{designations?.length ?? 0} designations</p>
-        </div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />New Designation</Button>
-      </div>
+      <PageHeader
+        title="Designations"
+        description={`${designations?.length ?? 0} designations configured`}
+        actions={<Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />New Designation</Button>}
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

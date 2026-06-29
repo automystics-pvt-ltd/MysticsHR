@@ -21,6 +21,7 @@ import { useCurrentHrmsUser, hasRole } from "@/lib/useCurrentHrmsUser";
 import {
   Target, Plus, ArrowRight, ChevronRight, Activity, Users, CheckCircle2, Clock, History,
 } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const STAGE_ORDER = [
   "Goal Setting", "Mid Review", "Self Appraisal",
@@ -213,25 +214,16 @@ export default function PerformancePage() {
   if (isLoading) return <div className="p-6">Loading...</div>;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Target className="w-6 h-6 text-primary" />
-            Performance Management
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Manage appraisal cycles, KRA/KPI goals, and reviews
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {isHR && (
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus className="w-4 h-4 mr-1" /> New Cycle
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Performance Management"
+        description="Manage appraisal cycles, KRA/KPI goals, and reviews"
+        actions={isHR ? (
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4 mr-2" />New Cycle
+          </Button>
+        ) : undefined}
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

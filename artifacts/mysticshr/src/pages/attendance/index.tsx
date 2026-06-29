@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import {
   useGetAttendance,
   usePostAttendance,
@@ -172,23 +173,26 @@ function HrAttendanceView() {
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Attendance</h1>
-        <div className="flex gap-2">
-          <Link href="/attendance/regularization">
-            <Button variant="outline"><ArrowRight className="w-4 h-4 mr-2" />Regularizations</Button>
-          </Link>
-          <Link href="/attendance/summary">
-            <Button variant="outline"><Calendar className="w-4 h-4 mr-2" />Monthly Summary</Button>
-          </Link>
-          {canManage && (
-            <Button onClick={() => { setForm({ employeeId: 0, attendanceDate: today, signInTime: "", signOutTime: "", breakDurationMinutes: 0, status: "Present", notes: "" }); setFormError(""); setShowForm(true); }}>
-              <Plus className="w-4 h-4 mr-2" />Record Attendance
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Attendance"
+        description="View and manage employee attendance records"
+        actions={
+          <>
+            <Link href="/attendance/regularization">
+              <Button variant="outline" size="sm"><ArrowRight className="w-4 h-4 mr-2" />Regularizations</Button>
+            </Link>
+            <Link href="/attendance/summary">
+              <Button variant="outline" size="sm"><Calendar className="w-4 h-4 mr-2" />Monthly Summary</Button>
+            </Link>
+            {canManage && (
+              <Button size="sm" onClick={() => { setForm({ employeeId: 0, attendanceDate: today, signInTime: "", signOutTime: "", breakDurationMinutes: 0, status: "Present", notes: "" }); setFormError(""); setShowForm(true); }}>
+                <Plus className="w-4 h-4 mr-2" />Record Attendance
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <div className="flex gap-3 items-end flex-wrap">
         <div>

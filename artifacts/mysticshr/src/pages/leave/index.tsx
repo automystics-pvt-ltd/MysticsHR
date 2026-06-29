@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Calendar, AlertCircle, ArrowRight, ChevronLeft, ChevronRight, List, CalendarDays } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import {
   ResponsiveContainer as RCResponsiveContainer,
   BarChart as RCBarChart,
@@ -178,36 +179,36 @@ export default function LeavePage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Leave Management</h1>
-          <p className="text-sm text-gray-500 mt-1">Apply for leave and track your applications</p>
-        </div>
-        <div className="flex gap-2">
-          {isHr && (
-            <>
-              <Link href="/leave/types">
-                <Button variant="outline" size="sm">Leave Types</Button>
-              </Link>
-              <Link href="/leave/policies">
-                <Button variant="outline" size="sm">Policies</Button>
-              </Link>
-            </>
-          )}
-          <Link href="/leave/calendar">
-            <Button variant="outline" size="sm"><Calendar className="w-4 h-4 mr-1" />Calendar</Button>
-          </Link>
-          {(isHr || role === "hod") && (
-            <Link href="/leave/approvals">
-              <Button variant="outline" size="sm">Approvals</Button>
+    <div className="space-y-6">
+      <PageHeader
+        title="Leave Management"
+        description="Apply for leave and track your applications"
+        actions={
+          <>
+            {isHr && (
+              <>
+                <Link href="/leave/types">
+                  <Button variant="outline" size="sm">Leave Types</Button>
+                </Link>
+                <Link href="/leave/policies">
+                  <Button variant="outline" size="sm">Policies</Button>
+                </Link>
+              </>
+            )}
+            <Link href="/leave/calendar">
+              <Button variant="outline" size="sm"><Calendar className="w-4 h-4 mr-1" />Calendar</Button>
             </Link>
-          )}
-          <Button onClick={() => setShowApply(true)} size="sm">
-            <Plus className="w-4 h-4 mr-1" />Apply Leave
-          </Button>
-        </div>
-      </div>
+            {(isHr || role === "hod") && (
+              <Link href="/leave/approvals">
+                <Button variant="outline" size="sm">Approvals</Button>
+              </Link>
+            )}
+            <Button onClick={() => setShowApply(true)} size="sm">
+              <Plus className="w-4 h-4 mr-1" />Apply Leave
+            </Button>
+          </>
+        }
+      />
 
       {/* Balance Cards */}
       <div>

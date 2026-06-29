@@ -19,6 +19,7 @@ import {
   Link2, RefreshCw, Copy, Check, AlertTriangle, Users, Clock, ChevronDown,
   Mail, Eye, EyeOff, Pencil, KeyRound,
 } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -234,18 +235,15 @@ export default function UsersPage() {
   return (
     <TooltipProvider delayDuration={100}>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">User Management</h1>
-            <p className="text-muted-foreground mt-1">Manage accounts, roles, access, and security</p>
-          </div>
-          {isAdmin && (
+        <PageHeader
+          title="User Management"
+          description="Manage accounts, roles, access, and security"
+          actions={isAdmin ? (
             <Button onClick={() => { setCreateForm({ name: "", email: "", role: "employee", password: "", usePassword: false }); setCreateError(""); setShowCreate(true); }} disabled={atLimit}>
               <Plus className="w-4 h-4 mr-2" />Add User
             </Button>
-          )}
-        </div>
+          ) : undefined}
+        />
 
         {/* License usage banner */}
         {isAdmin && license && (

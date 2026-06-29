@@ -7,3 +7,4 @@
 - [Port 8080 conflict pattern](port-8080-conflict.md) — duplicate legacy "API Server" workflow races artifacts workflow for 8080; remove the legacy workflow first, then kill stale PID via /proc/net/tcp inode lookup.
 - [API server route prefix](api-route-prefix.md) — all Express routes mount under /api (app.use("/api", router)); shell curl tests must use /api/... not bare paths.
 - [Sidebar required exports](sidebar-exports.md) — Sidebar.tsx must export both Sidebar and SidebarMenuButton; TopBar.tsx imports SidebarMenuButton from ./Sidebar for mobile menu toggle.
+- [UX shared components](ux-shared-components.md) — PageHeader, StatCard, NotificationBell in layout/ and ui/; apply to every new page for consistent header, KPI, and notification patterns.

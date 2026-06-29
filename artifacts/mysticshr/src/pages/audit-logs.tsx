@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { format } from "date-fns";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const MODULES = ["Employees", "Departments", "Designations", "Users", "Leave", "Payroll"];
 const PAGE_SIZE = 20;
@@ -26,10 +27,10 @@ export default function AuditLogsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Audit Logs</h1>
-        <p className="text-muted-foreground mt-1">{total} log entries</p>
-      </div>
+      <PageHeader
+        title="Audit Logs"
+        description={`${total} log entries`}
+      />
 
       <div className="flex gap-3">
         <Select value={module} onValueChange={(v) => { setModule(v === "_all" ? "" : v); setPage(0); }}>

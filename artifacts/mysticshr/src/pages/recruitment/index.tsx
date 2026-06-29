@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, CheckCircle2, XCircle, Briefcase, Users } from "lucide-react";
 import { useCurrentHrmsUser, hasRole } from "@/lib/useCurrentHrmsUser";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const REQ_STATUS_COLORS: Record<string, string> = {
   Draft: "bg-gray-100 text-gray-700",
@@ -326,10 +327,10 @@ function PipelineTab() {
 export default function RecruitmentPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Recruitment</h1>
-        <p className="text-muted-foreground mt-1">Manage job requisitions and the candidate pipeline</p>
-      </div>
+      <PageHeader
+        title="Recruitment"
+        description="Manage job requisitions and the candidate pipeline"
+      />
       <Tabs defaultValue="requisitions">
         <TabsList>
           <TabsTrigger value="requisitions"><Briefcase className="w-4 h-4 mr-2" />Requisitions</TabsTrigger>

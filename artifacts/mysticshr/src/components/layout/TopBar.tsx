@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Bell, LogOut, Search, User as UserIcon } from "lucide-react";
+import { LogOut, Search, User as UserIcon, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,6 +21,7 @@ import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
 import { useAuth } from "@/lib/auth";
 import { resolveActiveItem } from "./nav-config";
 import { SidebarMenuButton } from "./Sidebar";
+import { NotificationBell } from "./NotificationBell";
 
 interface TopBarProps {
   onMobileMenuOpen: () => void;
@@ -62,17 +63,18 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
 
   return (
     <header
-      className="h-16 border-b border-border bg-background flex items-center gap-2 px-3 md:px-6 shrink-0"
+      className="h-14 border-b border-border bg-background/95 backdrop-blur-sm flex items-center gap-2 px-3 md:px-5 shrink-0 sticky top-0 z-30"
       data-testid="app-topbar"
     >
       <SidebarMenuButton onOpen={onMobileMenuOpen} />
 
+      {/* Breadcrumb — desktop */}
       <div className="hidden md:flex items-center min-w-0 flex-1">
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Link href="/dashboard">Home</Link>
+                <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors text-sm">Home</Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             {active && (
@@ -80,10 +82,10 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
                   {trailingSegments.length === 0 ? (
-                    <BreadcrumbPage>{active.name}</BreadcrumbPage>
+                    <BreadcrumbPage className="text-sm font-medium">{active.name}</BreadcrumbPage>
                   ) : (
                     <BreadcrumbLink asChild>
-                      <Link href={active.href}>{active.name}</Link>
+                      <Link href={active.href} className="text-muted-foreground hover:text-foreground transition-colors text-sm">{active.name}</Link>
                     </BreadcrumbLink>
                   )}
                 </BreadcrumbItem>
@@ -94,10 +96,10 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
                   {s.isLast ? (
-                    <BreadcrumbPage>{s.label}</BreadcrumbPage>
+                    <BreadcrumbPage className="text-sm font-medium">{s.label}</BreadcrumbPage>
                   ) : (
                     <BreadcrumbLink asChild>
-                      <Link href={s.href}>{s.label}</Link>
+                      <Link href={s.href} className="text-muted-foreground hover:text-foreground transition-colors text-sm">{s.label}</Link>
                     </BreadcrumbLink>
                   )}
                 </BreadcrumbItem>
@@ -107,62 +109,58 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
         </Breadcrumb>
       </div>
 
+      {/* Page title — mobile */}
       <div className="flex-1 md:hidden font-semibold text-base truncate">
         {active?.name ?? "MysticsHR"}
       </div>
 
+      {/* Search trigger */}
       <Button
         variant="outline"
         size="sm"
-        className="hidden sm:inline-flex items-center gap-2 text-muted-foreground h-9 px-3 min-w-[200px] justify-between"
+        className="hidden sm:inline-flex items-center gap-2 text-muted-foreground h-8 px-3 min-w-[180px] max-w-[220px] justify-between bg-muted/50 border-border/60 hover:bg-muted"
         onClick={onCommandOpen}
         data-testid="topbar-search-trigger"
         aria-label="Search modules and pages"
       >
         <span className="flex items-center gap-2">
-          <Search className="w-4 h-4" />
+          <Search className="w-3.5 h-3.5" />
           <span className="text-xs">Search…</span>
         </span>
-        <kbd className="hidden md:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono">
+        <kbd className="hidden md:inline-flex items-center gap-0.5 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
           {isMac ? "⌘" : "Ctrl"}K
         </kbd>
       </Button>
       <Button
         variant="ghost"
         size="icon"
-        className="sm:hidden"
+        className="sm:hidden h-8 w-8"
         onClick={onCommandOpen}
         aria-label="Search"
       >
-        <Search className="w-5 h-5" />
+        <Search className="w-4 h-4" />
       </Button>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setLocation("/communications")}
-        aria-label="Notifications"
-        data-testid="topbar-notifications"
-      >
-        <Bell className="w-5 h-5" />
-      </Button>
+      {/* Notification bell */}
+      <NotificationBell />
 
+      {/* User menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className="h-10 px-2 gap-2 hover:bg-muted"
+            className="h-8 px-1.5 gap-2 hover:bg-muted rounded-lg"
             data-testid="topbar-user-menu"
             aria-label="User menu"
           >
-            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center">
+            <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-semibold flex items-center justify-center text-xs">
               {initial}
             </div>
-            <div className="hidden lg:flex flex-col items-start min-w-0 max-w-[160px]">
-              <span className="text-sm font-medium leading-tight truncate w-full text-left">
+            <div className="hidden lg:flex flex-col items-start min-w-0 max-w-[140px]">
+              <span className="text-xs font-medium leading-tight truncate w-full text-left">
                 {displayName}
               </span>
-              <span className="text-[11px] text-muted-foreground leading-tight truncate w-full text-left">
+              <span className="text-[10px] text-muted-foreground leading-tight truncate w-full text-left">
                 {formatRole(role)}
               </span>
             </div>
@@ -170,24 +168,29 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>
-            <div className="flex flex-col">
-              <span className="font-medium truncate">{displayName}</span>
-              <span className="text-xs text-muted-foreground font-normal truncate">
-                {formatRole(role)}
-              </span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold flex items-center justify-center text-sm shrink-0">
+                {initial}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="font-medium text-sm truncate">{displayName}</span>
+                <span className="text-xs text-muted-foreground font-normal truncate">
+                  {formatRole(role)}
+                </span>
+              </div>
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setLocation("/ess")} data-testid="user-menu-profile">
-            <UserIcon className="w-4 h-4 mr-2" />
+            <UserIcon className="w-4 h-4 mr-2 text-muted-foreground" />
             My Profile
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setLocation("/communications")}>
-            <Bell className="w-4 h-4 mr-2" />
-            Notifications
+          <DropdownMenuItem onClick={() => setLocation("/settings/api-keys")}>
+            <Settings className="w-4 h-4 mr-2 text-muted-foreground" />
+            Settings
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleSignOut} data-testid="user-menu-signout">
+          <DropdownMenuItem onClick={handleSignOut} data-testid="user-menu-signout" className="text-destructive focus:text-destructive">
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out
           </DropdownMenuItem>
