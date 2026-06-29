@@ -5,7 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
-import { filterNavByRole, type Role } from "./nav-config";
+import { useMyPermissions } from "@/lib/useMyPermissions";
+import { filterNavByRole, filterNavByPermissions, type Role } from "./nav-config";
+
+export function SidebarMenuButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="md:hidden p-2 rounded-md hover:bg-accent transition-colors"
+      aria-label="Open navigation menu"
+    >
+      <Menu className="w-5 h-5" />
+    </button>
+  );
+}
 
 interface SidebarProps {
   isOpen: boolean;
@@ -20,17 +33,21 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
   const [location] = useLocation();
   const { role: hrmsRole } = useCurrentHrmsUser();
   const role = (hrmsRole ?? "employee") as Role;
+  const { data: permissionsMap } = useMyPermissions();
 
-  const groups = useMemo(() => filterNavByRole(role), [role]);
+  const groups = useMemo(() => {
+    if (permissionsMap && Object.keys(permissionsMap).length > 0) {
+      return filterNavByPermissions(permissionsMap as Record<string, string[]>);
+    }
+    return filterNavByRole(role);
+  }, [permissionsMap, role]);
 
-  // Track per-group open state. Auto-open the group containing the active route.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const g of groups) initial[g.id] = g.defaultOpen ?? false;
     return initial;
   });
 
-  // If the user navigates into a collapsed group, force it open so they can see siblings.
   const effectiveOpen = useMemo(() => {
     const merged = { ...openGroups };
     for (const g of groups) {
@@ -46,7 +63,6 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
 
   return (
     <TooltipProvider delayDuration={150}>
-      {/* Mobile overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
@@ -81,117 +97,74 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
           >
             <X className="w-5 h-5" />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden md:flex text-sidebar-foreground shrink-0"
+            onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
+          </Button>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto sidebar-scroll py-3 px-2 space-y-1" data-testid="sidebar-nav">
-          {groups.map((group) => {
-            const open = effectiveOpen[group.id] ?? group.defaultOpen ?? false;
-            return (
-              <div key={group.id} className="mb-1">
-                {!collapsed && (
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.id)}
-                    className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50 hover:text-sidebar-foreground/80 transition-colors"
-                    data-testid={`sidebar-group-${group.id}`}
-                    aria-expanded={open}
-                  >
-                    <span>{group.label}</span>
-                    <ChevronDown
-                      className={cn(
-                        "w-3.5 h-3.5 transition-transform",
-                        open ? "rotate-0" : "-rotate-90",
-                      )}
-                    />
-                  </button>
-                )}
-                {(collapsed || open) && (
-                  <ul className="space-y-0.5 mt-0.5">
-                    {group.items.map((item) => {
-                      const isActive =
-                        location === item.href || location.startsWith(item.href + "/");
-                      const Icon = item.icon;
-                      const linkClass = cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors text-sm",
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
-                        collapsed && "justify-center px-0",
-                      );
-                      const link = (
-                        <Link href={item.href}>
-                          <div
-                            className={linkClass}
-                            onClick={() => setOpen(false)}
-                            data-testid={`nav-${item.href.replace(/\//g, "-")}`}
-                            aria-current={isActive ? "page" : undefined}
-                          >
-                            <Icon className="w-5 h-5 shrink-0" />
-                            {!collapsed && <span className="truncate">{item.name}</span>}
-                          </div>
-                        </Link>
-                      );
-                      return (
-                        <li key={item.href}>
-                          {collapsed ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>{link}</TooltipTrigger>
-                              <TooltipContent side="right">{item.name}</TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            link
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
-        </nav>
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1" aria-label="Main navigation">
+          {groups.map((group) => (
+            <div key={group.id}>
+              {!collapsed && (
+                <button
+                  onClick={() => toggleGroup(group.id)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 hover:text-sidebar-foreground/80 transition-colors"
+                >
+                  <span>{group.label}</span>
+                  <ChevronDown
+                    className={cn("w-3 h-3 transition-transform", effectiveOpen[group.id] ? "rotate-0" : "-rotate-90")}
+                  />
+                </button>
+              )}
+              {(collapsed || effectiveOpen[group.id]) && (
+                <ul className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const isActive = location === item.href || location.startsWith(item.href + "/");
+                    const Icon = item.icon;
+                    const linkContent = (
+                      <Link
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                          collapsed && "justify-center",
+                        )}
+                        aria-current={isActive ? "page" : undefined}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        {!collapsed && <span className="truncate">{item.name}</span>}
+                      </Link>
+                    );
 
-        {/* Collapse toggle (desktop only) */}
-        <div className="hidden md:flex border-t border-sidebar-border p-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setCollapsed(!collapsed)}
-            className={cn(
-              "w-full text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50",
-              collapsed && "justify-center px-0",
-            )}
-            data-testid="sidebar-collapse-toggle"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? (
-              <ChevronsRight className="w-4 h-4" />
-            ) : (
-              <>
-                <ChevronsLeft className="w-4 h-4 mr-2" />
-                <span className="text-xs">Collapse</span>
-              </>
-            )}
-          </Button>
-        </div>
+                    return (
+                      <li key={item.href}>
+                        {collapsed ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+                            <TooltipContent side="right">{item.name}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          linkContent
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          ))}
+        </nav>
       </aside>
     </TooltipProvider>
-  );
-}
-
-/** Mobile-only menu opener — used by the TopBar. */
-export function SidebarMenuButton({ onOpen }: { onOpen: () => void }) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="md:hidden"
-      onClick={onOpen}
-      aria-label="Open menu"
-      data-testid="sidebar-mobile-toggle"
-    >
-      <Menu className="w-5 h-5" />
-    </Button>
   );
 }

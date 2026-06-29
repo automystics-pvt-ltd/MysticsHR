@@ -62,6 +62,7 @@ import SystemConfigPage from "@/pages/system-config/index";
 import ApiKeysPage from "@/pages/settings/api-keys";
 import ApiDocsPage from "@/pages/settings/api-docs";
 import LoginPage from "@/pages/login";
+import RolesPermissionsPage from "@/pages/roles-permissions/index";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useCurrentHrmsUser, type HrmsRole, hasRole } from "@/lib/useCurrentHrmsUser";
 
@@ -237,6 +238,14 @@ function AppRoutes() {
         <ProtectedRoute>
           <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager"]}>
             <UsersPage />
+          </RoleProtectedRoute>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/roles-permissions">
+        <ProtectedRoute>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager"]}>
+            <RolesPermissionsPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>

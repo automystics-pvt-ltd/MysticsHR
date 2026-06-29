@@ -22,11 +22,11 @@ import {
   BarChart3,
   Bell,
   Network,
-  LifeBuoy,
-  Sparkles,
+  Ticket as PermIcon,
   KeyRound,
   BookOpen,
   MapPin,
+  Lock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -52,23 +52,17 @@ export interface NavItem {
   href: string;
   icon: LucideIcon;
   roles: Role[];
-  /** Extra search keywords surfaced by the command palette. */
+  moduleKey?: string;
   keywords?: string[];
 }
 
 export interface NavGroup {
   id: string;
   label: string;
-  /** Collapsed by default? Keep top groups open, admin groups closed. */
   defaultOpen?: boolean;
   items: NavItem[];
 }
 
-/**
- * The full navigation tree, organized SAP-style into business-domain groups.
- * The same tree powers the sidebar, the breadcrumb resolver, and the
- * command palette — keep everything declared here.
- */
 export const NAV_GROUPS: NavGroup[] = [
   {
     id: "home",
@@ -80,6 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/dashboard",
         icon: LayoutDashboard,
         roles: ALL_ROLES,
+        moduleKey: "dashboard",
         keywords: ["overview", "home", "kpi"],
       },
       {
@@ -87,6 +82,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/ess",
         icon: Home,
         roles: ALL_ROLES,
+        moduleKey: "ess",
         keywords: ["self service", "my profile", "employee"],
       },
     ],
@@ -101,6 +97,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/employees",
         icon: Users,
         roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
+        moduleKey: "employees",
         keywords: ["staff", "people", "team"],
       },
       {
@@ -108,6 +105,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/org-chart",
         icon: Network,
         roles: ALL_ROLES,
+        moduleKey: "org-chart",
         keywords: ["organization", "hierarchy", "reporting"],
       },
       {
@@ -115,6 +113,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/departments",
         icon: Building2,
         roles: ["customer_admin", "hr_manager", "hr_executive"],
+        moduleKey: "departments",
         keywords: ["division", "unit"],
       },
       {
@@ -122,6 +121,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/branches",
         icon: MapPin,
         roles: ["customer_admin", "hr_manager", "hr_executive"],
+        moduleKey: "branches",
         keywords: ["office", "location", "site"],
       },
       {
@@ -129,6 +129,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/designations",
         icon: Briefcase,
         roles: ["customer_admin", "hr_manager", "hr_executive"],
+        moduleKey: "designations",
         keywords: ["job title", "role", "position"],
       },
     ],
@@ -143,6 +144,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/recruitment",
         icon: UserPlus,
         roles: ["customer_admin", "hr_manager", "hr_executive", "hod"],
+        moduleKey: "recruitment",
         keywords: ["hiring", "requisition", "candidate", "job"],
       },
       {
@@ -150,6 +152,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/pre-onboarding",
         icon: ClipboardCheck,
         roles: ["customer_admin", "hr_manager", "hr_executive"],
+        moduleKey: "pre-onboarding",
         keywords: ["offer", "joining", "documents"],
       },
       {
@@ -157,6 +160,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/onboarding",
         icon: ClipboardList,
         roles: ["customer_admin", "hr_manager", "hr_executive", "hod"],
+        moduleKey: "onboarding",
         keywords: ["induction", "joinee", "checklist"],
       },
     ],
@@ -171,6 +175,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/shifts",
         icon: Clock,
         roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
+        moduleKey: "shifts",
         keywords: ["roster", "schedule"],
       },
       {
@@ -178,6 +183,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/attendance",
         icon: CalendarCheck,
         roles: ALL_ROLES,
+        moduleKey: "attendance",
         keywords: ["punch", "regularization", "muster"],
       },
       {
@@ -185,6 +191,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/leave",
         icon: Umbrella,
         roles: ALL_ROLES,
+        moduleKey: "leave",
         keywords: ["holiday", "time off", "vacation"],
       },
       {
@@ -192,6 +199,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/permissions",
         icon: Timer,
         roles: ALL_ROLES,
+        moduleKey: "work-permissions",
         keywords: ["short leave", "outdoor", "comp off"],
       },
     ],
@@ -206,6 +214,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/payroll",
         icon: Banknote,
         roles: ["customer_admin", "hr_manager", "hr_executive", "payroll_admin", "employee"],
+        moduleKey: "payroll",
         keywords: ["salary", "payslip", "tax", "ctc"],
       },
     ],
@@ -220,6 +229,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/performance",
         icon: Target,
         roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "employee"],
+        moduleKey: "performance",
         keywords: ["goals", "appraisal", "review", "kra"],
       },
     ],
@@ -234,6 +244,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/helpdesk",
         icon: Ticket,
         roles: ALL_ROLES,
+        moduleKey: "helpdesk",
         keywords: ["ticket", "support", "issue", "sla"],
       },
       {
@@ -241,6 +252,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/documents",
         icon: FileBadge,
         roles: ALL_ROLES,
+        moduleKey: "documents",
         keywords: ["files", "letters", "certificates"],
       },
       {
@@ -248,6 +260,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/communications",
         icon: Bell,
         roles: ["customer_admin", "hr_manager"],
+        moduleKey: "communications",
         keywords: ["announcements", "notifications", "broadcast"],
       },
     ],
@@ -262,6 +275,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/exit",
         icon: TrendingDown,
         roles: ALL_ROLES,
+        moduleKey: "exit",
         keywords: ["resignation", "clearance", "fnf", "relieving"],
       },
     ],
@@ -276,6 +290,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/analytics",
         icon: BarChart3,
         roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
+        moduleKey: "analytics",
         keywords: ["dashboard", "metrics", "charts"],
       },
       {
@@ -283,6 +298,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/reports",
         icon: FileText,
         roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"],
+        moduleKey: "reports",
         keywords: ["export", "download", "summary"],
       },
     ],
@@ -297,13 +313,23 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/users",
         icon: ShieldCheck,
         roles: ["customer_admin", "hr_manager"],
+        moduleKey: "users",
         keywords: ["roles", "access", "rbac"],
+      },
+      {
+        name: "Roles & Permissions",
+        href: "/roles-permissions",
+        icon: Lock,
+        roles: ["customer_admin", "hr_manager"],
+        moduleKey: "roles-permissions",
+        keywords: ["rbac", "access control", "permissions", "policies"],
       },
       {
         name: "Audit Logs",
         href: "/audit-logs",
         icon: FileText,
         roles: ["customer_admin", "hr_manager"],
+        moduleKey: "audit-logs",
         keywords: ["activity", "trail", "history"],
       },
       {
@@ -311,6 +337,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/settings",
         icon: Settings,
         roles: ["customer_admin", "hr_manager"],
+        moduleKey: "system-config",
         keywords: ["configuration", "preferences", "system"],
       },
       {
@@ -318,6 +345,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/settings/api-keys",
         icon: KeyRound,
         roles: ["customer_admin"],
+        moduleKey: "api-keys",
         keywords: ["integration", "external", "token", "developer"],
       },
       {
@@ -331,10 +359,8 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Flat list of all items, useful for command-palette search & breadcrumbs. */
 export const ALL_NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
-/** Resolve which item a given pathname belongs to (longest-prefix match). */
 export function resolveActiveItem(pathname: string): NavItem | undefined {
   let best: NavItem | undefined;
   for (const item of ALL_NAV_ITEMS) {
@@ -345,9 +371,20 @@ export function resolveActiveItem(pathname: string): NavItem | undefined {
   return best;
 }
 
-/** Filter the nav tree by role, dropping any group that ends up empty. */
 export function filterNavByRole(role: Role): NavGroup[] {
   return NAV_GROUPS
     .map((g) => ({ ...g, items: g.items.filter((i) => i.roles.includes(role)) }))
+    .filter((g) => g.items.length > 0);
+}
+
+export function filterNavByPermissions(permissionsMap: Record<string, string[]>): NavGroup[] {
+  return NAV_GROUPS
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => {
+        if (!i.moduleKey) return true;
+        return (permissionsMap[i.moduleKey] ?? []).includes("view");
+      }),
+    }))
     .filter((g) => g.items.length > 0);
 }
