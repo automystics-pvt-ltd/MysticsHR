@@ -75,28 +75,67 @@ async function getMailTransport() {
   }
 }
 
+function buildOtpHtml(name: string, otp: string, purpose: string): string {
+  return `
+    <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px 24px">
+      <div style="margin-bottom:24px">
+        <span style="font-size:20px;font-weight:700;color:#1e293b">MysticsHR</span>
+      </div>
+      <p style="color:#334155;font-size:15px;margin:0 0 8px">Hi ${name},</p>
+      <p style="color:#334155;font-size:15px;margin:0 0 24px">${purpose}</p>
+      <div style="background:#f1f5f9;border-radius:10px;padding:28px;text-align:center;margin:0 0 24px">
+        <span style="font-size:40px;font-weight:800;letter-spacing:14px;color:#1e293b;font-variant-numeric:tabular-nums">${otp}</span>
+      </div>
+      <p style="color:#64748b;font-size:13px;margin:0">
+        This code expires in <strong>${OTP_EXPIRY_MINUTES} minutes</strong>. Do not share it with anyone.
+      </p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
+      <p style="color:#94a3b8;font-size:12px;margin:0">
+        If you didn't request this code, you can safely ignore this email.
+      </p>
+    </div>
+  `;
+}
+
+async function sendViaResend(to: string, subject: string, html: string): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return false;
+  try {
+    const from = process.env.RESEND_FROM ?? "MysticsHR <onboarding@resend.dev>";
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to: [to], subject, html }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      console.error("[OTP] Resend error:", resp.status, body);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[OTP] Resend fetch failed:", e);
+    return false;
+  }
+}
+
 async function sendOtpEmail(to: string, name: string, otp: string, subject: string, purpose: string) {
   console.log(`[OTP] ${purpose} OTP for ${to}: ${otp}`);
+  const html = buildOtpHtml(name, otp, purpose);
+
+  // 1. Try Resend (zero-config beyond API key)
+  if (await sendViaResend(to, subject, html)) return;
+
+  // 2. Fall back to SMTP (configured via system settings or env vars)
   try {
     const transport = await getMailTransport();
-    if (!transport) return;
-    await transport.sendMail({
-      to,
-      subject,
-      html: `
-        <div style="font-family:sans-serif;max-width:480px;margin:auto">
-          <h2 style="color:#1e293b">MysticsHR</h2>
-          <p>Hi ${name},</p>
-          <p>${purpose}</p>
-          <div style="background:#f1f5f9;border-radius:8px;padding:24px;text-align:center;margin:24px 0">
-            <span style="font-size:36px;font-weight:700;letter-spacing:12px;color:#1e293b">${otp}</span>
-          </div>
-          <p style="color:#64748b;font-size:13px">This code expires in ${OTP_EXPIRY_MINUTES} minutes. Do not share it with anyone.</p>
-        </div>
-      `,
-    });
+    if (!transport) {
+      console.warn("[OTP] No email transport configured — OTP logged above for development use.");
+      return;
+    }
+    await transport.sendMail({ to, subject, html });
   } catch (e) {
-    console.error("[OTP] Failed to send email:", e);
+    console.error("[OTP] SMTP send failed:", e);
   }
 }
 
