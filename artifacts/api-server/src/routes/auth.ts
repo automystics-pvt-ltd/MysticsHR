@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "../lib/db";
 import { hrmsUsersTable, tenantsTable } from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { signToken, setAuthCookie, clearAuthCookie, requireHrmsUser } from "../lib/auth";
+import { signToken, signMfaToken, setAuthCookie, clearAuthCookie, requireHrmsUser } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 
 const router = Router();
@@ -107,6 +107,22 @@ router.post("/auth/login", async (req, res) => {
     if (matchedUser.isLocked) {
       const reason = matchedUser.lockedReason ?? "Account locked";
       res.status(403).json({ error: `Account is locked: ${reason}. Contact your HR administrator.` });
+      return;
+    }
+
+    // Successful credentials — check MFA before granting session
+    const userWithMfa = matchedUser as typeof hrmsUsersTable.$inferSelect & { mfaEnabled?: boolean };
+    if (userWithMfa.mfaEnabled) {
+      const mfaToken = signMfaToken({ userId: matchedUser.id, tenantId: matchedUser.tenantId });
+      void logAudit({
+        tenantId: matchedUser.tenantId,
+        action: "LOGIN_MFA_REQUIRED",
+        module: "Auth",
+        recordId: matchedUser.id,
+        newValue: matchedUser.email,
+        ipAddress: req.ip,
+      });
+      res.json({ mfaRequired: true, mfaToken });
       return;
     }
 

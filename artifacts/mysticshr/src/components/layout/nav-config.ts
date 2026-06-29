@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   ShieldCheck,
+  Shield,
   FileText,
   Settings,
   Clock,
@@ -339,6 +340,13 @@ export const NAV_GROUPS: NavGroup[] = [
         roles: ["customer_admin", "hr_manager"],
         moduleKey: "system-config",
         keywords: ["configuration", "preferences", "system"],
+      },
+      {
+        name: "Security",
+        href: "/settings/security",
+        icon: Shield,
+        roles: ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"],
+        keywords: ["password", "mfa", "2fa", "totp", "two-factor", "authenticator"],
       },
       {
         name: "API Keys",

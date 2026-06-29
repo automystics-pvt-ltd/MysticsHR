@@ -9,6 +9,8 @@ import { useCurrentHrmsUser, type HrmsRole, hasRole } from "@/lib/useCurrentHrms
 
 const LandingPage = lazy(() => import("@/pages/landing"));
 const LoginPage = lazy(() => import("@/pages/login"));
+const MfaVerifyPage = lazy(() => import("@/pages/mfa-verify"));
+const SecuritySettingsPage = lazy(() => import("@/pages/settings/security"));
 const DashboardPage = lazy(() => import("@/pages/dashboard"));
 
 const EmployeesPage = lazy(() => import("@/pages/employees/index"));
@@ -185,6 +187,11 @@ function AppRoutes() {
             </Suspense>
           </Route>
         )}
+        <Route path="/sign-in/mfa">
+          <Suspense fallback={<LoadingScreen />}>
+            <MfaVerifyPage />
+          </Suspense>
+        </Route>
         <Route path="/sign-in/*?">
           <Suspense fallback={<LoadingScreen />}>
             <LoginPage />
@@ -593,6 +600,13 @@ function AppRoutes() {
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager"]}>
               <AuditLogsPage />
+            </RoleProtectedRoute>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/settings/security">
+          <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
+              <SecuritySettingsPage />
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>

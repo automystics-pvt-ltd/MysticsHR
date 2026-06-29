@@ -126,6 +126,22 @@ export function requireRole(...allowedRoles: HrmsRole[]) {
   };
 }
 
+// ─── Short-lived MFA tokens (5 min, not a full session) ──────────────────────
+
+export function signMfaToken(payload: { userId: number; tenantId: number }): string {
+  return jwt.sign({ ...payload, isMfa: true }, getJwtSecret(), { expiresIn: "5m" });
+}
+
+export function verifyMfaToken(token: string): { userId: number; tenantId: number } | null {
+  try {
+    const decoded = jwt.verify(token, getJwtSecret()) as { userId: number; tenantId: number; isMfa: boolean };
+    if (!decoded.isMfa) return null;
+    return { userId: decoded.userId, tenantId: decoded.tenantId };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Platform admin tokens ────────────────────────────────────────────────────
 
 type PlatformTokenPayload = { platformAdminId: number; email: string; isPlatform: true };

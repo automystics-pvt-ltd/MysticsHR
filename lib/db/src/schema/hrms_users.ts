@@ -1,5 +1,5 @@
 import {
-  pgTable, serial, text, boolean, integer, timestamp, pgEnum, uniqueIndex,
+  pgTable, serial, text, boolean, integer, timestamp, pgEnum, uniqueIndex, jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -32,6 +32,9 @@ export const hrmsUsersTable = pgTable("hrms_users", {
   inviteToken: text("invite_token"),
   inviteExpiry: timestamp("invite_expiry"),
   invitedAt: timestamp("invited_at"),
+  mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+  mfaSecret: text("mfa_secret"),
+  mfaBackupCodes: jsonb("mfa_backup_codes").$type<string[]>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [

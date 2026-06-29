@@ -41,3 +41,5 @@ export * from "./api_keys";
 export * from "./billing";
 export * from "./branches";
 export * from "./role-permissions";
+export * from "./tenant_registrations";
+export * from "./password_reset_tokens";

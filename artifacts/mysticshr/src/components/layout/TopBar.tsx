@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LogOut, Search, User as UserIcon, Settings } from "lucide-react";
+import { LogOut, Search, User as UserIcon, Settings, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -184,6 +184,10 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
           <DropdownMenuItem onClick={() => setLocation("/ess")} data-testid="user-menu-profile">
             <UserIcon className="w-4 h-4 mr-2 text-muted-foreground" />
             My Profile
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setLocation("/settings/security")}>
+            <Shield className="w-4 h-4 mr-2 text-muted-foreground" />
+            Security
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setLocation("/settings/api-keys")}>
             <Settings className="w-4 h-4 mr-2 text-muted-foreground" />
