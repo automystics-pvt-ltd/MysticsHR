@@ -61,9 +61,11 @@ router.get("/notifications/unread-count", requireHrmsUser, async (req, res) => {
 
 // ─── Notification Templates ───────────────────────────────────────────────────
 
-router.get("/notification-templates", requireHrmsUser, requireRole(...HR_ROLES), async (_req, res) => {
+router.get("/notification-templates", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
-    const templates = await db.select().from(notificationTemplatesTable).orderBy(notificationTemplatesTable.eventType);
+    const templates = await db.select().from(notificationTemplatesTable)
+      .where(eq(notificationTemplatesTable.tenantId, req.hrmsUser!.tenantId))
+      .orderBy(notificationTemplatesTable.eventType);
     res.json(templates);
   } catch {
     res.status(500).json({ error: "Failed to list templates" });
@@ -90,7 +92,7 @@ router.put("/notification-templates/:id", requireHrmsUser, requireRole(...SUPER_
     const { channel, emailSubject, emailBody, whatsappTemplate, isActive } = req.body;
     const [updated] = await db.update(notificationTemplatesTable)
       .set({ channel, emailSubject, emailBody, whatsappTemplate, isActive, updatedAt: new Date() })
-      .where(eq(notificationTemplatesTable.id, id))
+      .where(and(eq(notificationTemplatesTable.id, id), eq(notificationTemplatesTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     if (!updated) { res.status(404).json({ error: "Template not found" }); return; }
     res.json(updated);
@@ -102,7 +104,7 @@ router.put("/notification-templates/:id", requireHrmsUser, requireRole(...SUPER_
 router.delete("/notification-templates/:id", requireHrmsUser, requireRole(...SUPER_ADMIN), async (req, res): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string);
-    await db.delete(notificationTemplatesTable).where(eq(notificationTemplatesTable.id, id));
+    await db.delete(notificationTemplatesTable).where(and(eq(notificationTemplatesTable.id, id), eq(notificationTemplatesTable.tenantId, req.hrmsUser!.tenantId)));
     res.status(204).end();
   } catch {
     res.status(500).json({ error: "Failed to delete template" });
@@ -395,9 +397,9 @@ router.post("/my-preferences/notifications/:eventType/unsilence", requireHrmsUse
  * master event-type registry. Same item shape as `/my-preferences/notifications`
  * so the admin UI can reuse the ESS list rendering. Missing entries default
  * to "everything on" — matching the seeding fallback. */
-router.get("/notification-defaults", requireHrmsUser, requireRole(...HR_ROLES), async (_req, res) => {
+router.get("/notification-defaults", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
-    const defaults = await getNotificationDefaults();
+    const defaults = await getNotificationDefaults(req.hrmsUser!.tenantId);
     const items = NOTIFICATION_EVENT_TYPES.map((meta) => {
       const d = defaults[meta.eventType];
       return {
@@ -444,12 +446,13 @@ router.put("/notification-defaults", requireHrmsUser, requireRole(...HR_ROLES), 
       .where(and(
         eq(systemSettingsTable.category, NOTIFICATION_DEFAULTS_CATEGORY),
         eq(systemSettingsTable.key, NOTIFICATION_DEFAULTS_KEY),
+        eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId),
       ))
       .limit(1);
     if (existing) {
       await db.update(systemSettingsTable)
         .set({ value: map, updatedAt: new Date() })
-        .where(eq(systemSettingsTable.id, existing.id));
+        .where(and(eq(systemSettingsTable.id, existing.id), eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)));
     } else {
       await db.insert(systemSettingsTable).values({
         tenantId: req.hrmsUser!.tenantId,

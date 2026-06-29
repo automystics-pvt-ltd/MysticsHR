@@ -68,11 +68,12 @@ export type NotificationDefaultsMap = Record<string, { emailEnabled: boolean; wh
  * map when nothing has been configured yet — callers should fall back to the
  * historical hard-coded "everything on" behavior in that case.
  */
-export async function getNotificationDefaults(): Promise<NotificationDefaultsMap> {
+export async function getNotificationDefaults(tenantId: number): Promise<NotificationDefaultsMap> {
   const [row] = await db.select().from(systemSettingsTable)
     .where(and(
       eq(systemSettingsTable.category, NOTIFICATION_DEFAULTS_CATEGORY),
       eq(systemSettingsTable.key, NOTIFICATION_DEFAULTS_KEY),
+      eq(systemSettingsTable.tenantId, tenantId),
     ))
     .limit(1);
   if (!row || !row.value || typeof row.value !== "object" || Array.isArray(row.value)) return {};
@@ -95,8 +96,8 @@ export async function getNotificationDefaults(): Promise<NotificationDefaultsMap
  * otherwise falls back to "everything on" (matching legacy behavior).
  * Existing rows for the employee are left untouched (idempotent on re-run).
  */
-export async function seedNotificationPreferencesForEmployee(employeeId: number): Promise<number> {
-  const defaults = await getNotificationDefaults();
+export async function seedNotificationPreferencesForEmployee(employeeId: number, tenantId: number): Promise<number> {
+  const defaults = await getNotificationDefaults(tenantId);
   const existing = await db.select({ eventType: notificationPreferencesTable.eventType })
     .from(notificationPreferencesTable)
     .where(eq(notificationPreferencesTable.employeeId, employeeId));
@@ -207,7 +208,7 @@ async function logNotification(params: {
 }) {
   try {
     await db.insert(notificationLogsTable).values({
-      tenantId: params.tenantId ?? null,
+      tenantId: params.tenantId!,
       channel: params.channel,
       eventType: params.eventType,
       module: params.module,

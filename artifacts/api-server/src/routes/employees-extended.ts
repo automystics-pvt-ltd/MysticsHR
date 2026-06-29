@@ -291,7 +291,7 @@ router.post(
           if (insertedEmp) {
             empIdMap.set(r.employeeId.trim(), insertedEmp.id);
             empResult.imported++;
-            try { await seedNotificationPreferencesForEmployee(insertedEmp.id); } catch {}
+            try { await seedNotificationPreferencesForEmployee(insertedEmp.id, req.hrmsUser!.tenantId); } catch {}
             if (r.dateOfJoining?.trim()) {
               try { await autoCreateOnboardingChecklist(insertedEmp.id, r.dateOfJoining.trim(), req.hrmsUser!.tenantId); } catch {}
             }

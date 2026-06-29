@@ -205,7 +205,7 @@ router.post(
       // non-fatal — the ESS prefs page falls back to the same defaults at read
       // time, so a missed seed only affects subsequent admin reporting.
       try {
-        await seedNotificationPreferencesForEmployee(emp.id);
+        await seedNotificationPreferencesForEmployee(emp.id, req.hrmsUser!.tenantId);
       } catch (e) {
         console.error("Notification preference seeding failed (non-fatal):", e);
       }
