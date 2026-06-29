@@ -14,32 +14,65 @@ function safeUser(user: typeof hrmsUsersTable.$inferSelect) {
 
 router.post("/auth/login", async (req, res) => {
   try {
-    const { email, password } = req.body as { email?: string; password?: string };
+    const { email, password, tenantSlug } = req.body as { email?: string; password?: string; tenantSlug?: string };
     if (!email || !password) {
       res.status(400).json({ error: "Email and password are required" });
       return;
     }
-    const [user] = await db
-      .select()
-      .from(hrmsUsersTable)
-      .where(eq(hrmsUsersTable.email, email.toLowerCase().trim()))
-      .limit(1);
-    if (!user || !user.passwordHash) {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Fetch all candidate accounts for this email.
+    // When a tenantSlug is provided, narrow to that tenant only (prevents iterating
+    // bcrypt rounds across every tenant — important when email reuse is allowed).
+    let candidates: (typeof hrmsUsersTable.$inferSelect)[];
+    if (tenantSlug) {
+      const [tenant] = await db
+        .select({ id: tenantsTable.id })
+        .from(tenantsTable)
+        .where(eq(tenantsTable.slug, tenantSlug))
+        .limit(1);
+      if (!tenant) {
+        res.status(401).json({ error: "Invalid email or password" });
+        return;
+      }
+      candidates = await db
+        .select()
+        .from(hrmsUsersTable)
+        .where(and(eq(hrmsUsersTable.email, normalizedEmail), eq(hrmsUsersTable.tenantId, tenant.id)));
+    } else {
+      // No tenant hint — fetch all accounts with this email across tenants.
+      // bcrypt.compare determines which one (if any) matches the supplied password.
+      candidates = await db
+        .select()
+        .from(hrmsUsersTable)
+        .where(eq(hrmsUsersTable.email, normalizedEmail));
+    }
+
+    if (candidates.length === 0) {
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
-    if (!user.isActive) {
+
+    // Find the first candidate whose password hash matches.
+    let matchedUser: typeof hrmsUsersTable.$inferSelect | null = null;
+    for (const candidate of candidates) {
+      if (candidate.passwordHash && await bcrypt.compare(password, candidate.passwordHash)) {
+        matchedUser = candidate;
+        break;
+      }
+    }
+
+    if (!matchedUser) {
+      res.status(401).json({ error: "Invalid email or password" });
+      return;
+    }
+    if (!matchedUser.isActive) {
       res.status(403).json({ error: "Your account is deactivated. Contact your HR administrator." });
       return;
     }
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      res.status(401).json({ error: "Invalid email or password" });
-      return;
-    }
-    const token = signToken({ userId: user.id, email: user.email, role: user.role, tenantId: user.tenantId });
+    const token = signToken({ userId: matchedUser.id, email: matchedUser.email, role: matchedUser.role, tenantId: matchedUser.tenantId });
     setAuthCookie(res, token);
-    res.json({ user: safeUser(user) });
+    res.json({ user: safeUser(matchedUser) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

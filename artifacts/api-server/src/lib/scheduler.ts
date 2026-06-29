@@ -477,6 +477,7 @@ async function escalateSlaBreaches() {
       subject: helpdeskTicketsTable.subject,
       slaDeadline: helpdeskTicketsTable.slaDeadline,
       assignedToUserId: helpdeskTicketsTable.assignedToUserId,
+      tenantId: helpdeskTicketsTable.tenantId,
     }).from(helpdeskTicketsTable)
       .where(and(
         ne(helpdeskTicketsTable.status, "Closed"),
@@ -486,10 +487,22 @@ async function escalateSlaBreaches() {
 
     if (overdue.length === 0) return;
 
-    // Get HR managers for escalation
-    const hrManagers = await getUsersByRoles(["customer_admin", "hr_manager", "hr_executive"], 1); // FIXME: Need to handle multiple tenants in scheduler
+    // Group overdue tickets by tenantId so we fetch HR managers per-tenant.
+    const byTenant = new Map<number, typeof overdue>();
+    for (const ticket of overdue) {
+      const tid = ticket.tenantId;
+      if (!byTenant.has(tid)) byTenant.set(tid, []);
+      byTenant.get(tid)!.push(ticket);
+    }
+
+    // Pre-fetch HR manager lists for each tenant that has overdue tickets.
+    const hrManagersByTenant = new Map<number, Awaited<ReturnType<typeof getUsersByRoles>>>();
+    for (const tid of byTenant.keys()) {
+      hrManagersByTenant.set(tid, await getUsersByRoles(["customer_admin", "hr_manager", "hr_executive"], tid));
+    }
 
     for (const ticket of overdue) {
+      const hrManagers = hrManagersByTenant.get(ticket.tenantId) ?? [];
       const slaLabel = ticket.slaDeadline ? new Date(ticket.slaDeadline).toLocaleString("en-IN") : "";
       const vars = { ticketId: String(ticket.id), subject: ticket.subject, slaDeadline: slaLabel };
 
@@ -571,7 +584,7 @@ async function processConfiguredEscalations() {
       const escalateTo = config.escalateTo;
       if (!escalateTo) continue;
 
-      const recipientUsers = await getUsersByRoles([escalateTo], 1); // FIXME: Need to handle multiple tenants in scheduler
+      const recipientUsers = await getUsersByRoles([escalateTo], config.tenantId);
       if (recipientUsers.length === 0) continue;
 
       if (config.transactionType === "leave") {

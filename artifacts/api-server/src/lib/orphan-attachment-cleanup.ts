@@ -185,20 +185,23 @@ export async function cleanupOrphanedAttachments(
   };
 
   // Best-effort: insert a "started" row so admins can see in-flight runs.
+  // Requires tenantId (NOT NULL constraint); skips tracking when not provided.
   // If the insert fails (e.g. table missing during migration), we still run.
   let runId: number | undefined;
-  try {
-    const [row] = await db.insert(storageCleanupRunsTable).values({
-      tenantId: opts.tenantId ?? null,
-      startedAt,
-      ageDays: result.ageDays,
-      dryRun,
-      triggeredBy,
-    }).returning({ id: storageCleanupRunsTable.id });
-    runId = row?.id;
-    result.runId = runId;
-  } catch (err) {
-    logger.warn({ err }, "[orphan-cleanup] failed to insert run record");
+  if (opts.tenantId !== undefined) {
+    try {
+      const [row] = await db.insert(storageCleanupRunsTable).values({
+        tenantId: opts.tenantId,
+        startedAt,
+        ageDays: result.ageDays,
+        dryRun,
+        triggeredBy,
+      }).returning({ id: storageCleanupRunsTable.id });
+      runId = row?.id;
+      result.runId = runId;
+    } catch (err) {
+      logger.warn({ err }, "[orphan-cleanup] failed to insert run record");
+    }
   }
 
   async function persist(errorMessage?: string) {
