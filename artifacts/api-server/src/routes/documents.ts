@@ -597,9 +597,9 @@ router.post("/documents/requests", requireHrmsUser, requireRole(...ALL_ROLES), a
     // Notify HR managers in-app
     const hrUsers = await db.select({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name })
       .from(hrmsUsersTable)
-      .where(inArray(hrmsUsersTable.role, ["hr_manager", "hr_executive", "customer_admin"]));
+      .where(and(inArray(hrmsUsersTable.role, ["hr_manager", "hr_executive", "customer_admin"]), eq(hrmsUsersTable.tenantId, u.tenantId)));
     const [emp] = await db.select({ firstName: employeesTable.firstName, lastName: employeesTable.lastName })
-      .from(employeesTable).where(eq(employeesTable.id, empId));
+      .from(employeesTable).where(and(eq(employeesTable.id, empId), eq(employeesTable.tenantId, u.tenantId)));
     const empName = emp ? `${emp.firstName} ${emp.lastName}` : "An employee";
     for (const hr of hrUsers) {
       if (hr.email) {
@@ -630,7 +630,7 @@ router.put("/documents/requests/:id", requireHrmsUser, requireRole(...HR_ROLES),
     // on an actual transition (prevents duplicate emails/log rows when HR
     // re-saves a request that's already Fulfilled/Cancelled).
     const [existing] = await db.select({ status: documentRequestsTable.status })
-      .from(documentRequestsTable).where(eq(documentRequestsTable.id, id)).limit(1);
+      .from(documentRequestsTable).where(and(eq(documentRequestsTable.id, id), eq(documentRequestsTable.tenantId, u.tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Document request not found" }); return; }
     const previousStatus = existing.status;
 
@@ -646,7 +646,7 @@ router.put("/documents/requests/:id", requireHrmsUser, requireRole(...HR_ROLES),
     }
 
     const [updated] = await db.update(documentRequestsTable).set(updates)
-      .where(eq(documentRequestsTable.id, id)).returning();
+      .where(and(eq(documentRequestsTable.id, id), eq(documentRequestsTable.tenantId, u.tenantId))).returning();
     if (!updated) { res.status(404).json({ error: "Document request not found" }); return; }
 
     await logAudit({ user: u, action: `document_request_${status.toLowerCase()}`, module: "documents", recordId: id });
@@ -660,7 +660,7 @@ router.put("/documents/requests/:id", requireHrmsUser, requireRole(...HR_ROLES),
       (status === "Fulfilled" || status === "Cancelled") && previousStatus !== status;
     if (isTerminalTransition) {
       const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-        .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, updated.employeeId)).limit(1);
+        .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, updated.employeeId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
       if (empUser?.email) {
         const appBase = process.env.APP_URL
           ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
