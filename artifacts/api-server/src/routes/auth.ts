@@ -84,16 +84,29 @@ router.post("/auth/logout", (_req, res) => {
   res.json({ ok: true });
 });
 
-router.get("/auth/me", requireHrmsUser, (req, res) => {
-  res.json(safeUser(req.hrmsUser!));
+router.get("/auth/me", requireHrmsUser, async (req, res) => {
+  try {
+    const [tenant] = await db
+      .select({ id: tenantsTable.id, slug: tenantsTable.slug, name: tenantsTable.name })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.id, req.hrmsUser!.tenantId))
+      .limit(1);
+    res.json({ user: safeUser(req.hrmsUser!), tenant: tenant ?? null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
+// POST /auth/register — lets an existing HRMS user set their password for the first time.
+// Tenant provisioning is the platform admin's responsibility; this endpoint does NOT
+// bootstrap tenants or create the very-first user. If no tenants exist, it errors.
 router.post("/auth/register", async (req, res) => {
   try {
-    const { email, password, name } = req.body as {
+    const { email, password, tenantSlug } = req.body as {
       email?: string;
       password?: string;
-      name?: string;
+      tenantSlug?: string;
     };
     if (!email || !password) {
       res.status(400).json({ error: "email and password are required" });
@@ -104,40 +117,42 @@ router.post("/auth/register", async (req, res) => {
       return;
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(hrmsUsersTable);
-
-    if (Number(count) === 0) {
-      if (!name) {
-        res.status(400).json({ error: "name is required for initial setup" });
-        return;
-      }
-      // Resolve default tenant for bootstrap — created by migration script
-      const [defaultTenant] = await db
-        .select({ id: tenantsTable.id })
-        .from(tenantsTable)
-        .where(eq(tenantsTable.slug, "default"))
-        .limit(1);
-      const tenantId = defaultTenant?.id ?? 1;
-
-      const passwordHash = await bcrypt.hash(password, 12);
-      const [created] = await db
-        .insert(hrmsUsersTable)
-        .values({ tenantId, email: normalizedEmail, name, role: "customer_admin", passwordHash, isActive: true })
-        .returning();
-      const token = signToken({ userId: created.id, email: created.email, role: created.role, tenantId: created.tenantId });
-      setAuthCookie(res, token);
-      res.status(201).json({ user: safeUser(created), bootstrapped: true });
+    // Gate: at least one tenant must exist (created by platform admin).
+    const [{ tenantCount }] = await db
+      .select({ tenantCount: sql<number>`count(*)::int` })
+      .from(tenantsTable);
+    if (Number(tenantCount) === 0) {
+      res.status(503).json({
+        error: "No tenants configured. Contact your platform administrator to set up your organisation first.",
+      });
       return;
     }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Resolve which tenant to scope the lookup to.
+    let tenantId: number | undefined;
+    if (tenantSlug) {
+      const [tenant] = await db
+        .select({ id: tenantsTable.id })
+        .from(tenantsTable)
+        .where(and(eq(tenantsTable.slug, tenantSlug), eq(tenantsTable.isActive, true)))
+        .limit(1);
+      if (!tenant) {
+        res.status(404).json({ error: "Organisation not found. Check the URL or contact your administrator." });
+        return;
+      }
+      tenantId = tenant.id;
+    }
+
+    const whereClause = tenantId
+      ? and(eq(hrmsUsersTable.email, normalizedEmail), eq(hrmsUsersTable.tenantId, tenantId))
+      : eq(hrmsUsersTable.email, normalizedEmail);
 
     const [existing] = await db
       .select()
       .from(hrmsUsersTable)
-      .where(eq(hrmsUsersTable.email, normalizedEmail))
+      .where(whereClause)
       .limit(1);
 
     if (!existing) {
@@ -159,7 +174,7 @@ router.post("/auth/register", async (req, res) => {
     const [updated] = await db
       .update(hrmsUsersTable)
       .set({ passwordHash, updatedAt: new Date() })
-      .where(eq(hrmsUsersTable.id, existing.id))
+      .where(and(eq(hrmsUsersTable.id, existing.id), eq(hrmsUsersTable.tenantId, existing.tenantId)))
       .returning();
     const token = signToken({ userId: updated.id, email: updated.email, role: updated.role, tenantId: updated.tenantId });
     setAuthCookie(res, token);
