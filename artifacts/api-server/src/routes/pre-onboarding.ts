@@ -12,7 +12,7 @@ import { and, eq, sql, desc } from "drizzle-orm";
 
 const router = Router();
 
-const HR_WRITE_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
+const HR_WRITE_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
 
 const recordSelect = {
   id: preOnboardingRecordsTable.id,

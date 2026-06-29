@@ -26,8 +26,8 @@ import { issueDocumentDownloadToken, getAppBaseUrl } from "../lib/document-token
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -70,7 +70,7 @@ async function autoGenerateClearanceTasks(exitRequestId: number, actualLwd: stri
   const [financeUser] = await db.select({ id: hrmsUsersTable.id }).from(hrmsUsersTable)
     .where(eq(hrmsUsersTable.role, "payroll_admin")).limit(1);
   const [adminUser] = await db.select({ id: hrmsUsersTable.id }).from(hrmsUsersTable)
-    .where(eq(hrmsUsersTable.role, "super_admin")).limit(1);
+    .where(eq(hrmsUsersTable.role, "customer_admin")).limit(1);
 
   // Resolve the employee's reporting manager (HOD of their department)
   let managerUserId: number | undefined;
@@ -235,7 +235,7 @@ router.post("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async 
     }
 
     // Termination is a disciplinary action — only HR Manager or Super Admin may initiate it
-    if (exitType === "Termination" && u.role !== "hr_manager" && u.role !== "super_admin") {
+    if (exitType === "Termination" && u.role !== "hr_manager" && u.role !== "customer_admin") {
       res.status(403).json({ error: "Termination can only be initiated by HR Manager or Super Admin" }); return;
     }
 
@@ -263,7 +263,7 @@ router.post("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async 
     const noticePeriodDays = computeNoticePeriodDays(emp.dateOfJoining, emp.employmentType, contractualNoticePeriodDays);
 
     // Enforce minimum LWD = today + noticePeriodDays (HR Manager / Super Admin may override)
-    const canOverrideNotice = u.role === "hr_manager" || u.role === "super_admin";
+    const canOverrideNotice = u.role === "hr_manager" || u.role === "customer_admin";
     if (noticePeriodDays > 0 && !canOverrideNotice) {
       const minLwd = new Date();
       minLwd.setDate(minLwd.getDate() + noticePeriodDays);
@@ -308,7 +308,7 @@ router.post("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async 
     (async () => {
       const empName = `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim() || "an employee";
       const empCodeStr = emp.employeeId ?? String(empId);
-      const hrRecipients = await getUsersByRoles(["super_admin", "hr_manager", "hr_executive"]);
+      const hrRecipients = await getUsersByRoles(["customer_admin", "hr_manager", "hr_executive"]);
       await Promise.allSettled(hrRecipients.map((r) =>
         dispatchNotification({
           eventType: "exit_request_submitted", module: "exit",
@@ -374,7 +374,7 @@ router.get("/exit/requests/:id", requireHrmsUser, requireRole(...ALL_ROLES), asy
       : [null];
 
     // Mask exit-interview responses for hr_executive — only hr_manager and super_admin may view them
-    const canReadResponses = u.role === "hr_manager" || u.role === "super_admin";
+    const canReadResponses = u.role === "hr_manager" || u.role === "customer_admin";
     const exitInterview = interview
       ? { ...interview, responses: canReadResponses ? interview.responses : [] }
       : null;
@@ -396,7 +396,7 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
 
     // Notice period waiver/buyout requires HR Manager or super_admin authorization
     if ((noticePeriodWaived === true || noticePeriodBuyout === true) &&
-        u.role !== "super_admin" && u.role !== "hr_manager") {
+        u.role !== "customer_admin" && u.role !== "hr_manager") {
       res.status(403).json({ error: "Only HR Manager or Super Admin can waive or buyout notice periods" }); return;
     }
 
@@ -495,7 +495,7 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
       // On completion, also notify HR + Finance to initiate FnF
       if (isCompletion) {
         (async () => {
-          const hrUsers = await getUsersByRoles(["super_admin", "hr_manager", "payroll_admin"]);
+          const hrUsers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"]);
           const empName = empUser?.name ?? "An employee";
           await Promise.allSettled(hrUsers.map(hr =>
             dispatchNotification({
@@ -614,7 +614,7 @@ router.put("/exit/clearance-tasks/:taskId", requireHrmsUser, requireRole(...ALL_
           }).catch(() => {});
         }
         (async () => {
-          const hrUsers = await getUsersByRoles(["super_admin", "hr_manager", "payroll_admin"]);
+          const hrUsers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"]);
           const empName = empUser?.name ?? "An employee";
           await Promise.allSettled(hrUsers.map(hr =>
             dispatchNotification({
@@ -824,7 +824,7 @@ router.post("/exit/requests/:id/fnf", requireHrmsUser, requireRole(...HR_ROLES, 
       }).from(employeesTable).where(eq(employeesTable.id, exitReq.employeeId)).limit(1);
       const empName = emp ? `${emp.firstName} ${emp.lastName}` : "an employee";
       const empCodeStr = emp?.employeeCode ?? String(exitReq.employeeId);
-      const approvers = await getUsersByRoles(["super_admin", "hr_manager", "payroll_admin"]);
+      const approvers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"]);
       await Promise.allSettled(approvers.map(a =>
         dispatchNotification({
           eventType: "fnf_pending_approval", module: "exit",
@@ -859,7 +859,7 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
 
     // Derive approver lane — only hr_manager/super_admin can approve as HR; payroll_admin as Finance
     let approverLane: "hr" | "finance";
-    if (u.role === "hr_manager" || u.role === "super_admin") {
+    if (u.role === "hr_manager" || u.role === "customer_admin") {
       approverLane = "hr";
     } else if (u.role === "payroll_admin") {
       approverLane = "finance";
@@ -1073,7 +1073,7 @@ router.get("/exit/requests/:id/interview", requireHrmsUser, requireRole(...ALL_R
       res.json(newInterview);
     } else {
       // Only HR Manager and Super Admin can view interview responses (per policy)
-      const canSeeResponses = u.role === "hr_manager" || u.role === "super_admin";
+      const canSeeResponses = u.role === "hr_manager" || u.role === "customer_admin";
       if (!canSeeResponses) {
         res.json({ ...interview, responses: [] });
       } else {
@@ -1085,7 +1085,7 @@ router.get("/exit/requests/:id/interview", requireHrmsUser, requireRole(...ALL_R
 
 // ─── CONFIGURE EXIT INTERVIEW QUESTIONS ───────────────────────────────────────
 // HR Manager / Super Admin can set custom interview questions for a specific request
-router.put("/exit/requests/:id/interview/questions", requireHrmsUser, requireRole("hr_manager", "super_admin"), async (req, res) => {
+router.put("/exit/requests/:id/interview/questions", requireHrmsUser, requireRole("hr_manager", "customer_admin"), async (req, res) => {
   try {
     const exitRequestId = Number(req.params.id);
     const { questions } = req.body;

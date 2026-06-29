@@ -16,7 +16,7 @@ import { eq, and, desc, asc, or, gte, lte, sql } from "drizzle-orm";
 
 const router = Router();
 
-const PAYROLL_ADMIN_ROLES = ["super_admin", "payroll_admin"] as const;
+const PAYROLL_ADMIN_ROLES = ["customer_admin", "payroll_admin"] as const;
 
 function buildAppUrl(path: string): string {
   const base = process.env.APP_URL
@@ -24,9 +24,9 @@ function buildAppUrl(path: string): string {
   if (!base) return path;
   return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive", "payroll_admin"] as const;
-const HR_READ_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive", "payroll_admin"] as const;
+const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 
 // ─── TDS COMPUTATION ─────────────────────────────────────────────────────────
 // FY 2024-25 slab rates
@@ -535,7 +535,7 @@ router.post("/payroll/locks/:year/:month/lock", requireHrmsUser, requireRole(...
     const periodLabel = `${monthNames[(month - 1) % 12]} ${year}`;
     import("../lib/notification-service").then(async ({ dispatchNotification }) => {
       const { getUsersByRoles } = await import("./system-config");
-      const recipients = await getUsersByRoles(["super_admin", "hr_manager", "payroll_admin"]);
+      const recipients = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"]);
       await Promise.allSettled(recipients.map(u =>
         dispatchNotification({
           eventType: "payroll_locked", module: "payroll",
@@ -549,7 +549,7 @@ router.post("/payroll/locks/:year/:month/lock", requireHrmsUser, requireRole(...
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-router.post("/payroll/locks/:year/:month/unlock", requireHrmsUser, requireRole("super_admin"), async (req, res) => {
+router.post("/payroll/locks/:year/:month/unlock", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
     const year = Number(req.params.year);
     const month = Number(req.params.month);
@@ -600,7 +600,7 @@ router.post("/payroll/lock-exceptions", requireHrmsUser, requireRole(...HR_ROLES
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-router.post("/payroll/lock-exceptions/:id/action", requireHrmsUser, requireRole("super_admin"), async (req, res) => {
+router.post("/payroll/lock-exceptions/:id/action", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
     const { action, approvalRemarks } = req.body as { action: "approve" | "reject"; approvalRemarks?: string };
     const [exc] = await db.update(payrollLockExceptionsTable).set({
@@ -662,7 +662,7 @@ router.post("/payroll/salary-revisions", requireHrmsUser, requireRole(...HR_ROLE
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-router.post("/payroll/salary-revisions/:id/action", requireHrmsUser, requireRole("super_admin"), async (req, res) => {
+router.post("/payroll/salary-revisions/:id/action", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
     const { action, approvalRemarks } = req.body as { action: "approve" | "reject"; approvalRemarks?: string };
 
@@ -994,7 +994,7 @@ router.post("/payroll/runs/:id/compute", requireHrmsUser, requireRole(...PAYROLL
     void import("../lib/notification-service").then(async ({ dispatchNotification }) => {
       const approvers = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name, id: hrmsUsersTable.id })
         .from(hrmsUsersTable)
-        .where(and(or(eq(hrmsUsersTable.role, "super_admin"), eq(hrmsUsersTable.role, "payroll_admin")), eq(hrmsUsersTable.isActive, true)));
+        .where(and(or(eq(hrmsUsersTable.role, "customer_admin"), eq(hrmsUsersTable.role, "payroll_admin")), eq(hrmsUsersTable.isActive, true)));
       await Promise.allSettled(approvers.map(a => {
         if (!a.email) return Promise.resolve();
         return dispatchNotification({

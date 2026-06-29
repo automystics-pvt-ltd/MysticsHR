@@ -29,9 +29,9 @@ type LeaveStatusValue = (typeof LEAVE_STATUSES)[number];
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const HR_READ_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -630,7 +630,7 @@ router.put("/leave/applications/:id", requireHrmsUser, requireRole(...HR_ROLES),
 // to be unique across the application's advisory-lock namespace).
 const BACKFILL_LOCK_KEY = 729103948;
 
-router.post("/leave/backfill-attendance", requireHrmsUser, requireRole("super_admin"), async (req, res) => {
+router.post("/leave/backfill-attendance", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
     const { dryRun } = req.body as { dryRun?: boolean } ?? {};
 
@@ -859,7 +859,7 @@ router.post("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), a
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-router.post("/leave/applications/:id/hod-action", requireHrmsUser, requireRole("super_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
+router.post("/leave/applications/:id/hod-action", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
   try {
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const appId = Number(req.params.id);
@@ -1017,7 +1017,7 @@ router.post("/leave/applications/:id/cancel", requireHrmsUser, requireRole(...AL
       return;
     }
 
-    const isHrRole = ["super_admin", "hr_manager", "hr_executive"].includes(req.hrmsUser.role);
+    const isHrRole = ["customer_admin", "hr_manager", "hr_executive"].includes(req.hrmsUser.role);
 
     // Ownership / scope check for non-HR roles
     if (req.hrmsUser.role === "employee") {
@@ -1090,7 +1090,7 @@ router.post("/leave/applications/:id/cancel", requireHrmsUser, requireRole(...AL
 });
 
 // HOD/HR approves or rejects a "Cancel Requested" leave application
-router.post("/leave/applications/:id/cancel-action", requireHrmsUser, requireRole("super_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
+router.post("/leave/applications/:id/cancel-action", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
   try {
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const appId = Number(req.params.id);

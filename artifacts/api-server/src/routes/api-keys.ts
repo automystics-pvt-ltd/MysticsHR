@@ -9,7 +9,7 @@ import { issueApiKey } from "../lib/apiKeys";
 const router: ReturnType<typeof Router> = Router();
 
 // Only super admins can mint or revoke API keys.
-const ADMIN = ["super_admin"] as const;
+const ADMIN = ["customer_admin"] as const;
 
 router.get("/api-keys", requireHrmsUser, requireRole(...ADMIN), async (_req, res) => {
   try {

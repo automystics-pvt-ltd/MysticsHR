@@ -9,8 +9,8 @@ import { isValidIanaTimezone } from "../lib/timezones";
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager"] as const;
-const SUPER_ADMIN = ["super_admin"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager"] as const;
+const SUPER_ADMIN = ["customer_admin"] as const;
 
 // Sensitive categories: only super_admin may read/write
 const SENSITIVE_CATEGORIES = ["email", "whatsapp"] as const;
@@ -31,7 +31,7 @@ router.get("/system-settings/:category", requireHrmsUser, requireRole(...HR_ROLE
     const user = req.hrmsUser!;
 
     // Sensitive config (email/whatsapp credentials) is super_admin only
-    if ((SENSITIVE_CATEGORIES as readonly string[]).includes(category) && user.role !== "super_admin") {
+    if ((SENSITIVE_CATEGORIES as readonly string[]).includes(category) && user.role !== "customer_admin") {
       res.status(403).json({ error: "Only super admin may view credential settings" }); return;
     }
 
@@ -106,7 +106,7 @@ router.get("/approval-chains", requireHrmsUser, requireRole(...HR_ROLES), async 
   }
 });
 
-const VALID_ROLES = ["super_admin", "hr_manager", "hod", "payroll_admin", "employee", "auditor"] as const;
+const VALID_ROLES = ["customer_admin", "hr_manager", "hod", "payroll_admin", "employee", "auditor"] as const;
 const VALID_TRANSACTION_TYPES = ["leave", "helpdesk", "exit", "payroll", "recruitment", "onboarding"] as const;
 
 function validateApprovalChainBody(body: Record<string, unknown>): string | null {
@@ -170,17 +170,17 @@ router.delete("/approval-chains/:id", requireHrmsUser, requireRole(...SUPER_ADMI
 // Returns a capability matrix: for each module, which roles can do what actions
 
 const DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
-  employees:   { view: ["super_admin","hr_manager","hr_executive","hod"], create: ["super_admin","hr_manager"], edit: ["super_admin","hr_manager","hr_executive"], delete: ["super_admin"] },
-  leave:       { view: ["super_admin","hr_manager","hr_executive","hod","payroll_admin","employee"], approve: ["super_admin","hr_manager","hr_executive","hod"], manage: ["super_admin","hr_manager"] },
-  payroll:     { view: ["super_admin","hr_manager","payroll_admin"], run: ["super_admin","payroll_admin"], approve: ["super_admin","hr_manager"], lock: ["super_admin","payroll_admin"] },
-  attendance:  { view: ["super_admin","hr_manager","hr_executive","hod","payroll_admin","employee"], regularize: ["super_admin","hr_manager","hr_executive","hod","employee"] },
-  helpdesk:    { view: ["super_admin","hr_manager","hr_executive","hod","payroll_admin","employee"], manage: ["super_admin","hr_manager","hr_executive"] },
-  recruitment: { view: ["super_admin","hr_manager","hr_executive"], manage: ["super_admin","hr_manager","hr_executive"] },
-  exit:        { view: ["super_admin","hr_manager","hr_executive","payroll_admin"], approve: ["super_admin","hr_manager"] },
-  documents:   { view: ["super_admin","hr_manager","hr_executive","hod","payroll_admin","employee"], generate: ["super_admin","hr_manager","hr_executive"] },
-  performance: { view: ["super_admin","hr_manager","hr_executive","hod","employee"], manage: ["super_admin","hr_manager","hr_executive","hod"] },
-  reports:     { view: ["super_admin","hr_manager","hr_executive","payroll_admin"], export: ["super_admin","hr_manager"] },
-  system:      { manage: ["super_admin"] },
+  employees:   { view: ["customer_admin","hr_manager","hr_executive","hod"], create: ["customer_admin","hr_manager"], edit: ["customer_admin","hr_manager","hr_executive"], delete: ["customer_admin"] },
+  leave:       { view: ["customer_admin","hr_manager","hr_executive","hod","payroll_admin","employee"], approve: ["customer_admin","hr_manager","hr_executive","hod"], manage: ["customer_admin","hr_manager"] },
+  payroll:     { view: ["customer_admin","hr_manager","payroll_admin"], run: ["customer_admin","payroll_admin"], approve: ["customer_admin","hr_manager"], lock: ["customer_admin","payroll_admin"] },
+  attendance:  { view: ["customer_admin","hr_manager","hr_executive","hod","payroll_admin","employee"], regularize: ["customer_admin","hr_manager","hr_executive","hod","employee"] },
+  helpdesk:    { view: ["customer_admin","hr_manager","hr_executive","hod","payroll_admin","employee"], manage: ["customer_admin","hr_manager","hr_executive"] },
+  recruitment: { view: ["customer_admin","hr_manager","hr_executive"], manage: ["customer_admin","hr_manager","hr_executive"] },
+  exit:        { view: ["customer_admin","hr_manager","hr_executive","payroll_admin"], approve: ["customer_admin","hr_manager"] },
+  documents:   { view: ["customer_admin","hr_manager","hr_executive","hod","payroll_admin","employee"], generate: ["customer_admin","hr_manager","hr_executive"] },
+  performance: { view: ["customer_admin","hr_manager","hr_executive","hod","employee"], manage: ["customer_admin","hr_manager","hr_executive","hod"] },
+  reports:     { view: ["customer_admin","hr_manager","hr_executive","payroll_admin"], export: ["customer_admin","hr_manager"] },
+  system:      { manage: ["customer_admin"] },
 };
 
 router.get("/role-permissions", requireHrmsUser, requireRole(...HR_ROLES), async (_req, res) => {
@@ -210,7 +210,7 @@ router.get("/role-permissions", requireHrmsUser, requireRole(...HR_ROLES), async
 });
 
 router.put("/role-permissions", requireHrmsUser, requireRole(...SUPER_ADMIN), async (req, res) => {
-  const VALID_ROLES = new Set(["super_admin","hr_manager","hr_executive","hod","payroll_admin","employee"]);
+  const VALID_ROLES = new Set(["customer_admin","hr_manager","hr_executive","hod","payroll_admin","employee"]);
   try {
     const body = req.body;
     // Validate payload structure: must be an object of objects of string arrays
@@ -256,7 +256,7 @@ router.put("/role-permissions", requireHrmsUser, requireRole(...SUPER_ADMIN), as
 // ─── Custom Employee Fields ───────────────────────────────────────────────────
 // Stored in system_settings with category="custom_employee_fields", key=unique ID
 
-router.get("/custom-fields", requireHrmsUser, requireRole("super_admin", "hr_manager"), async (_req, res) => {
+router.get("/custom-fields", requireHrmsUser, requireRole("customer_admin", "hr_manager"), async (_req, res) => {
   try {
     const rows = await db.select().from(systemSettingsTable)
       .where(eq(systemSettingsTable.category, "custom_employee_fields"))
@@ -269,7 +269,7 @@ router.get("/custom-fields", requireHrmsUser, requireRole("super_admin", "hr_man
   } catch { res.status(500).json({ error: "Failed to fetch custom fields" }); }
 });
 
-router.post("/custom-fields", requireHrmsUser, requireRole("super_admin"), async (req, res) => {
+router.post("/custom-fields", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
     const { name, type, required, options, placeholder } = req.body as { name: string; type: string; required?: boolean; options?: unknown[]; placeholder?: string };
     if (!name || !type) { res.status(400).json({ error: "name and type are required" }); return; }
@@ -283,7 +283,7 @@ router.post("/custom-fields", requireHrmsUser, requireRole("super_admin"), async
   } catch { res.status(500).json({ error: "Failed to create custom field" }); }
 });
 
-router.put("/custom-fields/:id", requireHrmsUser, requireRole("super_admin"), async (req, res) => {
+router.put("/custom-fields/:id", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
     const { name, type, required, options, placeholder } = req.body as { name: string; type: string; required?: boolean; options?: unknown[]; placeholder?: string };
     const key = req.params["id"] as string;
@@ -298,7 +298,7 @@ router.put("/custom-fields/:id", requireHrmsUser, requireRole("super_admin"), as
   } catch { res.status(500).json({ error: "Failed to update custom field" }); }
 });
 
-router.delete("/custom-fields/:id", requireHrmsUser, requireRole("super_admin"), async (req, res) => {
+router.delete("/custom-fields/:id", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
     const key = req.params["id"] as string;
     await db.delete(systemSettingsTable)
@@ -310,7 +310,7 @@ router.delete("/custom-fields/:id", requireHrmsUser, requireRole("super_admin"),
 // ─── Leave Blackout Dates ─────────────────────────────────────────────────────
 // Stored in system_settings with category="leave_blackout_dates", key=unique ID
 
-router.get("/leave-blackouts", requireHrmsUser, requireRole("super_admin", "hr_manager", "hod", "employee", "payroll_admin"), async (_req, res) => {
+router.get("/leave-blackouts", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hod", "employee", "payroll_admin"), async (_req, res) => {
   try {
     const rows = await db.select().from(systemSettingsTable)
       .where(eq(systemSettingsTable.category, "leave_blackout_dates"))
@@ -323,7 +323,7 @@ router.get("/leave-blackouts", requireHrmsUser, requireRole("super_admin", "hr_m
   } catch { res.status(500).json({ error: "Failed to fetch leave blackouts" }); }
 });
 
-router.post("/leave-blackouts", requireHrmsUser, requireRole("super_admin", "hr_manager"), async (req, res) => {
+router.post("/leave-blackouts", requireHrmsUser, requireRole("customer_admin", "hr_manager"), async (req, res) => {
   try {
     const { name, startDate, endDate, reason } = req.body as { name: string; startDate: string; endDate: string; reason?: string };
     if (!name || !startDate || !endDate) { res.status(400).json({ error: "name, startDate, and endDate are required" }); return; }
@@ -337,7 +337,7 @@ router.post("/leave-blackouts", requireHrmsUser, requireRole("super_admin", "hr_
   } catch { res.status(500).json({ error: "Failed to create leave blackout" }); }
 });
 
-router.delete("/leave-blackouts/:id", requireHrmsUser, requireRole("super_admin", "hr_manager"), async (req, res) => {
+router.delete("/leave-blackouts/:id", requireHrmsUser, requireRole("customer_admin", "hr_manager"), async (req, res) => {
   try {
     const key = req.params["id"] as string;
     await db.delete(systemSettingsTable)
@@ -351,7 +351,7 @@ router.delete("/leave-blackouts/:id", requireHrmsUser, requireRole("super_admin"
 // badge on attendance rows. Stored in system_settings under category
 // "attendance_suspicion", key "config".
 
-router.get("/attendance-suspicion-config", requireHrmsUser, requireRole("super_admin", "hr_manager", "hr_executive", "hod"), async (_req, res) => {
+router.get("/attendance-suspicion-config", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hr_executive", "hod"), async (_req, res) => {
   try {
     const cfg = await loadAttendanceSuspicionConfig();
     res.json(cfg);
@@ -360,7 +360,7 @@ router.get("/attendance-suspicion-config", requireHrmsUser, requireRole("super_a
   }
 });
 
-router.put("/attendance-suspicion-config", requireHrmsUser, requireRole("super_admin", "hr_manager"), async (req, res) => {
+router.put("/attendance-suspicion-config", requireHrmsUser, requireRole("customer_admin", "hr_manager"), async (req, res) => {
   try {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const saved = await saveAttendanceSuspicionConfig({

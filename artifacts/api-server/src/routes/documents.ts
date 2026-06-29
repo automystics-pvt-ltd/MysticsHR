@@ -17,8 +17,8 @@ import { dispatchNotification } from "../lib/notification-service";
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 
 // ─── LIST TEMPLATES ───────────────────────────────────────────────────────────
 router.get("/documents/templates", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
@@ -587,7 +587,7 @@ router.post("/documents/requests", requireHrmsUser, requireRole(...ALL_ROLES), a
     // Notify HR managers in-app
     const hrUsers = await db.select({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name })
       .from(hrmsUsersTable)
-      .where(inArray(hrmsUsersTable.role, ["hr_manager", "hr_executive", "super_admin"]));
+      .where(inArray(hrmsUsersTable.role, ["hr_manager", "hr_executive", "customer_admin"]));
     const [emp] = await db.select({ firstName: employeesTable.firstName, lastName: employeesTable.lastName })
       .from(employeesTable).where(eq(employeesTable.id, empId));
     const empName = emp ? `${emp.firstName} ${emp.lastName}` : "An employee";

@@ -9,7 +9,7 @@ const router = Router();
 router.get(
   "/audit-logs",
   requireHrmsUser,
-  requireRole("super_admin", "hr_manager"),
+  requireRole("customer_admin", "hr_manager"),
   async (req, res) => {
     try {
       const { module, userId, limit = "50", offset = "0" } = req.query as Record<string, string>;

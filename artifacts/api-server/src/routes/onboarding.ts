@@ -20,8 +20,8 @@ import { DEFAULT_ONBOARDING_TASKS } from "../lib/onboarding-utils";
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const HR_READ_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
 
 async function recomputeChecklist(checklistId: number) {
   const tasks = await db

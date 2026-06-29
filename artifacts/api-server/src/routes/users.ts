@@ -16,7 +16,7 @@ function safeUser(user: typeof hrmsUsersTable.$inferSelect) {
 router.get(
   "/users",
   requireHrmsUser,
-  requireRole("super_admin", "hr_manager"),
+  requireRole("customer_admin", "hr_manager"),
   async (req, res) => {
     try {
       const users = await db.select().from(hrmsUsersTable).orderBy(hrmsUsersTable.name);
@@ -31,7 +31,7 @@ router.get(
 router.post(
   "/users",
   requireHrmsUser,
-  requireRole("super_admin"),
+  requireRole("customer_admin"),
   async (req, res) => {
     try {
       const { employeeId, email, name, role, password } = req.body as {
@@ -91,7 +91,7 @@ router.get("/users/me", requireHrmsUser, (req, res) => {
 router.get(
   "/users/:id",
   requireHrmsUser,
-  requireRole("super_admin", "hr_manager"),
+  requireRole("customer_admin", "hr_manager"),
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);
@@ -115,7 +115,7 @@ router.get(
 router.patch(
   "/users/:id",
   requireHrmsUser,
-  requireRole("super_admin"),
+  requireRole("customer_admin"),
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);

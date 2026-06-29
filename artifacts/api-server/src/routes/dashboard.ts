@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 
-const HR_READ_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
+const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
 import { db } from "../lib/db";
 import {
   employeesTable,

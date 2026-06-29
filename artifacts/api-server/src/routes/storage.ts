@@ -24,7 +24,7 @@ import { eq, inArray } from "drizzle-orm";
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
-const HR_ROLES = new Set(["super_admin", "hr_manager", "hr_executive"]);
+const HR_ROLES = new Set(["customer_admin", "hr_manager", "hr_executive"]);
 
 // Server-side MIME allowlist. Blocks HTML/JS/SVG and other active content
 // even if the client is malicious. Mirrors the frontend allowlist but is

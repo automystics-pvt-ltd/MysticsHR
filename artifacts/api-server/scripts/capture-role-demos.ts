@@ -27,7 +27,7 @@ const COMMON_DASHBOARD: Shot = { path: "/dashboard", file: "01-dashboard.png", t
 
 const ROLES: RoleSpec[] = [
   {
-    key: "super_admin",
+    key: "customer_admin",
     email: "arjun.sharma@automystics.com",
     display: "Super Admin (Arjun Sharma)",
     description:

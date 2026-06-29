@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 const DEMO_PASSWORD = "DemoTest123!@#";
 
 const seededUsers = [
-  { email: "arjun.sharma@automystics.com", firstName: "Arjun", lastName: "Sharma", role: "super_admin" },
+  { email: "arjun.sharma@automystics.com", firstName: "Arjun", lastName: "Sharma", role: "customer_admin" },
   { email: "priya.v@automystics.com", firstName: "Priya", lastName: "Venkataraman", role: "hr_manager" },
   { email: "ravi.kumar@automystics.com", firstName: "Ravi", lastName: "Kumar", role: "payroll_admin" },
   { email: "meena.r@automystics.com", firstName: "Meena", lastName: "Rajesh", role: "hr_executive" },

@@ -161,7 +161,7 @@ router.get("/employees", requireHrmsUser, async (req, res) => {
 router.post(
   "/employees",
   requireHrmsUser,
-  requireRole("super_admin", "hr_manager", "hr_executive"),
+  requireRole("customer_admin", "hr_manager", "hr_executive"),
   async (req, res) => {
     try {
       const {
@@ -314,7 +314,7 @@ router.get("/employees/:id", requireHrmsUser, async (req, res) => {
 router.patch(
   "/employees/:id",
   requireHrmsUser,
-  requireRole("super_admin", "hr_manager", "hr_executive"),
+  requireRole("customer_admin", "hr_manager", "hr_executive"),
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);
@@ -410,7 +410,7 @@ router.patch(
 router.delete(
   "/employees/:id",
   requireHrmsUser,
-  requireRole("super_admin", "hr_manager"),
+  requireRole("customer_admin", "hr_manager"),
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);
@@ -435,7 +435,7 @@ router.delete(
 router.patch(
   "/employees/:id/status",
   requireHrmsUser,
-  requireRole("super_admin", "hr_manager"),
+  requireRole("customer_admin", "hr_manager"),
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);

@@ -85,7 +85,7 @@ router.post("/auth/register", async (req, res) => {
       const passwordHash = await bcrypt.hash(password, 12);
       const [created] = await db
         .insert(hrmsUsersTable)
-        .values({ email: normalizedEmail, name, role: "super_admin", passwordHash, isActive: true })
+        .values({ email: normalizedEmail, name, role: "customer_admin", passwordHash, isActive: true })
         .returning();
       const token = signToken({ userId: created.id, email: created.email, role: created.role });
       setAuthCookie(res, token);

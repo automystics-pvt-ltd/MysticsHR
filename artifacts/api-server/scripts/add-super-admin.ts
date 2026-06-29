@@ -1,94 +1,84 @@
-import { createClerkClient } from "@clerk/express";
+import bcrypt from "bcrypt";
 import { db } from "../src/lib/db";
 import { hrmsUsersTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { tenantsTable } from "@workspace/db/schema";
+import { and, eq } from "drizzle-orm";
 
+/**
+ * Provisions a Customer Admin (tenant-level administrator) in hrms_users.
+ *
+ * For Platform Super Admin provisioning (platform_admins table), use:
+ *   psql $DATABASE_URL -c "INSERT INTO platform_admins (email, name, password_hash, is_active)
+ *   VALUES ('admin@example.com', 'Platform Admin', '<bcrypt-hash>', true)
+ *   ON CONFLICT (email) DO NOTHING;"
+ *
+ * Generate a bcrypt hash:
+ *   node -e "require('bcrypt').hash('YourPass', 12).then(console.log)"
+ *
+ * Usage:
+ *   EMAIL=admin@example.com FIRST_NAME=John LAST_NAME=Doe PASSWORD=StrongPass123 \
+ *   TENANT_SLUG=default pnpm --filter @workspace/api-server dlx tsx scripts/add-super-admin.ts
+ */
 async function main() {
   const email = process.env.EMAIL?.trim().toLowerCase();
-  const firstName = process.env.FIRST_NAME?.trim() || "Super";
+  const firstName = process.env.FIRST_NAME?.trim() || "Customer";
   const lastName = process.env.LAST_NAME?.trim() || "Admin";
   const password = process.env.PASSWORD?.trim() || "DemoTest123!@#";
+  const tenantSlug = process.env.TENANT_SLUG?.trim() || "default";
 
   if (!email) {
     console.error("Missing EMAIL env var.");
-    console.error('Usage: EMAIL=you@example.com FIRST_NAME=John LAST_NAME=Doe PASSWORD="StrongPass123!" pnpm dlx tsx scripts/add-super-admin.ts');
+    console.error(
+      'Usage: EMAIL=you@example.com FIRST_NAME=John LAST_NAME=Doe PASSWORD="StrongPass123!" pnpm --filter @workspace/api-server dlx tsx scripts/add-super-admin.ts'
+    );
     process.exit(1);
   }
 
-  const secret = process.env.CLERK_SECRET_KEY;
-  if (!secret) {
-    console.error("CLERK_SECRET_KEY missing from environment.");
-    process.exit(1);
-  }
-
-  const clerk = createClerkClient({ secretKey: secret });
-
-  let clerkUserId: string;
-  const existing = await clerk.users.getUserList({ emailAddress: [email] });
-  if (existing.data.length > 0) {
-    clerkUserId = existing.data[0].id;
-    console.log(`✓ Clerk user already exists: ${email} (${clerkUserId})`);
-    try {
-      await clerk.users.updateUser(clerkUserId, { password, skipPasswordChecks: true } as any);
-      console.log("  ↪ password reset to provided value");
-    } catch (e: any) {
-      console.log(`  ! could not reset password: ${e?.message ?? e}`);
-    }
-  } else {
-    const created = await clerk.users.createUser({
-      emailAddress: [email],
-      password,
-      firstName,
-      lastName,
-      skipPasswordChecks: true,
-      skipPasswordRequirement: false,
-    } as any);
-    clerkUserId = created.id;
-    console.log(`+ Created Clerk user: ${email} (${clerkUserId})`);
-  }
-
-  // Force-verify all email addresses on the account so sign-in skips verification.
-  try {
-    const fresh = await clerk.users.getUser(clerkUserId);
-    for (const ea of fresh.emailAddresses ?? []) {
-      if (!ea.verification || ea.verification.status !== "verified") {
-        await clerk.emailAddresses.updateEmailAddress(ea.id, { verified: true } as any);
-        console.log(`  ↪ email verified: ${ea.emailAddress}`);
-      }
-    }
-  } catch (e: any) {
-    console.log(`  ! could not verify email: ${e?.message ?? e}`);
-  }
-
-  // Upsert into hrms_users with role super_admin.
-  const fullName = `${firstName} ${lastName}`.trim();
-  const existingHrms = await db
+  // Resolve tenant
+  const [tenant] = await db
     .select()
-    .from(hrmsUsersTable)
-    .where(eq(hrmsUsersTable.email, email))
+    .from(tenantsTable)
+    .where(eq(tenantsTable.slug, tenantSlug))
     .limit(1);
 
-  if (existingHrms.length > 0) {
+  if (!tenant) {
+    console.error(`Tenant with slug "${tenantSlug}" not found.`);
+    console.error("Run the migration script first: psql $DATABASE_URL -f lib/db/src/migrate-default-tenant.sql");
+    process.exit(1);
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  // Check if user already exists in this tenant
+  const [existingHrms] = await db
+    .select()
+    .from(hrmsUsersTable)
+    .where(and(eq(hrmsUsersTable.email, email), eq(hrmsUsersTable.tenantId, tenant.id)))
+    .limit(1);
+
+  if (existingHrms) {
     await db
       .update(hrmsUsersTable)
       .set({
-        clerkUserId,
-        role: "super_admin",
+        role: "customer_admin",
         name: fullName,
+        passwordHash,
         isActive: true,
         updatedAt: new Date(),
       })
-      .where(eq(hrmsUsersTable.email, email));
-    console.log(`✓ Upgraded existing HRMS user to super_admin: ${email}`);
+      .where(and(eq(hrmsUsersTable.email, email), eq(hrmsUsersTable.tenantId, tenant.id)));
+    console.log(`✓ Upgraded existing HRMS user to customer_admin: ${email} (tenant: ${tenantSlug})`);
   } else {
     await db.insert(hrmsUsersTable).values({
-      clerkUserId,
+      tenantId: tenant.id,
       email,
       name: fullName,
-      role: "super_admin",
+      role: "customer_admin",
+      passwordHash,
       isActive: true,
     });
-    console.log(`+ Inserted new HRMS user as super_admin: ${email}`);
+    console.log(`+ Inserted new HRMS user as customer_admin: ${email} (tenant: ${tenantSlug})`);
   }
 
   console.log("\nDone. Sign in at your site with:");

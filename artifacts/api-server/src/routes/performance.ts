@@ -11,11 +11,11 @@ import { eq, and, desc, sql, inArray } from "drizzle-orm";
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const MANAGER_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const MANAGER_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 // Performance-specific roles: excludes payroll_admin (finance role with no appraisal visibility)
-const PERF_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "employee"] as const;
+const PERF_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "employee"] as const;
 
 const STAGES = [
   "Goal Setting", "Mid Review", "Self Appraisal",
@@ -108,7 +108,7 @@ router.get("/performance/goals", requireHrmsUser, requireRole(...PERF_ROLES), as
   try {
     const { cycleId, employeeId } = req.query as { cycleId?: string; employeeId?: string };
     const u = req.hrmsUser!;
-    const isHrRole = (["super_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
+    const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
 
     const conds = [];
     if (cycleId) conds.push(eq(performanceGoalsTable.cycleId, Number(cycleId)));
@@ -183,7 +183,7 @@ router.post("/performance/goals", requireHrmsUser, requireRole(...MANAGER_ROLES)
 
     const targetEmployeeId = Number(employeeId);
     // HOD scope: can only assign goals to direct reports
-    const isHrRole = (["super_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
+    const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
     if (!isHrRole) {
       const [hodEmp] = await db.select({ id: employeesTable.id }).from(employeesTable)
         .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
@@ -223,7 +223,7 @@ router.put("/performance/goals/:id", requireHrmsUser, requireRole(...MANAGER_ROL
     if (!existingGoal) { res.status(404).json({ error: "Not found" }); return; }
 
     // HOD scope: can only update goals belonging to direct reports
-    const isHrRole = (["super_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
+    const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
     if (!isHrRole) {
       const [hodEmp] = await db.select({ id: employeesTable.id }).from(employeesTable)
         .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
@@ -263,7 +263,7 @@ async function resolveProgressScope(
   u: { id: number; role: string },
   goalEmployeeId: number
 ): Promise<{ allowed: boolean }> {
-  const isHrRole = (["super_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
+  const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
   if (isHrRole) return { allowed: true };
 
   const [linkedEmp] = await db.select({ id: employeesTable.id }).from(employeesTable)
@@ -339,7 +339,7 @@ router.get("/performance/self-appraisals", requireHrmsUser, requireRole(...PERF_
   try {
     const { cycleId, employeeId } = req.query as { cycleId?: string; employeeId?: string };
     const u = req.hrmsUser!;
-    const isHrRole = (["super_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
+    const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
 
     const conds = [];
     if (employeeId) conds.push(eq(selfAppraisalsTable.employeeId, Number(employeeId)));
@@ -443,7 +443,7 @@ router.get("/performance/manager-evaluations", requireHrmsUser, requireRole(...P
     // - HR/super_admin: unrestricted
     // - employee: only their own manager evaluations (read-only history)
     // - HOD: only evaluations for their direct reports
-    const isHrRole = (["super_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
+    const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
     if (u.role === "employee") {
       const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable)
         .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
@@ -500,7 +500,7 @@ router.post("/performance/manager-evaluations", requireHrmsUser, requireRole(...
 
     // Scope enforcement: HOD can only evaluate their direct reports;
     // HR roles and super_admin have unrestricted scope.
-    const isHrRole = (["super_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
+    const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
     if (!isHrRole) {
       // Get HOD's own employee record to compare with target employee's managerId
       const [hodEmp] = await db.select({ id: employeesTable.id }).from(employeesTable)
@@ -642,7 +642,7 @@ router.get("/performance/cycle-averages", requireHrmsUser, requireRole(...MANAGE
     const scope: "department" | "designation" | "company" = scopeRaw === "company"
       ? "company"
       : scopeRaw === "designation" ? "designation" : "department";
-    const isHrRole = (["super_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
+    const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
 
     // Look up target employee (need departmentId/designationId for the
     // corresponding cohort scopes).
@@ -734,7 +734,7 @@ router.get("/performance/outcomes", requireHrmsUser, requireRole(...PERF_ROLES),
   try {
     const { cycleId, employeeId } = req.query as { cycleId?: string; employeeId?: string };
     const u = req.hrmsUser!;
-    const isHrRole = (["super_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
+    const isHrRole = (["customer_admin", "hr_manager", "hr_executive"] as string[]).includes(u.role);
 
     const conds = [];
     if (cycleId) conds.push(eq(appraisalOutcomesTable.cycleId, Number(cycleId)));

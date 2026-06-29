@@ -51,7 +51,7 @@ const ROLE_FLOWS: Record<string, string[]> = {
   ],
 };
 
-const ROLE_ORDER = ["super_admin", "hr_manager", "payroll_admin", "hr_executive", "hod", "employee"];
+const ROLE_ORDER = ["customer_admin", "hr_manager", "payroll_admin", "hr_executive", "hod", "employee"];
 
 const ROLE_EMAIL: Record<string, string> = {
   super_admin: "arjun.sharma@automystics.com",

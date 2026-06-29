@@ -17,8 +17,8 @@ type PermissionStatusValue = (typeof PERMISSION_STATUSES)[number];
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 const DEFAULT_LIMIT_MINUTES = 240; // 4 hours per month
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ router.post("/permissions", requireHrmsUser, requireRole(...ALL_ROLES), async (r
     const remaining = register.limitMinutes - effectiveUsed;
 
     // Only HR roles may set isOverride=true
-    const isHrRole = ["super_admin", "hr_manager", "hr_executive"].includes(req.hrmsUser.role);
+    const isHrRole = ["customer_admin", "hr_manager", "hr_executive"].includes(req.hrmsUser.role);
     if (isOverride && !isHrRole) {
       res.status(403).json({ error: "Only HR can submit override permissions" }); return;
     }
@@ -327,7 +327,7 @@ router.post("/permissions", requireHrmsUser, requireRole(...ALL_ROLES), async (r
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-router.post("/permissions/:id/action", requireHrmsUser, requireRole("super_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
+router.post("/permissions/:id/action", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
   try {
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const permId = Number(req.params.id);

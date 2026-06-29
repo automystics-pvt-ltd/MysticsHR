@@ -14,9 +14,9 @@ import nodemailer from "nodemailer";
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager"] as const;
-const SUPER_ADMIN = ["super_admin"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager"] as const;
+const SUPER_ADMIN = ["customer_admin"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 
 // ─── Notification Templates ───────────────────────────────────────────────────
 

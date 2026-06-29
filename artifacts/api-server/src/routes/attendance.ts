@@ -18,9 +18,9 @@ import { evaluateSuspicion, loadAttendanceSuspicionConfig } from "../lib/attenda
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const HR_READ_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 
 type AttendanceStatus = "Present" | "Absent" | "Half-Day" | "On Leave" | "On Permission" | "Holiday" | "Week Off" | "Regularization Pending";
 type RegularizationStatus = "Pending" | "Approved" | "Rejected";
@@ -445,7 +445,7 @@ router.post("/attendance/regularizations", requireHrmsUser, requireRole(...ALL_R
   }
 });
 
-router.post("/attendance/regularizations/:id/action", requireHrmsUser, requireRole("super_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
+router.post("/attendance/regularizations/:id/action", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
   try {
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const regId = Number(req.params.id);

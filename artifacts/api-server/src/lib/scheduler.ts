@@ -487,7 +487,7 @@ async function escalateSlaBreaches() {
     if (overdue.length === 0) return;
 
     // Get HR managers for escalation
-    const hrManagers = await getUsersByRoles(["super_admin", "hr_manager", "hr_executive"]);
+    const hrManagers = await getUsersByRoles(["customer_admin", "hr_manager", "hr_executive"]);
 
     for (const ticket of overdue) {
       const slaLabel = ticket.slaDeadline ? new Date(ticket.slaDeadline).toLocaleString("en-IN") : "";
@@ -1037,7 +1037,7 @@ async function remindPendingPayrollApprovals() {
     })
       .from(hrmsUsersTable)
       .where(and(
-        inArray(hrmsUsersTable.role, ["super_admin", "payroll_admin"]),
+        inArray(hrmsUsersTable.role, ["customer_admin", "payroll_admin"]),
         eq(hrmsUsersTable.isActive, true),
       ));
 

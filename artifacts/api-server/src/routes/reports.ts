@@ -25,8 +25,8 @@ import {
 import { eq, and, gte, lte, sql, desc, count, or, type SQL } from "drizzle-orm";
 
 const router = Router();
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const MANAGER_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const MANAGER_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
 
 // ─── ANALYTICS DASHBOARD ──────────────────────────────────────────────────────
 router.get("/analytics/dashboard", requireHrmsUser, requireRole(...MANAGER_ROLES), async (req, res) => {

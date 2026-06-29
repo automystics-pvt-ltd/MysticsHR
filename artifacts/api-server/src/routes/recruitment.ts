@@ -19,8 +19,8 @@ import { dispatchNotification } from "../lib/notification-service";
 
 const router = Router();
 
-const HR_WRITE_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const APPROVE_ROLES = ["super_admin", "hr_manager", "hod"] as const;
+const HR_WRITE_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const APPROVE_ROLES = ["customer_admin", "hr_manager", "hod"] as const;
 
 function genCode(prefix: string): string {
   const ts = Date.now().toString(36).toUpperCase();
@@ -192,7 +192,7 @@ router.patch("/requisitions/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES
   }
 });
 
-router.delete("/requisitions/:id", requireHrmsUser, requireRole("super_admin", "hr_manager"), async (req, res) => {
+router.delete("/requisitions/:id", requireHrmsUser, requireRole("customer_admin", "hr_manager"), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
     const [row] = await db
@@ -407,7 +407,7 @@ router.patch("/candidates/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES),
   }
 });
 
-router.delete("/candidates/:id", requireHrmsUser, requireRole("super_admin", "hr_manager"), async (req, res) => {
+router.delete("/candidates/:id", requireHrmsUser, requireRole("customer_admin", "hr_manager"), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
     const [row] = await db

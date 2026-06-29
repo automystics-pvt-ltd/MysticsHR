@@ -81,13 +81,13 @@ const SHOTS: Shot[] = [
   { role: "hr_manager", path: "/documents", file: "31-documents.png", caption: "Document templates and issued documents" },
 
   // 9. Communications, Reports, System Config
-  { role: "super_admin", path: "/communications", file: "32-communications.png", caption: "Communications and notifications hub" },
-  { role: "super_admin", path: "/analytics", file: "33-analytics.png", caption: "Analytics dashboard" },
-  { role: "super_admin", path: "/reports", file: "34-reports.png", caption: "Reports library" },
-  { role: "super_admin", path: "/audit-logs", file: "35-audit-logs.png", caption: "Audit trail" },
-  { role: "super_admin", path: "/users", file: "36-users.png", caption: "User & role management" },
-  { role: "super_admin", path: "/permissions", file: "37-permissions.png", caption: "Role permissions matrix" },
-  { role: "super_admin", path: "/settings", file: "38-settings.png", caption: "System configuration" },
+  { role: "customer_admin", path: "/communications", file: "32-communications.png", caption: "Communications and notifications hub" },
+  { role: "customer_admin", path: "/analytics", file: "33-analytics.png", caption: "Analytics dashboard" },
+  { role: "customer_admin", path: "/reports", file: "34-reports.png", caption: "Reports library" },
+  { role: "customer_admin", path: "/audit-logs", file: "35-audit-logs.png", caption: "Audit trail" },
+  { role: "customer_admin", path: "/users", file: "36-users.png", caption: "User & role management" },
+  { role: "customer_admin", path: "/permissions", file: "37-permissions.png", caption: "Role permissions matrix" },
+  { role: "customer_admin", path: "/settings", file: "38-settings.png", caption: "System configuration" },
 
   // ESS
   { role: "employee", path: "/ess", file: "39-ess.png", caption: "Employee self-service hub" },
@@ -142,7 +142,7 @@ async function main() {
 
   // Use one sign-in (super_admin) for all shots — sees every module.
   const byRole = new Map<RoleKey, Shot[]>();
-  byRole.set("super_admin", SHOTS.map((s) => ({ ...s, role: "super_admin" as RoleKey })));
+  byRole.set("customer_admin", SHOTS.map((s) => ({ ...s, role: "customer_admin" as RoleKey })));
 
   const captured: Array<{ shot: Shot; ok: boolean; err?: string }> = [];
 

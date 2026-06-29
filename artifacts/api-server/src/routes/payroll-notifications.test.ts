@@ -103,7 +103,7 @@ describe("POST /payroll/locks/:year/:month/lock — payroll_locked", () => {
     // accidental role rename or scope expansion doesn't silently change
     // who gets notified about a payroll lock.
     expect(systemConfigState.roleCalls).toContainEqual(
-      ["super_admin", "hr_manager", "payroll_admin"],
+      ["customer_admin", "hr_manager", "payroll_admin"],
     );
   });
 });

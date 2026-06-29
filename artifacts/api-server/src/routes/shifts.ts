@@ -14,9 +14,9 @@ import { eq, and, isNull, gte, lte, or, SQL, desc } from "drizzle-orm";
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const HR_READ_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 
 type ShiftSwapStatus = "Pending" | "Approved" | "Rejected";
 
@@ -389,7 +389,7 @@ router.post("/shift-swaps", requireHrmsUser, requireRole(...ALL_ROLES), async (r
   }
 });
 
-router.post("/shift-swaps/:id/hod-action", requireHrmsUser, requireRole("super_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
+router.post("/shift-swaps/:id/hod-action", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hr_executive", "hod"), async (req, res) => {
   try {
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const swapId = Number(req.params.id);

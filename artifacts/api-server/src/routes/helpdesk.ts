@@ -18,9 +18,9 @@ import { eq, and, desc, inArray, or, isNull } from "drizzle-orm";
 
 const router = Router();
 
-const HR_ROLES = ["super_admin", "hr_manager", "hr_executive"] as const;
-const MANAGER_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod"] as const;
-const ALL_ROLES = ["super_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
+const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
+const MANAGER_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod"] as const;
+const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 
 // SLA hours by priority
 const SLA_HOURS: Record<string, number> = {
@@ -84,11 +84,11 @@ async function checkTicketAccess(
  */
 async function autoAssignForCategory(category: string): Promise<number | null> {
   const preferredRoles: Record<string, string[]> = {
-    IT: ["super_admin", "hr_manager"],
+    IT: ["customer_admin", "hr_manager"],
     HR: ["hr_manager", "hr_executive"],
     Finance: ["payroll_admin", "hr_manager"],
     Payroll: ["payroll_admin", "hr_manager"],
-    Admin: ["super_admin", "hr_manager"],
+    Admin: ["customer_admin", "hr_manager"],
     Other: ["hr_manager", "hr_executive"],
   };
   const roles = preferredRoles[category] ?? ["hr_manager"];
@@ -117,7 +117,7 @@ async function escalateSlaBreach(ticket: typeof helpdeskTicketsTable.$inferSelec
     .from(hrmsUsersTable)
     .where(or(
       eq(hrmsUsersTable.role, "hr_manager"),
-      eq(hrmsUsersTable.role, "super_admin"),
+      eq(hrmsUsersTable.role, "customer_admin"),
       eq(hrmsUsersTable.role, "hod"),
     ));
   const recipients: Array<{ id: number; email: string | null; name: string | null; employeeId: number | null }> = [...hrUsers];
