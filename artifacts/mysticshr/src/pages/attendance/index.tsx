@@ -549,12 +549,30 @@ function EmployeeAttendanceView({ employeeId }: { employeeId: number }) {
 }
 
 export default function AttendancePage() {
-  const { role, hrmsUser } = useCurrentHrmsUser();
+  const { role, hrmsUser, isLoading } = useCurrentHrmsUser();
 
   if (role === "employee") {
+    if (isLoading) {
+      return <div className="p-6 text-muted-foreground animate-pulse">Loading your attendance records…</div>;
+    }
     const empId = hrmsUser?.employeeId ?? null;
     if (!empId) {
-      return <div className="p-6 text-muted-foreground">Loading your attendance records...</div>;
+      return (
+        <div className="p-8 max-w-md mx-auto mt-8">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-amber-700 font-semibold">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              Account not linked to an employee profile
+            </div>
+            <p className="text-sm text-amber-800">
+              Your login account hasn't been connected to an employee record yet. You won't be able to mark attendance, apply for leave, or use self-service features until an HR Administrator links your account.
+            </p>
+            <p className="text-sm text-amber-700 font-medium">
+              Please contact your HR Administrator and ask them to open your user account and set the <strong>Employee</strong> field.
+            </p>
+          </div>
+        </div>
+      );
     }
     return <EmployeeAttendanceView employeeId={empId} />;
   }

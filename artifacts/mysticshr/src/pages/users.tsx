@@ -178,7 +178,15 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<HrmsUser | null>(null);
   const [editRole, setEditRole] = useState("");
   const [editActive, setEditActive] = useState(true);
+  const [editEmployeeId, setEditEmployeeId] = useState<number | null>(null);
   const [editError, setEditError] = useState("");
+
+  const { data: employeeList = [] } = useQuery<{ id: number; firstName: string; lastName: string; employeeId: string }[]>({
+    queryKey: ["employees-for-user-link"],
+    queryFn: () => apiFetch("/employees?status=active&limit=500"),
+    select: (d: unknown) => (Array.isArray(d) ? d : (d as { data?: unknown[] })?.data ?? []) as { id: number; firstName: string; lastName: string; employeeId: string }[],
+    staleTime: 1000 * 60 * 5,
+  });
 
   const [lockTarget, setLockTarget] = useState<HrmsUser | null>(null);
   const [lockReason, setLockReason] = useState("");
@@ -190,6 +198,7 @@ export default function UsersPage() {
     setEditUser(u);
     setEditRole(u.role);
     setEditActive(u.isActive);
+    setEditEmployeeId(u.employeeId ?? null);
     setEditError("");
   }
 
@@ -197,7 +206,10 @@ export default function UsersPage() {
     if (!editUser) return;
     setEditError("");
     try {
-      await updateMut.mutateAsync({ id: editUser.id, data: { role: editRole, isActive: editActive } });
+      await updateMut.mutateAsync({
+        id: editUser.id,
+        data: { role: editRole, isActive: editActive, employeeId: editEmployeeId ?? undefined },
+      });
       setEditUser(null);
     } catch (e: unknown) {
       setEditError(e instanceof Error ? e.message : "Failed to save");
@@ -357,6 +369,18 @@ export default function UsersPage() {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[u.role]}`}>
                         {ROLE_LABELS[u.role] ?? u.role}
                       </span>
+                      {u.role === "employee" && !u.employeeId && (
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800 flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" />Not linked
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs text-xs">This employee account is not linked to an employee record. Edit the user to link it.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                       {u.isLocked && (
                         <Tooltip>
                           <TooltipTrigger>
@@ -582,6 +606,34 @@ export default function UsersPage() {
                   {ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5" />
+                Linked Employee
+              </Label>
+              <Select
+                value={editEmployeeId?.toString() ?? "none"}
+                onValueChange={v => setEditEmployeeId(v === "none" ? null : Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Not linked" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Not linked —</SelectItem>
+                  {employeeList.map(e => (
+                    <SelectItem key={e.id} value={e.id.toString()}>
+                      {e.firstName} {e.lastName} ({e.employeeId})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {editRole === "employee" && !editEmployeeId && (
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Employee role users must be linked to an employee record to use self-service features.
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={editActive} onCheckedChange={setEditActive} id="editActive" />
