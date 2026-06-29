@@ -70,7 +70,7 @@ export async function runCarryForwardForYear(
 
     const leaveTypes = await tx.select().from(leaveTypesTable).where(eq(leaveTypesTable.isActive, true));
     const emps = await tx
-      .select({ id: employeesTable.id })
+      .select({ id: employeesTable.id, tenantId: employeesTable.tenantId })
       .from(employeesTable)
       .where(
         and(
@@ -138,6 +138,7 @@ export async function runCarryForwardForYear(
             }).where(eq(leaveBalancesTable.id, existing.id));
           } else {
             await sp.insert(leaveBalancesTable).values({
+              tenantId: emp.tenantId,
               employeeId: emp.id,
               leaveTypeId: lt.id,
               year: nextYear,
@@ -148,6 +149,7 @@ export async function runCarryForwardForYear(
             });
           }
           await sp.insert(leaveAccrualHistoryTable).values({
+            tenantId: emp.tenantId,
             employeeId: emp.id,
             leaveTypeId: lt.id,
             year: nextYear,

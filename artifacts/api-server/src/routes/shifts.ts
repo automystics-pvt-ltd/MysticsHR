@@ -25,13 +25,13 @@ type ShiftSwapStatus = "Pending" | "Approved" | "Rejected";
 router.get("/shifts/templates", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const { isActive, departmentId } = req.query;
-    const where: SQL<unknown>[] = [];
+    const where: SQL<unknown>[] = [eq(shiftTemplatesTable.tenantId, req.hrmsUser!.tenantId)];
     if (isActive !== undefined) where.push(eq(shiftTemplatesTable.isActive, isActive === "true"));
     if (departmentId) where.push(eq(shiftTemplatesTable.departmentId, Number(departmentId)));
     const templates = await db
       .select()
       .from(shiftTemplatesTable)
-      .where(where.length ? and(...where) : undefined)
+      .where(and(...where))
       .orderBy(shiftTemplatesTable.name);
     res.json(templates);
   } catch (err) {
@@ -44,6 +44,7 @@ router.post("/shifts/templates", requireHrmsUser, requireRole(...HR_ROLES), asyn
   try {
     const body = req.body;
     const [created] = await db.insert(shiftTemplatesTable).values({
+      tenantId: req.hrmsUser!.tenantId,
       name: body.name,
       shiftType: body.shiftType ?? "Fixed",
       startTime: body.startTime,
@@ -59,7 +60,7 @@ router.post("/shifts/templates", requireHrmsUser, requireRole(...HR_ROLES), asyn
       isActive: body.isActive !== false,
       notes: body.notes ?? null,
     }).returning();
-    await logAudit({ user: req.hrmsUser, action: "CREATE", module: "ShiftTemplates", recordId: created.id, newValue: created.name, ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: "CREATE", module: "ShiftTemplates", recordId: created.id, newValue: created.name, ipAddress: req.ip });
     res.status(201).json(created);
   } catch (err) {
     console.error(err);
@@ -69,7 +70,12 @@ router.post("/shifts/templates", requireHrmsUser, requireRole(...HR_ROLES), asyn
 
 router.get("/shifts/templates/:id", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
-    const [template] = await db.select().from(shiftTemplatesTable).where(eq(shiftTemplatesTable.id, Number(req.params.id)));
+    const [template] = await db.select().from(shiftTemplatesTable).where(
+      and(
+        eq(shiftTemplatesTable.id, Number(req.params.id)),
+        eq(shiftTemplatesTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
     if (!template) { res.status(404).json({ error: "Not found" }); return; }
     res.json(template);
   } catch (err) {
@@ -83,12 +89,22 @@ router.patch("/shifts/templates/:id", requireHrmsUser, requireRole(...HR_ROLES),
     const body = req.body;
     const templateId = Number(req.params.id);
 
-    const [before] = await db.select().from(shiftTemplatesTable).where(eq(shiftTemplatesTable.id, templateId));
+    const [before] = await db.select().from(shiftTemplatesTable).where(
+      and(
+        eq(shiftTemplatesTable.id, templateId),
+        eq(shiftTemplatesTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
     if (!before) { res.status(404).json({ error: "Not found" }); return; }
 
     const [updated] = await db.update(shiftTemplatesTable)
       .set({ ...body, updatedAt: new Date() })
-      .where(eq(shiftTemplatesTable.id, templateId))
+      .where(
+        and(
+          eq(shiftTemplatesTable.id, templateId),
+          eq(shiftTemplatesTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      )
       .returning();
 
     // Payroll impact: if shift rate changed, compute and audit affected employees
@@ -103,12 +119,13 @@ router.patch("/shifts/templates/:id", requireHrmsUser, requireRole(...HR_ROLES),
         .where(
           and(
             eq(shiftAssignmentsTable.shiftTemplateId, templateId),
+            eq(shiftAssignmentsTable.tenantId, req.hrmsUser!.tenantId),
             or(isNull(shiftAssignmentsTable.effectiveTo), gte(shiftAssignmentsTable.effectiveTo, today)),
           )
         );
       // Audit payroll impact so HR can track which employees are affected
       await logAudit({
-        user: req.hrmsUser,
+        user: req.hrmsUser!,
         action: "SHIFT_RATE_CHANGE",
         module: "ShiftTemplates",
         recordId: templateId,
@@ -117,7 +134,7 @@ router.patch("/shifts/templates/:id", requireHrmsUser, requireRole(...HR_ROLES),
         ipAddress: req.ip,
       });
     } else {
-      await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "ShiftTemplates", recordId: updated.id, newValue: JSON.stringify(body), ipAddress: req.ip });
+      await logAudit({ user: req.hrmsUser!, action: "UPDATE", module: "ShiftTemplates", recordId: updated.id, newValue: JSON.stringify(body), ipAddress: req.ip });
     }
 
     res.json(updated);
@@ -129,9 +146,14 @@ router.patch("/shifts/templates/:id", requireHrmsUser, requireRole(...HR_ROLES),
 
 router.delete("/shifts/templates/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
-    const [deleted] = await db.delete(shiftTemplatesTable).where(eq(shiftTemplatesTable.id, Number(req.params.id))).returning({ id: shiftTemplatesTable.id });
+    const [deleted] = await db.delete(shiftTemplatesTable).where(
+      and(
+        eq(shiftTemplatesTable.id, Number(req.params.id)),
+        eq(shiftTemplatesTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    ).returning({ id: shiftTemplatesTable.id });
     if (!deleted) { res.status(404).json({ error: "Not found" }); return; }
-    await logAudit({ user: req.hrmsUser, action: "DELETE", module: "ShiftTemplates", recordId: deleted.id, ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: "DELETE", module: "ShiftTemplates", recordId: deleted.id, ipAddress: req.ip });
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -159,7 +181,12 @@ router.get("/employees/:id/shift-assignments", requireHrmsUser, requireRole(...H
       })
       .from(shiftAssignmentsTable)
       .leftJoin(shiftTemplatesTable, eq(shiftAssignmentsTable.shiftTemplateId, shiftTemplatesTable.id))
-      .where(eq(shiftAssignmentsTable.employeeId, empId))
+      .where(
+        and(
+          eq(shiftAssignmentsTable.employeeId, empId),
+          eq(shiftAssignmentsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      )
       .orderBy(shiftAssignmentsTable.effectiveFrom);
     res.json(assignments);
   } catch (err) {
@@ -173,11 +200,12 @@ router.post("/employees/:id/shift-assignments", requireHrmsUser, requireRole(...
     const empId = Number(req.params.id);
     const body = req.body;
     const [created] = await db.insert(shiftAssignmentsTable).values({
+      tenantId: req.hrmsUser!.tenantId,
       employeeId: empId,
       shiftTemplateId: body.shiftTemplateId,
       effectiveFrom: body.effectiveFrom,
       effectiveTo: body.effectiveTo ?? null,
-      assignedById: req.hrmsUser.id,
+      assignedById: req.hrmsUser!.id,
       notes: body.notes ?? null,
     }).returning();
     const [withName] = await db.select({
@@ -193,8 +221,13 @@ router.post("/employees/:id/shift-assignments", requireHrmsUser, requireRole(...
       updatedAt: shiftAssignmentsTable.updatedAt,
     }).from(shiftAssignmentsTable)
       .leftJoin(shiftTemplatesTable, eq(shiftAssignmentsTable.shiftTemplateId, shiftTemplatesTable.id))
-      .where(eq(shiftAssignmentsTable.id, created.id));
-    await logAudit({ user: req.hrmsUser, action: "SHIFT_ASSIGN", module: "ShiftAssignments", recordId: created.id, newValue: `Employee ${empId} → template ${body.shiftTemplateId}`, ipAddress: req.ip });
+      .where(
+        and(
+          eq(shiftAssignmentsTable.id, created.id),
+          eq(shiftAssignmentsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      );
+    await logAudit({ user: req.hrmsUser!, action: "SHIFT_ASSIGN", module: "ShiftAssignments", recordId: created.id, newValue: `Employee ${empId} → template ${body.shiftTemplateId}`, ipAddress: req.ip });
     res.status(201).json(withName);
   } catch (err) {
     console.error(err);
@@ -204,7 +237,12 @@ router.post("/employees/:id/shift-assignments", requireHrmsUser, requireRole(...
 
 router.delete("/shift-assignments/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
-    const [deleted] = await db.delete(shiftAssignmentsTable).where(eq(shiftAssignmentsTable.id, Number(req.params.id))).returning({ id: shiftAssignmentsTable.id });
+    const [deleted] = await db.delete(shiftAssignmentsTable).where(
+      and(
+        eq(shiftAssignmentsTable.id, Number(req.params.id)),
+        eq(shiftAssignmentsTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    ).returning({ id: shiftAssignmentsTable.id });
     if (!deleted) { res.status(404).json({ error: "Not found" }); return; }
     res.status(204).end();
   } catch (err) {
@@ -225,8 +263,9 @@ router.get("/shifts/calendar", requireHrmsUser, requireRole(...HR_READ_ROLES), a
     const endDate = `${year}-${String(mon).padStart(2, "0")}-${lastDay}`;
 
     const calendarWhere: SQL<unknown>[] = [
+      eq(shiftAssignmentsTable.tenantId, req.hrmsUser!.tenantId),
       lte(shiftAssignmentsTable.effectiveFrom, endDate),
-      or(isNull(shiftAssignmentsTable.effectiveTo), gte(shiftAssignmentsTable.effectiveTo, startDate)),
+      or(isNull(shiftAssignmentsTable.effectiveTo), gte(shiftAssignmentsTable.effectiveTo, startDate)) as SQL<unknown>,
     ];
     if (employeeId) calendarWhere.push(eq(shiftAssignmentsTable.employeeId, Number(employeeId)));
     if (departmentId) calendarWhere.push(eq(employeesTable.departmentId, Number(departmentId)));
@@ -254,6 +293,7 @@ router.get("/shifts/calendar", requireHrmsUser, requireRole(...HR_READ_ROLES), a
       .select({ employeeId: attendanceRecordsTable.employeeId, attendanceDate: attendanceRecordsTable.attendanceDate, status: attendanceRecordsTable.status })
       .from(attendanceRecordsTable)
       .where(and(
+        eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId),
         gte(attendanceRecordsTable.attendanceDate, startDate),
         lte(attendanceRecordsTable.attendanceDate, endDate),
       ));
@@ -305,8 +345,8 @@ router.get("/shifts/calendar", requireHrmsUser, requireRole(...HR_READ_ROLES), a
 router.get("/shift-swaps", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const { status, employeeId } = req.query;
-    const user = req.hrmsUser;
-    const where: SQL<unknown>[] = [];
+    const user = req.hrmsUser!;
+    const where: SQL<unknown>[] = [eq(shiftSwapsTable.tenantId, req.hrmsUser!.tenantId)];
 
     if (status) {
       const validStatuses: ShiftSwapStatus[] = ["Pending", "Approved", "Rejected"];
@@ -317,13 +357,18 @@ router.get("/shift-swaps", requireHrmsUser, requireRole(...ALL_ROLES), async (re
 
     // Employees can only view their own swap requests
     if (user.role === "employee") {
-      const [userRow] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(eq(hrmsUsersTable.id, user.id));
+      const [userRow] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(
+        and(
+          eq(hrmsUsersTable.id, user.id),
+          eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      );
       if (!userRow?.employeeId) { res.status(400).json({ error: "Employee record not found" }); return; }
       where.push(
         or(
           eq(shiftSwapsTable.requesterEmployeeId, userRow.employeeId),
           eq(shiftSwapsTable.swapWithEmployeeId, userRow.employeeId),
-        )
+        ) as SQL<unknown>
       );
     } else if (employeeId) {
       where.push(eq(shiftSwapsTable.requesterEmployeeId, Number(employeeId)));
@@ -361,13 +406,28 @@ router.post("/shift-swaps", requireHrmsUser, requireRole(...ALL_ROLES), async (r
     const body = req.body;
 
     // Find requester employee via hrmsUser link
-    const [userRow] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(eq(hrmsUsersTable.id, req.hrmsUser.id));
+    const [userRow] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(
+      and(
+        eq(hrmsUsersTable.id, req.hrmsUser!.id),
+        eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
     const requesterId = userRow?.employeeId ?? null;
     if (!requesterId) { res.status(400).json({ error: "Could not find employee record" }); return; }
 
     // Enforce same-department eligibility: both employees must be in the same department
-    const [requesterEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, requesterId));
-    const [swapWithEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, Number(body.swapWithEmployeeId)));
+    const [requesterEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(
+      and(
+        eq(employeesTable.id, requesterId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
+    const [swapWithEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(
+      and(
+        eq(employeesTable.id, Number(body.swapWithEmployeeId)),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
 
     if (!requesterEmp || !swapWithEmp) { res.status(400).json({ error: "Employee record not found" }); return; }
     if (requesterEmp.departmentId !== swapWithEmp.departmentId) {
@@ -376,12 +436,13 @@ router.post("/shift-swaps", requireHrmsUser, requireRole(...ALL_ROLES), async (r
     }
 
     const [created] = await db.insert(shiftSwapsTable).values({
+      tenantId: req.hrmsUser!.tenantId,
       requesterEmployeeId: requesterId,
       swapWithEmployeeId: body.swapWithEmployeeId,
       swapDate: body.swapDate,
       reason: body.reason ?? null,
     }).returning();
-    await logAudit({ user: req.hrmsUser, action: "SHIFT_SWAP_REQUEST", module: "ShiftSwaps", recordId: created.id, newValue: `Swap on ${body.swapDate}`, ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: "SHIFT_SWAP_REQUEST", module: "ShiftSwaps", recordId: created.id, newValue: `Swap on ${body.swapDate}`, ipAddress: req.ip });
     res.status(201).json(created);
   } catch (err) {
     console.error(err);
@@ -394,7 +455,12 @@ router.post("/shift-swaps/:id/hod-action", requireHrmsUser, requireRole("custome
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const swapId = Number(req.params.id);
 
-    const [swap] = await db.select().from(shiftSwapsTable).where(eq(shiftSwapsTable.id, swapId));
+    const [swap] = await db.select().from(shiftSwapsTable).where(
+      and(
+        eq(shiftSwapsTable.id, swapId),
+        eq(shiftSwapsTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
     if (!swap) { res.status(404).json({ error: "Not found" }); return; }
 
     // State machine: only Pending HOD status can be actioned
@@ -404,9 +470,19 @@ router.post("/shift-swaps/:id/hod-action", requireHrmsUser, requireRole("custome
     }
 
     // HOD scope: a HOD can only action swaps where the requester is in their department
-    if (req.hrmsUser.role === "hod" && req.hrmsUser.employeeId) {
-      const [hodEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, req.hrmsUser.employeeId));
-      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, swap.requesterEmployeeId as number));
+    if (req.hrmsUser!.role === "hod" && req.hrmsUser!.employeeId) {
+      const [hodEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(
+        and(
+          eq(employeesTable.id, req.hrmsUser!.employeeId),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      );
+      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(
+        and(
+          eq(employeesTable.id, swap.requesterEmployeeId as number),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      );
       if (hodEmp?.departmentId == null || hodEmp.departmentId !== reqEmp?.departmentId) {
         res.status(403).json({ error: "You can only action shift swap requests from employees in your department" });
         return;
@@ -415,10 +491,15 @@ router.post("/shift-swaps/:id/hod-action", requireHrmsUser, requireRole("custome
 
     const [updated] = await db.update(shiftSwapsTable)
       .set({ hodStatus: action, hodRemarks: remarks ?? null, hodActionedById: req.hrmsUser!.id, hodActionedAt: new Date(), updatedAt: new Date() })
-      .where(eq(shiftSwapsTable.id, swapId))
+      .where(
+        and(
+          eq(shiftSwapsTable.id, swapId),
+          eq(shiftSwapsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      )
       .returning();
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
-    await logAudit({ user: req.hrmsUser, action: `HOD_${action.toUpperCase()}`, module: "ShiftSwaps", recordId: updated.id, newValue: action, ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: `HOD_${action.toUpperCase()}`, module: "ShiftSwaps", recordId: updated.id, newValue: action, ipAddress: req.ip });
     res.json(updated);
   } catch (err) {
     console.error(err);
@@ -437,11 +518,18 @@ router.post("/departments/:id/shift-assignments", requireHrmsUser, requireRole(.
     const deptEmployees = await db
       .select({ id: employeesTable.id })
       .from(employeesTable)
-      .where(and(eq(employeesTable.departmentId, departmentId), isNull(employeesTable.deletedAt)));
+      .where(
+        and(
+          eq(employeesTable.departmentId, departmentId),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId),
+          isNull(employeesTable.deletedAt)
+        )
+      );
 
     if (deptEmployees.length === 0) { res.status(201).json({ count: 0 }); return; }
 
     const rows = deptEmployees.map(emp => ({
+      tenantId: req.hrmsUser!.tenantId,
       employeeId: emp.id as number,
       shiftTemplateId,
       effectiveFrom,
@@ -449,7 +537,7 @@ router.post("/departments/:id/shift-assignments", requireHrmsUser, requireRole(.
       assignedById: req.hrmsUser!.id,
     }));
     await db.insert(shiftAssignmentsTable).values(rows);
-    await logAudit({ user: req.hrmsUser, action: "DEPT_SHIFT_ASSIGNED", module: "ShiftAssignments", recordId: departmentId, newValue: `Assigned template ${shiftTemplateId} to ${rows.length} employees from dept ${departmentId}`, ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: "DEPT_SHIFT_ASSIGNED", module: "ShiftAssignments", recordId: departmentId, newValue: `Assigned template ${shiftTemplateId} to ${rows.length} employees from dept ${departmentId}`, ipAddress: req.ip });
     res.status(201).json({ count: rows.length });
   } catch (err) {
     console.error(err);
@@ -459,12 +547,13 @@ router.post("/departments/:id/shift-assignments", requireHrmsUser, requireRole(.
 
 /** Find the active shift template ID for an employee on a given date (YYYY-MM-DD).
  *  Uses desc(effectiveFrom) so the most-recently-started assignment wins when multiple overlap. */
-async function getActiveTemplateForDate(employeeId: number, date: string): Promise<number | null> {
+async function getActiveTemplateForDate(employeeId: number, date: string, tenantId: number): Promise<number | null> {
   const [row] = await db
     .select({ shiftTemplateId: shiftAssignmentsTable.shiftTemplateId })
     .from(shiftAssignmentsTable)
     .where(and(
       eq(shiftAssignmentsTable.employeeId, employeeId),
+      eq(shiftAssignmentsTable.tenantId, tenantId),
       lte(shiftAssignmentsTable.effectiveFrom, date),
       or(isNull(shiftAssignmentsTable.effectiveTo), gte(shiftAssignmentsTable.effectiveTo, date)),
     ))
@@ -479,7 +568,12 @@ router.post("/shift-swaps/:id/hr-action", requireHrmsUser, requireRole(...HR_ROL
     const swapId = Number(req.params.id);
 
     // State machine: HR action is only permitted after HOD has approved
-    const [swap] = await db.select().from(shiftSwapsTable).where(eq(shiftSwapsTable.id, swapId));
+    const [swap] = await db.select().from(shiftSwapsTable).where(
+      and(
+        eq(shiftSwapsTable.id, swapId),
+        eq(shiftSwapsTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
     if (!swap) { res.status(404).json({ error: "Not found" }); return; }
     if (swap.hodStatus !== "Approved") {
       res.status(422).json({ error: "HR action is not permitted until HOD has approved this swap request" });
@@ -496,8 +590,8 @@ router.post("/shift-swaps/:id/hr-action", requireHrmsUser, requireRole(...HR_ROL
     let swapWithTplId: number | null = null;
     if (action === "Approved") {
       [requesterTplId, swapWithTplId] = await Promise.all([
-        getActiveTemplateForDate(swap.requesterEmployeeId as number, swap.swapDate as string),
-        getActiveTemplateForDate(swap.swapWithEmployeeId as number, swap.swapDate as string),
+        getActiveTemplateForDate(swap.requesterEmployeeId as number, swap.swapDate as string, req.hrmsUser!.tenantId),
+        getActiveTemplateForDate(swap.swapWithEmployeeId as number, swap.swapDate as string, req.hrmsUser!.tenantId),
       ]);
       if (!requesterTplId || !swapWithTplId) {
         res.status(422).json({ error: "Cannot apply swap: one or both employees have no active shift template for the swap date. Assign shift templates first." });
@@ -509,23 +603,28 @@ router.post("/shift-swaps/:id/hr-action", requireHrmsUser, requireRole(...HR_ROL
     const updated = await db.transaction(async (tx) => {
       const [row] = await tx.update(shiftSwapsTable)
         .set({ hrStatus: action, hrRemarks: remarks ?? null, hrActionedById: req.hrmsUser!.id, hrActionedAt: new Date(), updatedAt: new Date() })
-        .where(eq(shiftSwapsTable.id, swapId))
+        .where(
+          and(
+            eq(shiftSwapsTable.id, swapId),
+            eq(shiftSwapsTable.tenantId, req.hrmsUser!.tenantId)
+          )
+        )
         .returning();
       if (!row) throw new Error("Swap not found during transaction");
 
       if (action === "Approved" && requesterTplId && swapWithTplId) {
         await tx.insert(shiftAssignmentsTable).values([
-          { employeeId: swap.requesterEmployeeId as number, shiftTemplateId: swapWithTplId, effectiveFrom: swap.swapDate as string, effectiveTo: swap.swapDate as string, assignedById: req.hrmsUser!.id },
-          { employeeId: swap.swapWithEmployeeId as number, shiftTemplateId: requesterTplId, effectiveFrom: swap.swapDate as string, effectiveTo: swap.swapDate as string, assignedById: req.hrmsUser!.id },
+          { tenantId: req.hrmsUser!.tenantId, employeeId: swap.requesterEmployeeId as number, shiftTemplateId: swapWithTplId, effectiveFrom: swap.swapDate as string, effectiveTo: swap.swapDate as string, assignedById: req.hrmsUser!.id },
+          { tenantId: req.hrmsUser!.tenantId, employeeId: swap.swapWithEmployeeId as number, shiftTemplateId: requesterTplId, effectiveFrom: swap.swapDate as string, effectiveTo: swap.swapDate as string, assignedById: req.hrmsUser!.id },
         ]);
       }
       return row;
     });
 
     if (action === "Approved") {
-      await logAudit({ user: req.hrmsUser, action: "SWAP_APPLIED", module: "ShiftSwaps", recordId: updated.id, newValue: `Swap applied for ${swap.swapDate}: emp ${swap.requesterEmployeeId} ↔ emp ${swap.swapWithEmployeeId}`, ipAddress: req.ip });
+      await logAudit({ user: req.hrmsUser!, action: "SWAP_APPLIED", module: "ShiftSwaps", recordId: updated.id, newValue: `Swap applied for ${swap.swapDate}: emp ${swap.requesterEmployeeId} ↔ emp ${swap.swapWithEmployeeId}`, ipAddress: req.ip });
     }
-    await logAudit({ user: req.hrmsUser, action: `HR_${action.toUpperCase()}`, module: "ShiftSwaps", recordId: updated.id, newValue: action, ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: `HR_${action.toUpperCase()}`, module: "ShiftSwaps", recordId: updated.id, newValue: action, ipAddress: req.ip });
     res.json(updated);
   } catch (err) {
     console.error(err);

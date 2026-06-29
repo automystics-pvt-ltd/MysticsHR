@@ -14,11 +14,11 @@ router.get(
     try {
       const { module, userId, limit = "50", offset = "0" } = req.query as Record<string, string>;
 
-      const conditions = [];
+      const conditions = [eq(auditLogsTable.tenantId, req.hrmsUser!.tenantId)];
       if (module) conditions.push(eq(auditLogsTable.module, module));
       if (userId) conditions.push(eq(auditLogsTable.userId, parseInt(userId, 10)));
 
-      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+      const whereClause = and(...conditions);
 
       const [countRow] = await db
         .select({ count: sql<number>`count(*)::int` })

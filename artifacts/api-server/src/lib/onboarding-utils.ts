@@ -20,7 +20,8 @@ export const DEFAULT_ONBOARDING_TASKS = [
 
 export async function autoCreateOnboardingChecklist(
   employeeId: number,
-  joiningDate: string | null | undefined
+  joiningDate: string | null | undefined,
+  tenantId: number
 ): Promise<boolean> {
   const existing = await db
     .select({ id: onboardingChecklistsTable.id })
@@ -32,12 +33,13 @@ export async function autoCreateOnboardingChecklist(
 
   const [checklist] = await db
     .insert(onboardingChecklistsTable)
-    .values({ employeeId, joiningDate: joiningDate ?? null })
+    .values({ tenantId, employeeId, joiningDate: joiningDate ?? null })
     .returning();
 
   const taskDueDate = joiningDate ?? null;
   for (const t of DEFAULT_ONBOARDING_TASKS) {
     await db.insert(onboardingTasksTable).values({
+      tenantId,
       checklistId: checklist.id,
       title: t.title,
       category: t.category,

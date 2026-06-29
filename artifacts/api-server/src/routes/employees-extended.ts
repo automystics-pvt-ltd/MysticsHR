@@ -246,8 +246,8 @@ router.post(
         return;
       }
 
-      const depts = await db.select({ id: departmentsTable.id, name: departmentsTable.name }).from(departmentsTable);
-      const desigs = await db.select({ id: designationsTable.id, title: designationsTable.title }).from(designationsTable);
+      const depts = await db.select({ id: departmentsTable.id, name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.tenantId, req.hrmsUser!.tenantId));
+      const desigs = await db.select({ id: designationsTable.id, title: designationsTable.title }).from(designationsTable).where(eq(designationsTable.tenantId, req.hrmsUser!.tenantId));
       const deptMap = new Map(depts.map(d => [d.name.toLowerCase(), d.id]));
       const desigMap = new Map(desigs.map(d => [d.title.toLowerCase(), d.id]));
 
@@ -266,7 +266,7 @@ router.post(
           const designationId = r.designation ? (desigMap.get(r.designation.toLowerCase()) ?? null) : null;
           let managerId: number | null = null;
           if (r.managerEmployeeId?.trim()) {
-            const [mgr] = await db.select({ id: employeesTable.id }).from(employeesTable).where(eq(employeesTable.employeeId, r.managerEmployeeId.trim())).limit(1);
+            const [mgr] = await db.select({ id: employeesTable.id }).from(employeesTable).where(and(eq(employeesTable.employeeId, r.managerEmployeeId.trim()), eq(employeesTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
             managerId = mgr?.id ?? null;
           }
           const [insertedEmp] = await db.insert(employeesTable).values({
@@ -286,13 +286,14 @@ router.post(
             managerId,
             location: r.location?.trim() || null,
             timezone: r.timezone?.trim() || "Asia/Kolkata",
+            tenantId: req.hrmsUser!.tenantId,
           }).returning({ id: employeesTable.id });
           if (insertedEmp) {
             empIdMap.set(r.employeeId.trim(), insertedEmp.id);
             empResult.imported++;
             try { await seedNotificationPreferencesForEmployee(insertedEmp.id); } catch {}
             if (r.dateOfJoining?.trim()) {
-              try { await autoCreateOnboardingChecklist(insertedEmp.id, r.dateOfJoining.trim()); } catch {}
+              try { await autoCreateOnboardingChecklist(insertedEmp.id, r.dateOfJoining.trim(), req.hrmsUser!.tenantId); } catch {}
             }
           }
         } catch (err: unknown) {
@@ -302,11 +303,11 @@ router.post(
         }
       }
 
-      async function resolveDbId(empIdStr: string): Promise<number | null> {
+      async function resolveDbId(empIdStr: string, tenantId: number): Promise<number | null> {
         const trimmed = empIdStr?.trim();
         if (!trimmed) return null;
         if (empIdMap.has(trimmed)) return empIdMap.get(trimmed)!;
-        const [existing] = await db.select({ id: employeesTable.id }).from(employeesTable).where(eq(employeesTable.employeeId, trimmed)).limit(1);
+        const [existing] = await db.select({ id: employeesTable.id }).from(employeesTable).where(and(eq(employeesTable.employeeId, trimmed), eq(employeesTable.tenantId, tenantId))).limit(1);
         if (existing) empIdMap.set(trimmed, existing.id);
         return existing?.id ?? null;
       }
@@ -316,7 +317,7 @@ router.post(
         const r = profiles[i];
         if (!r.employeeId?.trim()) continue;
         try {
-          const dbId = await resolveDbId(r.employeeId);
+          const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { profileResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
           const data = {
             nationalId: r.nationalId?.trim() || null,
@@ -345,11 +346,11 @@ router.post(
             noticePeriodDays: r.noticePeriodDays?.trim() ? parseInt(r.noticePeriodDays.trim(), 10) : null,
             workLocation: r.workLocation?.trim() || null,
           };
-          const [existing] = await db.select({ id: employeeProfilesTable.id }).from(employeeProfilesTable).where(eq(employeeProfilesTable.employeeId, dbId)).limit(1);
+          const [existing] = await db.select({ id: employeeProfilesTable.id }).from(employeeProfilesTable).where(and(eq(employeeProfilesTable.employeeId, dbId), eq(employeeProfilesTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
           if (existing) {
-            await db.update(employeeProfilesTable).set(data).where(eq(employeeProfilesTable.employeeId, dbId));
+            await db.update(employeeProfilesTable).set(data).where(and(eq(employeeProfilesTable.employeeId, dbId), eq(employeeProfilesTable.tenantId, req.hrmsUser!.tenantId)));
           } else {
-            await db.insert(employeeProfilesTable).values({ employeeId: dbId, ...data });
+            await db.insert(employeeProfilesTable).values({ employeeId: dbId, ...data, tenantId: req.hrmsUser!.tenantId });
           }
           profileResult.imported++;
         } catch (err: unknown) {
@@ -365,7 +366,7 @@ router.post(
           if (!r.degree?.trim() || !r.institution?.trim()) {
             eduResult.errors.push({ row: i + 1, error: "degree and institution are required" }); continue;
           }
-          const dbId = await resolveDbId(r.employeeId);
+          const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { eduResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
           await db.insert(employeeEducationTable).values({
             employeeId: dbId,
@@ -375,6 +376,7 @@ router.post(
             startYear: r.startYear?.trim() ? parseInt(r.startYear.trim(), 10) : null,
             endYear: r.endYear?.trim() ? parseInt(r.endYear.trim(), 10) : null,
             grade: r.grade?.trim() || null,
+            tenantId: req.hrmsUser!.tenantId,
           });
           eduResult.imported++;
         } catch (err: unknown) {
@@ -390,7 +392,7 @@ router.post(
           if (!r.company?.trim() || !r.designation?.trim()) {
             wxpResult.errors.push({ row: i + 1, error: "company and designation are required" }); continue;
           }
-          const dbId = await resolveDbId(r.employeeId);
+          const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { wxpResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
           await db.insert(employeeWorkExperienceTable).values({
             employeeId: dbId,
@@ -401,6 +403,7 @@ router.post(
             endDate: r.endDate?.trim() || null,
             description: r.description?.trim() || null,
             ctcDrawn: r.ctcDrawn?.trim() || null,
+            tenantId: req.hrmsUser!.tenantId,
           });
           wxpResult.imported++;
         } catch (err: unknown) {
@@ -414,7 +417,7 @@ router.post(
         if (!r.employeeId?.trim()) continue;
         try {
           if (!r.name?.trim()) { skillsResult.errors.push({ row: i + 1, error: "name is required" }); continue; }
-          const dbId = await resolveDbId(r.employeeId);
+          const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { skillsResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
           await db.insert(employeeSkillsTable).values({
             employeeId: dbId,
@@ -422,6 +425,7 @@ router.post(
             proficiency: r.proficiency?.trim() || null,
             yearsOfExperience: r.yearsOfExperience?.trim() ? parseInt(r.yearsOfExperience.trim(), 10) : null,
             lastUsedYear: r.lastUsedYear?.trim() ? parseInt(r.lastUsedYear.trim(), 10) : null,
+            tenantId: req.hrmsUser!.tenantId,
           });
           skillsResult.imported++;
         } catch (err: unknown) {
@@ -437,7 +441,7 @@ router.post(
           if (!r.name?.trim() || !r.issuingOrganization?.trim()) {
             certResult.errors.push({ row: i + 1, error: "name and issuingOrganization are required" }); continue;
           }
-          const dbId = await resolveDbId(r.employeeId);
+          const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { certResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
           await db.insert(employeeCertificationsTable).values({
             employeeId: dbId,
@@ -447,6 +451,7 @@ router.post(
             credentialUrl: r.credentialUrl?.trim() || null,
             issueDate: r.issueDate?.trim() || null,
             expiryDate: r.expiryDate?.trim() || null,
+            tenantId: req.hrmsUser!.tenantId,
           });
           certResult.imported++;
         } catch (err: unknown) {
@@ -462,7 +467,7 @@ router.post(
           if (!r.name?.trim() || !r.relation?.trim()) {
             famResult.errors.push({ row: i + 1, error: "name and relation are required" }); continue;
           }
-          const dbId = await resolveDbId(r.employeeId);
+          const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { famResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
           await db.insert(employeeFamilyMembersTable).values({
             employeeId: dbId,
@@ -473,6 +478,7 @@ router.post(
             phone: r.phone?.trim() || null,
             occupation: r.occupation?.trim() || null,
             isDependent: ["true", "yes", "1"].includes((r.isDependent ?? "").toLowerCase()),
+            tenantId: req.hrmsUser!.tenantId,
           });
           famResult.imported++;
         } catch (err: unknown) {
@@ -524,7 +530,7 @@ router.get("/employees/:id/profile", requireHrmsUser, requireRole(...HR_READ_ROL
     const [profile] = await db
       .select()
       .from(employeeProfilesTable)
-      .where(eq(employeeProfilesTable.employeeId, id))
+      .where(and(eq(employeeProfilesTable.employeeId, id), eq(employeeProfilesTable.tenantId, req.hrmsUser!.tenantId)))
       .limit(1);
     if (!profile) {
       res.status(404).json({ error: "Profile not found" });
@@ -550,14 +556,14 @@ router.put(
       const hasBankUpdate = ["bankAccountName", "bankAccountNumber", "ifscCode", "bankName", "bankBranch"]
         .some(f => Object.prototype.hasOwnProperty.call(b, f));
       if (hasBankUpdate) {
-        const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_bank_account");
+        const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_bank_account", undefined, undefined, req.hrmsUser!.email ?? undefined, req.hrmsUser!.tenantId);
         if (lockError) { res.status(422).json({ error: lockError }); return; }
       }
 
       const [existing] = await db
         .select()
         .from(employeeProfilesTable)
-        .where(eq(employeeProfilesTable.employeeId, id))
+        .where(and(eq(employeeProfilesTable.employeeId, id), eq(employeeProfilesTable.tenantId, req.hrmsUser!.tenantId)))
         .limit(1);
       const profileData = {
         nationalId: b.nationalId ?? null,
@@ -593,17 +599,17 @@ router.put(
         for (const f of fields) {
           const oldVal = String((existing as Record<string, unknown>)[f] ?? "");
           const newVal = String((profileData as Record<string, unknown>)[f] ?? "");
-          await recordHistory(id, "EmployeeProfile", f, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById);
+          await recordHistory(id, "EmployeeProfile", f, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById, req.hrmsUser!.tenantId);
         }
         [profile] = await db
           .update(employeeProfilesTable)
           .set(profileData)
-          .where(eq(employeeProfilesTable.employeeId, id))
+          .where(and(eq(employeeProfilesTable.employeeId, id), eq(employeeProfilesTable.tenantId, req.hrmsUser!.tenantId)))
           .returning();
       } else {
         [profile] = await db
           .insert(employeeProfilesTable)
-          .values({ employeeId: id, ...profileData })
+          .values({ employeeId: id, ...profileData, tenantId: req.hrmsUser!.tenantId })
           .returning();
       }
       await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "EmployeeProfile", recordId: id, ipAddress: req.ip });
@@ -621,7 +627,7 @@ router.get("/employees/:id/education", requireHrmsUser, requireRole(...HR_READ_R
     const rows = await db
       .select()
       .from(employeeEducationTable)
-      .where(eq(employeeEducationTable.employeeId, id))
+      .where(and(eq(employeeEducationTable.employeeId, id), eq(employeeEducationTable.tenantId, req.hrmsUser!.tenantId)))
       .orderBy(desc(employeeEducationTable.endYear));
     res.json(rows);
   } catch (err) {
@@ -640,7 +646,7 @@ router.post("/employees/:id/education", requireHrmsUser, requireRole(...HR_ROLES
     }
     const [row] = await db
       .insert(employeeEducationTable)
-      .values({ employeeId: id, degree, institution, fieldOfStudy, startYear, endYear, grade })
+      .values({ employeeId: id, degree, institution, fieldOfStudy, startYear, endYear, grade, tenantId: req.hrmsUser!.tenantId })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "EmployeeEducation", recordId: row.id, ipAddress: req.ip });
     res.status(201).json(row);
@@ -679,6 +685,7 @@ router.post("/employees/:id/education/import", requireHrmsUser, requireRole(...H
           startYear,
           endYear,
           grade: r.grade ? String(r.grade) : null,
+          tenantId: req.hrmsUser!.tenantId,
         });
         imported++;
       } catch (err: unknown) {
@@ -698,12 +705,12 @@ router.patch("/employee-education/:id", requireHrmsUser, requireRole(...HR_ROLES
   try {
     const id = parseInt(String(req.params.id), 10);
     const { degree, institution, fieldOfStudy, startYear, endYear, grade } = req.body;
-    const [existing] = await db.select().from(employeeEducationTable).where(eq(employeeEducationTable.id, id)).limit(1);
+    const [existing] = await db.select().from(employeeEducationTable).where(and(eq(employeeEducationTable.id, id), eq(employeeEducationTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
     const [row] = await db
       .update(employeeEducationTable)
       .set({ degree, institution, fieldOfStudy, startYear, endYear, grade, updatedAt: new Date() })
-      .where(eq(employeeEducationTable.id, id))
+      .where(and(eq(employeeEducationTable.id, id), eq(employeeEducationTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     const changedById = req.hrmsUser?.id ?? null;
     const eduFields: Array<{ key: keyof typeof existing; val: unknown }> = [
@@ -717,7 +724,7 @@ router.patch("/employee-education/:id", requireHrmsUser, requireRole(...HR_ROLES
     for (const { key, val } of eduFields) {
       const oldVal = String(existing[key] ?? "");
       const newVal = String(val ?? "");
-      await recordHistory(existing.employeeId, "EmployeeEducation", key, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById);
+      await recordHistory(existing.employeeId, "EmployeeEducation", key as string, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById, req.hrmsUser!.tenantId);
     }
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "EmployeeEducation", recordId: id, ipAddress: req.ip });
     res.json(row);
@@ -730,7 +737,7 @@ router.patch("/employee-education/:id", requireHrmsUser, requireRole(...HR_ROLES
 router.delete("/employee-education/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    await db.delete(employeeEducationTable).where(eq(employeeEducationTable.id, id));
+    await db.delete(employeeEducationTable).where(and(eq(employeeEducationTable.id, id), eq(employeeEducationTable.tenantId, req.hrmsUser!.tenantId)));
     await logAudit({ user: req.hrmsUser, action: "DELETE", module: "EmployeeEducation", recordId: id, ipAddress: req.ip });
     res.status(204).send();
   } catch (err) {
@@ -745,7 +752,7 @@ router.get("/employees/:id/work-experience", requireHrmsUser, requireRole(...HR_
     const rows = await db
       .select()
       .from(employeeWorkExperienceTable)
-      .where(eq(employeeWorkExperienceTable.employeeId, id))
+      .where(and(eq(employeeWorkExperienceTable.employeeId, id), eq(employeeWorkExperienceTable.tenantId, req.hrmsUser!.tenantId)))
       .orderBy(desc(employeeWorkExperienceTable.startDate));
     res.json(rows);
   } catch (err) {
@@ -764,7 +771,7 @@ router.post("/employees/:id/work-experience", requireHrmsUser, requireRole(...HR
     }
     const [row] = await db
       .insert(employeeWorkExperienceTable)
-      .values({ employeeId: id, company, designation, location, startDate, endDate, description, ctcDrawn })
+      .values({ employeeId: id, company, designation, location, startDate, endDate, description, ctcDrawn, tenantId: req.hrmsUser!.tenantId })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "EmployeeWorkExp", recordId: row.id, ipAddress: req.ip });
     res.status(201).json(row);
@@ -803,6 +810,7 @@ router.post("/employees/:id/work-experience/import", requireHrmsUser, requireRol
           endDate: r.endDate ? String(r.endDate) : null,
           description: r.description ? String(r.description) : null,
           ctcDrawn: r.ctcDrawn ? String(r.ctcDrawn) : null,
+          tenantId: req.hrmsUser!.tenantId,
         });
         imported++;
       } catch (err: unknown) {
@@ -822,12 +830,12 @@ router.patch("/employee-work-experience/:id", requireHrmsUser, requireRole(...HR
   try {
     const id = parseInt(String(req.params.id), 10);
     const { company, designation, location, startDate, endDate, description, ctcDrawn } = req.body;
-    const [existing] = await db.select().from(employeeWorkExperienceTable).where(eq(employeeWorkExperienceTable.id, id)).limit(1);
+    const [existing] = await db.select().from(employeeWorkExperienceTable).where(and(eq(employeeWorkExperienceTable.id, id), eq(employeeWorkExperienceTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
     const [row] = await db
       .update(employeeWorkExperienceTable)
       .set({ company, designation, location, startDate, endDate, description, ctcDrawn, updatedAt: new Date() })
-      .where(eq(employeeWorkExperienceTable.id, id))
+      .where(and(eq(employeeWorkExperienceTable.id, id), eq(employeeWorkExperienceTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     const changedById = req.hrmsUser?.id ?? null;
     const weFields: Array<{ key: keyof typeof existing; val: unknown }> = [
@@ -842,7 +850,7 @@ router.patch("/employee-work-experience/:id", requireHrmsUser, requireRole(...HR
     for (const { key, val } of weFields) {
       const oldVal = String(existing[key] ?? "");
       const newVal = String(val ?? "");
-      await recordHistory(existing.employeeId, "EmployeeWorkExp", key, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById);
+      await recordHistory(existing.employeeId, "EmployeeWorkExp", key as string, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById, req.hrmsUser!.tenantId);
     }
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "EmployeeWorkExp", recordId: id, ipAddress: req.ip });
     res.json(row);
@@ -855,7 +863,7 @@ router.patch("/employee-work-experience/:id", requireHrmsUser, requireRole(...HR
 router.delete("/employee-work-experience/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    await db.delete(employeeWorkExperienceTable).where(eq(employeeWorkExperienceTable.id, id));
+    await db.delete(employeeWorkExperienceTable).where(and(eq(employeeWorkExperienceTable.id, id), eq(employeeWorkExperienceTable.tenantId, req.hrmsUser!.tenantId)));
     await logAudit({ user: req.hrmsUser, action: "DELETE", module: "EmployeeWorkExp", recordId: id, ipAddress: req.ip });
     res.status(204).send();
   } catch (err) {
@@ -870,7 +878,7 @@ router.get("/employees/:id/emp-documents", requireHrmsUser, requireRole(...HR_RE
     const rows = await db
       .select()
       .from(employeeDocumentsTable)
-      .where(eq(employeeDocumentsTable.employeeId, id))
+      .where(and(eq(employeeDocumentsTable.employeeId, id), eq(employeeDocumentsTable.tenantId, req.hrmsUser!.tenantId)))
       .orderBy(desc(employeeDocumentsTable.createdAt));
     res.json(rows);
   } catch (err) {
@@ -899,6 +907,7 @@ router.post("/employees/:id/emp-documents", requireHrmsUser, requireRole(...HR_R
         alertDays: alertDays ?? 30,
         notes,
         uploadedById: req.hrmsUser?.id ?? null,
+        tenantId: req.hrmsUser!.tenantId,
       })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "EmployeeDocuments", recordId: row.id, ipAddress: req.ip });
@@ -941,6 +950,7 @@ router.post("/employees/:id/emp-documents/import", requireHrmsUser, requireRole(
           alertDays,
           notes: r.notes ? String(r.notes) : null,
           uploadedById: req.hrmsUser?.id ?? null,
+          tenantId: req.hrmsUser!.tenantId,
         });
         imported++;
       } catch (err: unknown) {
@@ -960,12 +970,12 @@ router.patch("/emp-documents/:id", requireHrmsUser, requireRole(...HR_ROLES), as
   try {
     const id = parseInt(String(req.params.id), 10);
     const { documentType, documentName, fileUrl, issueDate, expiryDate, alertDays, notes } = req.body;
-    const [existing] = await db.select().from(employeeDocumentsTable).where(eq(employeeDocumentsTable.id, id)).limit(1);
+    const [existing] = await db.select().from(employeeDocumentsTable).where(and(eq(employeeDocumentsTable.id, id), eq(employeeDocumentsTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
     const [row] = await db
       .update(employeeDocumentsTable)
       .set({ documentType, documentName, fileUrl, issueDate, expiryDate, alertDays, notes, updatedAt: new Date() })
-      .where(eq(employeeDocumentsTable.id, id))
+      .where(and(eq(employeeDocumentsTable.id, id), eq(employeeDocumentsTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     const changedById = req.hrmsUser?.id ?? null;
     const docFields: Array<{ key: keyof typeof existing; val: unknown }> = [
@@ -980,7 +990,7 @@ router.patch("/emp-documents/:id", requireHrmsUser, requireRole(...HR_ROLES), as
     for (const { key, val } of docFields) {
       const oldVal = String(existing[key] ?? "");
       const newVal = String(val ?? "");
-      await recordHistory(existing.employeeId, "EmployeeDocuments", key, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById);
+      await recordHistory(existing.employeeId, "EmployeeDocuments", key as string, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById, req.hrmsUser!.tenantId);
     }
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "EmployeeDocuments", recordId: id, ipAddress: req.ip });
     res.json(row);
@@ -993,7 +1003,7 @@ router.patch("/emp-documents/:id", requireHrmsUser, requireRole(...HR_ROLES), as
 router.delete("/emp-documents/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    await db.delete(employeeDocumentsTable).where(eq(employeeDocumentsTable.id, id));
+    await db.delete(employeeDocumentsTable).where(and(eq(employeeDocumentsTable.id, id), eq(employeeDocumentsTable.tenantId, req.hrmsUser!.tenantId)));
     await logAudit({ user: req.hrmsUser, action: "DELETE", module: "EmployeeDocuments", recordId: id, ipAddress: req.ip });
     res.status(204).send();
   } catch (err) {
@@ -1011,7 +1021,7 @@ router.get("/employees/:id/skills", requireHrmsUser, requireRole(...HR_READ_ROLE
     const rows = await db
       .select()
       .from(employeeSkillsTable)
-      .where(eq(employeeSkillsTable.employeeId, id))
+      .where(and(eq(employeeSkillsTable.employeeId, id), eq(employeeSkillsTable.tenantId, req.hrmsUser!.tenantId)))
       .orderBy(employeeSkillsTable.name);
     res.json(rows);
   } catch (err) {
@@ -1030,7 +1040,7 @@ router.post("/employees/:id/skills", requireHrmsUser, requireRole(...HR_ROLES), 
     }
     const [row] = await db
       .insert(employeeSkillsTable)
-      .values({ employeeId: id, name, proficiency, yearsOfExperience, lastUsedYear })
+      .values({ employeeId: id, name, proficiency, yearsOfExperience, lastUsedYear, tenantId: req.hrmsUser!.tenantId })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "EmployeeSkills", recordId: row.id, ipAddress: req.ip });
     res.status(201).json(row);
@@ -1069,6 +1079,7 @@ router.post("/employees/:id/skills/import", requireHrmsUser, requireRole(...HR_R
           proficiency,
           yearsOfExperience,
           lastUsedYear,
+          tenantId: req.hrmsUser!.tenantId,
         });
         imported++;
       } catch (err: unknown) {
@@ -1088,12 +1099,12 @@ router.patch("/employee-skills/:id", requireHrmsUser, requireRole(...HR_ROLES), 
   try {
     const id = parseInt(String(req.params.id), 10);
     const { name, proficiency, yearsOfExperience, lastUsedYear } = req.body;
-    const [existing] = await db.select().from(employeeSkillsTable).where(eq(employeeSkillsTable.id, id)).limit(1);
+    const [existing] = await db.select().from(employeeSkillsTable).where(and(eq(employeeSkillsTable.id, id), eq(employeeSkillsTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
     const [row] = await db
       .update(employeeSkillsTable)
       .set({ name, proficiency, yearsOfExperience, lastUsedYear, updatedAt: new Date() })
-      .where(eq(employeeSkillsTable.id, id))
+      .where(and(eq(employeeSkillsTable.id, id), eq(employeeSkillsTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "EmployeeSkills", recordId: id, ipAddress: req.ip });
     res.json(row);
@@ -1106,7 +1117,7 @@ router.patch("/employee-skills/:id", requireHrmsUser, requireRole(...HR_ROLES), 
 router.delete("/employee-skills/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    await db.delete(employeeSkillsTable).where(eq(employeeSkillsTable.id, id));
+    await db.delete(employeeSkillsTable).where(and(eq(employeeSkillsTable.id, id), eq(employeeSkillsTable.tenantId, req.hrmsUser!.tenantId)));
     await logAudit({ user: req.hrmsUser, action: "DELETE", module: "EmployeeSkills", recordId: id, ipAddress: req.ip });
     res.status(204).send();
   } catch (err) {
@@ -1124,7 +1135,7 @@ router.get("/employees/:id/certifications", requireHrmsUser, requireRole(...HR_R
     const rows = await db
       .select()
       .from(employeeCertificationsTable)
-      .where(eq(employeeCertificationsTable.employeeId, id))
+      .where(and(eq(employeeCertificationsTable.employeeId, id), eq(employeeCertificationsTable.tenantId, req.hrmsUser!.tenantId)))
       .orderBy(desc(employeeCertificationsTable.issueDate));
     res.json(rows);
   } catch (err) {
@@ -1143,7 +1154,7 @@ router.post("/employees/:id/certifications", requireHrmsUser, requireRole(...HR_
     }
     const [row] = await db
       .insert(employeeCertificationsTable)
-      .values({ employeeId: id, name, issuingOrganization, credentialId, credentialUrl, issueDate, expiryDate })
+      .values({ employeeId: id, name, issuingOrganization, credentialId, credentialUrl, issueDate, expiryDate, tenantId: req.hrmsUser!.tenantId })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "EmployeeCertifications", recordId: row.id, ipAddress: req.ip });
     res.status(201).json(row);
@@ -1181,6 +1192,7 @@ router.post("/employees/:id/certifications/import", requireHrmsUser, requireRole
           credentialUrl: r.credentialUrl ? String(r.credentialUrl) : null,
           issueDate: r.issueDate ? String(r.issueDate) : null,
           expiryDate: r.expiryDate ? String(r.expiryDate) : null,
+          tenantId: req.hrmsUser!.tenantId,
         });
         imported++;
       } catch (err: unknown) {
@@ -1200,12 +1212,12 @@ router.patch("/employee-certifications/:id", requireHrmsUser, requireRole(...HR_
   try {
     const id = parseInt(String(req.params.id), 10);
     const { name, issuingOrganization, credentialId, credentialUrl, issueDate, expiryDate } = req.body;
-    const [existing] = await db.select().from(employeeCertificationsTable).where(eq(employeeCertificationsTable.id, id)).limit(1);
+    const [existing] = await db.select().from(employeeCertificationsTable).where(and(eq(employeeCertificationsTable.id, id), eq(employeeCertificationsTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
     const [row] = await db
       .update(employeeCertificationsTable)
       .set({ name, issuingOrganization, credentialId, credentialUrl, issueDate, expiryDate, updatedAt: new Date() })
-      .where(eq(employeeCertificationsTable.id, id))
+      .where(and(eq(employeeCertificationsTable.id, id), eq(employeeCertificationsTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "EmployeeCertifications", recordId: id, ipAddress: req.ip });
     res.json(row);
@@ -1218,7 +1230,7 @@ router.patch("/employee-certifications/:id", requireHrmsUser, requireRole(...HR_
 router.delete("/employee-certifications/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    await db.delete(employeeCertificationsTable).where(eq(employeeCertificationsTable.id, id));
+    await db.delete(employeeCertificationsTable).where(and(eq(employeeCertificationsTable.id, id), eq(employeeCertificationsTable.tenantId, req.hrmsUser!.tenantId)));
     await logAudit({ user: req.hrmsUser, action: "DELETE", module: "EmployeeCertifications", recordId: id, ipAddress: req.ip });
     res.status(204).send();
   } catch (err) {
@@ -1236,7 +1248,7 @@ router.get("/employees/:id/family-members", requireHrmsUser, requireRole(...HR_R
     const rows = await db
       .select()
       .from(employeeFamilyMembersTable)
-      .where(eq(employeeFamilyMembersTable.employeeId, id))
+      .where(and(eq(employeeFamilyMembersTable.employeeId, id), eq(employeeFamilyMembersTable.tenantId, req.hrmsUser!.tenantId)))
       .orderBy(employeeFamilyMembersTable.name);
     res.json(rows);
   } catch (err) {
@@ -1255,7 +1267,7 @@ router.post("/employees/:id/family-members", requireHrmsUser, requireRole(...HR_
     }
     const [row] = await db
       .insert(employeeFamilyMembersTable)
-      .values({ employeeId: id, name, relation, dateOfBirth, gender, phone, occupation, isDependent: !!isDependent })
+      .values({ employeeId: id, name, relation, dateOfBirth, gender, phone, occupation, isDependent: !!isDependent, tenantId: req.hrmsUser!.tenantId })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "EmployeeFamily", recordId: row.id, ipAddress: req.ip });
     res.status(201).json(row);
@@ -1295,6 +1307,7 @@ router.post("/employees/:id/family-members/import", requireHrmsUser, requireRole
           phone: r.phone ? String(r.phone) : null,
           occupation: r.occupation ? String(r.occupation) : null,
           isDependent,
+          tenantId: req.hrmsUser!.tenantId,
         });
         imported++;
       } catch (err: unknown) {
@@ -1314,12 +1327,12 @@ router.patch("/employee-family-members/:id", requireHrmsUser, requireRole(...HR_
   try {
     const id = parseInt(String(req.params.id), 10);
     const { name, relation, dateOfBirth, gender, phone, occupation, isDependent } = req.body;
-    const [existing] = await db.select().from(employeeFamilyMembersTable).where(eq(employeeFamilyMembersTable.id, id)).limit(1);
+    const [existing] = await db.select().from(employeeFamilyMembersTable).where(and(eq(employeeFamilyMembersTable.id, id), eq(employeeFamilyMembersTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
     const [row] = await db
       .update(employeeFamilyMembersTable)
       .set({ name, relation, dateOfBirth, gender, phone, occupation, isDependent: !!isDependent, updatedAt: new Date() })
-      .where(eq(employeeFamilyMembersTable.id, id))
+      .where(and(eq(employeeFamilyMembersTable.id, id), eq(employeeFamilyMembersTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "EmployeeFamily", recordId: id, ipAddress: req.ip });
     res.json(row);
@@ -1332,7 +1345,7 @@ router.patch("/employee-family-members/:id", requireHrmsUser, requireRole(...HR_
 router.delete("/employee-family-members/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    await db.delete(employeeFamilyMembersTable).where(eq(employeeFamilyMembersTable.id, id));
+    await db.delete(employeeFamilyMembersTable).where(and(eq(employeeFamilyMembersTable.id, id), eq(employeeFamilyMembersTable.tenantId, req.hrmsUser!.tenantId)));
     await logAudit({ user: req.hrmsUser, action: "DELETE", module: "EmployeeFamily", recordId: id, ipAddress: req.ip });
     res.status(204).send();
   } catch (err) {
@@ -1347,7 +1360,7 @@ router.get("/employees/:id/history", requireHrmsUser, requireRole(...HR_READ_ROL
     const rows = await db
       .select()
       .from(employeeHistoryTable)
-      .where(eq(employeeHistoryTable.employeeId, id))
+      .where(and(eq(employeeHistoryTable.employeeId, id), eq(employeeHistoryTable.tenantId, req.hrmsUser!.tenantId)))
       .orderBy(desc(employeeHistoryTable.changedAt));
     res.json(rows);
   } catch (err) {

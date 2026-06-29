@@ -1,8 +1,8 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../lib/db";
-import { hrmsUsersTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { hrmsUsersTable, tenantsTable } from "@workspace/db/schema";
+import { and, eq, sql } from "drizzle-orm";
 import { signToken, setAuthCookie, clearAuthCookie, requireHrmsUser } from "../lib/auth";
 
 const router = Router();
@@ -37,7 +37,7 @@ router.post("/auth/login", async (req, res) => {
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
-    const token = signToken({ userId: user.id, email: user.email, role: user.role });
+    const token = signToken({ userId: user.id, email: user.email, role: user.role, tenantId: user.tenantId });
     setAuthCookie(res, token);
     res.json({ user: safeUser(user) });
   } catch (err) {
@@ -82,12 +82,20 @@ router.post("/auth/register", async (req, res) => {
         res.status(400).json({ error: "name is required for initial setup" });
         return;
       }
+      // Resolve default tenant for bootstrap — created by migration script
+      const [defaultTenant] = await db
+        .select({ id: tenantsTable.id })
+        .from(tenantsTable)
+        .where(eq(tenantsTable.slug, "default"))
+        .limit(1);
+      const tenantId = defaultTenant?.id ?? 1;
+
       const passwordHash = await bcrypt.hash(password, 12);
       const [created] = await db
         .insert(hrmsUsersTable)
-        .values({ email: normalizedEmail, name, role: "customer_admin", passwordHash, isActive: true })
+        .values({ tenantId, email: normalizedEmail, name, role: "customer_admin", passwordHash, isActive: true })
         .returning();
-      const token = signToken({ userId: created.id, email: created.email, role: created.role });
+      const token = signToken({ userId: created.id, email: created.email, role: created.role, tenantId: created.tenantId });
       setAuthCookie(res, token);
       res.status(201).json({ user: safeUser(created), bootstrapped: true });
       return;
@@ -120,7 +128,7 @@ router.post("/auth/register", async (req, res) => {
       .set({ passwordHash, updatedAt: new Date() })
       .where(eq(hrmsUsersTable.id, existing.id))
       .returning();
-    const token = signToken({ userId: updated.id, email: updated.email, role: updated.role });
+    const token = signToken({ userId: updated.id, email: updated.email, role: updated.role, tenantId: updated.tenantId });
     setAuthCookie(res, token);
     res.json({ user: safeUser(updated) });
   } catch (err) {
@@ -146,7 +154,7 @@ router.post("/auth/change-password", requireHrmsUser, async (req, res) => {
     const [user] = await db
       .select()
       .from(hrmsUsersTable)
-      .where(eq(hrmsUsersTable.id, req.hrmsUser!.id))
+      .where(and(eq(hrmsUsersTable.id, req.hrmsUser!.id), eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)))
       .limit(1);
     if (!user?.passwordHash) {
       res.status(400).json({ error: "No password set. Use register to set your password." });
@@ -161,7 +169,7 @@ router.post("/auth/change-password", requireHrmsUser, async (req, res) => {
     await db
       .update(hrmsUsersTable)
       .set({ passwordHash, updatedAt: new Date() })
-      .where(eq(hrmsUsersTable.id, user.id));
+      .where(and(eq(hrmsUsersTable.id, user.id), eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)));
     res.json({ ok: true });
   } catch (err) {
     console.error(err);

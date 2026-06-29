@@ -39,12 +39,12 @@ function computeSlaDeadline(priority: string): Date {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-async function getEmployeeForUser(userId: number): Promise<{ id: number } | null> {
+async function getEmployeeForUser(userId: number, tenantId: number): Promise<{ id: number } | null> {
   const [user] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable)
-    .where(eq(hrmsUsersTable.id, userId));
+    .where(and(eq(hrmsUsersTable.id, userId), eq(hrmsUsersTable.tenantId, tenantId)));
   if (!user?.employeeId) return null;
   const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable)
-    .where(eq(employeesTable.id, user.employeeId));
+    .where(and(eq(employeesTable.id, user.employeeId), eq(employeesTable.tenantId, tenantId)));
   return emp ?? null;
 }
 
@@ -54,23 +54,24 @@ async function getEmployeeForUser(userId: number): Promise<{ id: number } | null
  */
 async function checkTicketAccess(
   ticketId: number,
-  u: { id: number; role: string }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  u: any
 ): Promise<typeof helpdeskTicketsTable.$inferSelect | null> {
   const [ticket] = await db.select().from(helpdeskTicketsTable)
-    .where(eq(helpdeskTicketsTable.id, ticketId));
+    .where(and(eq(helpdeskTicketsTable.id, ticketId), eq(helpdeskTicketsTable.tenantId, u.tenantId)));
   if (!ticket) return null;
 
   const isHrRole = (HR_ROLES as readonly string[]).includes(u.role);
   if (isHrRole) return ticket;
 
-  const emp = await getEmployeeForUser(u.id);
+  const emp = await getEmployeeForUser(u.id, u.tenantId);
   if (!emp) return null;
 
   if (ticket.raisedByEmployeeId === emp.id) return ticket;
 
   if (u.role === "hod") {
     const directReports = await db.select({ id: employeesTable.id }).from(employeesTable)
-      .where(eq(employeesTable.managerId, emp.id));
+      .where(and(eq(employeesTable.managerId, emp.id), eq(employeesTable.tenantId, u.tenantId)));
     const teamIds = [emp.id, ...directReports.map(r => r.id)];
     if (ticket.raisedByEmployeeId && teamIds.includes(ticket.raisedByEmployeeId)) return ticket;
   }
@@ -82,7 +83,7 @@ async function checkTicketAccess(
  * Category-to-role routing: return first HR user of an appropriate role for auto-assignment.
  * Falls back to any hr_manager if no specific match.
  */
-async function autoAssignForCategory(category: string): Promise<number | null> {
+async function autoAssignForCategory(category: string, tenantId: number): Promise<number | null> {
   const preferredRoles: Record<string, string[]> = {
     IT: ["customer_admin", "hr_manager"],
     HR: ["hr_manager", "hr_executive"],
@@ -94,7 +95,7 @@ async function autoAssignForCategory(category: string): Promise<number | null> {
   const roles = preferredRoles[category] ?? ["hr_manager"];
   for (const role of roles) {
     const [user] = await db.select({ id: hrmsUsersTable.id }).from(hrmsUsersTable)
-      .where(eq(hrmsUsersTable.role, role as "hr_manager")).limit(1);
+      .where(and(eq(hrmsUsersTable.role, role as "hr_manager"), eq(hrmsUsersTable.tenantId, tenantId))).limit(1);
     if (user) return user.id;
   }
   return null;
@@ -107,28 +108,33 @@ async function autoAssignForCategory(category: string): Promise<number | null> {
 async function escalateSlaBreach(ticket: typeof helpdeskTicketsTable.$inferSelect, at: Date) {
   await db.update(helpdeskTicketsTable)
     .set({ slaBreached: true, slaEscalatedAt: at })
-    .where(eq(helpdeskTicketsTable.id, ticket.id));
+    .where(and(eq(helpdeskTicketsTable.id, ticket.id), eq(helpdeskTicketsTable.tenantId, ticket.tenantId)));
   await db.insert(ticketSlaLogsTable).values({
+    tenantId: ticket.tenantId,
     ticketId: ticket.id,
     event: `SLA BREACH: Ticket #${ticket.id} "${ticket.subject}" is overdue. Assignee: user ${ticket.assignedToUserId ?? "unassigned"}.`,
   });
 
   const hrUsers = await db.select({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
     .from(hrmsUsersTable)
-    .where(or(
-      eq(hrmsUsersTable.role, "hr_manager"),
-      eq(hrmsUsersTable.role, "customer_admin"),
-      eq(hrmsUsersTable.role, "hod"),
+    .where(and(
+      or(
+        eq(hrmsUsersTable.role, "hr_manager"),
+        eq(hrmsUsersTable.role, "customer_admin"),
+        eq(hrmsUsersTable.role, "hod"),
+      ),
+      eq(hrmsUsersTable.tenantId, ticket.tenantId)
     ));
   const recipients: Array<{ id: number; email: string | null; name: string | null; employeeId: number | null }> = [...hrUsers];
   if (ticket.assignedToUserId && !recipients.find(r => r.id === ticket.assignedToUserId)) {
     const [assignee] = await db.select({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
-      .from(hrmsUsersTable).where(eq(hrmsUsersTable.id, ticket.assignedToUserId)).limit(1);
+      .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, ticket.assignedToUserId), eq(hrmsUsersTable.tenantId, ticket.tenantId))).limit(1);
     if (assignee) recipients.push(assignee);
   }
 
   for (const r of recipients) {
     await db.insert(userNotificationsTable).values({
+      tenantId: ticket.tenantId,
       recipientUserId: r.id,
       title: "SLA Breach Alert",
       message: `Ticket #${ticket.id} "${ticket.subject}" has breached its SLA deadline. Immediate action required.`,
@@ -157,12 +163,14 @@ async function escalateSlaBreach(ticket: typeof helpdeskTicketsTable.$inferSelec
 async function insertAttachments(
   ticketId: number,
   uploadedByUserId: number,
+  tenantId: number,
   attachments: Array<{ objectPath: string; fileName: string; fileSize: number; contentType: string }>,
   commentId: number | null = null,
 ) {
   if (!attachments.length) return [];
   const rows = await db.insert(ticketAttachmentsTable).values(
     attachments.map(a => ({
+      tenantId,
       ticketId,
       commentId,
       uploadedByUserId,
@@ -205,11 +213,11 @@ async function enrichTicket(ticketInput: typeof helpdeskTicketsTable.$inferSelec
   let ticket = ticketInput;
   const [raisedBy] = ticket.raisedByEmployeeId
     ? await db.select({ firstName: employeesTable.firstName, lastName: employeesTable.lastName })
-        .from(employeesTable).where(eq(employeesTable.id, ticket.raisedByEmployeeId))
+        .from(employeesTable).where(and(eq(employeesTable.id, ticket.raisedByEmployeeId), eq(employeesTable.tenantId, ticket.tenantId)))
     : [null];
   const [assignedTo] = ticket.assignedToUserId
     ? await db.select({ name: hrmsUsersTable.name }).from(hrmsUsersTable)
-        .where(eq(hrmsUsersTable.id, ticket.assignedToUserId))
+        .where(and(eq(hrmsUsersTable.id, ticket.assignedToUserId), eq(hrmsUsersTable.tenantId, ticket.tenantId)))
     : [null];
 
   const now = new Date();
@@ -246,21 +254,21 @@ router.get("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asyn
 
     if (!isHrRole) {
       if (u.role === "employee") {
-        const emp = await getEmployeeForUser(u.id);
+        const emp = await getEmployeeForUser(u.id, u.tenantId);
         if (!emp) { res.json([]); return; }
         conds.push(eq(helpdeskTicketsTable.raisedByEmployeeId, emp.id));
       } else if (u.role === "hod") {
         // HOD: see own team tickets
-        const hodEmp = await getEmployeeForUser(u.id);
+        const hodEmp = await getEmployeeForUser(u.id, u.tenantId);
         if (!hodEmp) { res.json([]); return; }
         const directReports = await db.select({ id: employeesTable.id }).from(employeesTable)
-          .where(eq(employeesTable.managerId, hodEmp.id));
+          .where(and(eq(employeesTable.managerId, hodEmp.id), eq(employeesTable.tenantId, u.tenantId)));
         const teamIds = [hodEmp.id, ...directReports.map(r => r.id)];
         if (teamIds.length === 0) { res.json([]); return; }
         conds.push(inArray(helpdeskTicketsTable.raisedByEmployeeId, teamIds));
       } else {
         // payroll_admin: see own tickets only
-        const emp = await getEmployeeForUser(u.id);
+        const emp = await getEmployeeForUser(u.id, u.tenantId);
         if (emp) {
           conds.push(eq(helpdeskTicketsTable.raisedByEmployeeId, emp.id));
         } else {
@@ -268,6 +276,8 @@ router.get("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asyn
         }
       }
     }
+
+    conds.push(eq(helpdeskTicketsTable.tenantId, u.tenantId));
 
     const tickets = await db.select().from(helpdeskTicketsTable)
       .where(conds.length ? and(...conds) : undefined)
@@ -295,11 +305,12 @@ router.post("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asy
       validatedAttachments = attachments;
     }
 
-    const emp = await getEmployeeForUser(u.id);
+    const emp = await getEmployeeForUser(u.id, u.tenantId);
     const slaDeadline = computeSlaDeadline(priority);
-    const assignedToUserId = await autoAssignForCategory(category);
+    const assignedToUserId = await autoAssignForCategory(category, u.tenantId);
 
     const [ticket] = await db.insert(helpdeskTicketsTable).values({
+      tenantId: u.tenantId,
       subject,
       description,
       category,
@@ -311,10 +322,11 @@ router.post("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asy
     }).returning();
 
     if (validatedAttachments.length) {
-      await insertAttachments(ticket.id, u.id, validatedAttachments, null);
+      await insertAttachments(ticket.id, u.id, u.tenantId, validatedAttachments, null);
     }
 
     await db.insert(ticketSlaLogsTable).values({
+      tenantId: u.tenantId,
       ticketId: ticket.id,
       event: `Ticket created with priority ${priority}. SLA deadline: ${slaDeadline.toISOString()}`,
     });
@@ -322,6 +334,7 @@ router.post("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asy
     // Record initial auto-assignment in assignment history for audit trail
     if (assignedToUserId) {
       await db.insert(ticketAssignmentsTable).values({
+        tenantId: u.tenantId,
         ticketId: ticket.id,
         assignedToUserId,
         assignedByUserId: null,
@@ -350,7 +363,7 @@ router.post("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asy
     // Notify assignee about new ticket
     if (assignedToUserId) {
       const [assignee] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
-        .from(hrmsUsersTable).where(eq(hrmsUsersTable.id, assignedToUserId));
+        .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, assignedToUserId), eq(hrmsUsersTable.tenantId, u.tenantId)));
       if (assignee?.email) {
         dispatchNotification({
           eventType: "helpdesk_ticket_raised", module: "helpdesk",
@@ -367,7 +380,7 @@ router.post("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asy
 
     // Broadcast new ticket to HR (super_admin, hr_manager, hr_executive — matches HR_ROLES) so HR is aware of incoming tickets
     try {
-      const hrUsers = await getUsersByRoles([...HR_ROLES]);
+      const hrUsers = await getUsersByRoles([...HR_ROLES], req.hrmsUser!.tenantId);
       const raiserName = emp ? `Employee #${emp.id}` : "an employee";
       for (const hr of hrUsers) {
         if (!hr.email || hr.id === assignedToUserId) continue; // skip assignee (already notified) and self
@@ -432,7 +445,7 @@ router.get("/helpdesk/tickets/:id", requireHrmsUser, requireRole(...ALL_ROLES), 
       createdAt: ticketAttachmentsTable.createdAt,
     }).from(ticketAttachmentsTable)
       .leftJoin(hrmsUsersTable, eq(ticketAttachmentsTable.uploadedByUserId, hrmsUsersTable.id))
-      .where(eq(ticketAttachmentsTable.ticketId, id))
+      .where(and(eq(ticketAttachmentsTable.ticketId, id), eq(ticketAttachmentsTable.tenantId, u.tenantId)))
       .orderBy(ticketAttachmentsTable.createdAt);
 
     const ticketLevelAttachments = attachmentRows.filter(a => a.commentId === null);
@@ -470,19 +483,20 @@ router.put("/helpdesk/tickets/:id", requireHrmsUser, requireRole(...MANAGER_ROLE
     if (status === "Closed") updates.closedAt = new Date();
 
     await db.insert(ticketSlaLogsTable).values({
+      tenantId: u.tenantId,
       ticketId: id,
       event: `Status changed to ${status ?? existing.status}` +
         (assignedToUserId !== undefined ? `, assigned to user ${assignedToUserId}` : ""),
     });
 
     const [updated] = await db.update(helpdeskTicketsTable).set(updates)
-      .where(eq(helpdeskTicketsTable.id, id)).returning();
+      .where(and(eq(helpdeskTicketsTable.id, id), eq(helpdeskTicketsTable.tenantId, u.tenantId))).returning();
 
     // Notify raiser when status changes
     if (status && status !== existing.status && existing.raisedByEmployeeId) {
       try {
         const [raiser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
-          .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, existing.raisedByEmployeeId)).limit(1);
+          .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, existing.raisedByEmployeeId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
         if (raiser?.email) {
           dispatchNotification({
             eventType: "helpdesk_status_changed", module: "helpdesk",
@@ -503,7 +517,7 @@ router.put("/helpdesk/tickets/:id", requireHrmsUser, requireRole(...MANAGER_ROLE
     if (assignedToUserId !== undefined && assignedToUserId !== existing.assignedToUserId && assignedToUserId !== null) {
       try {
         const [newAssignee] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
-          .from(hrmsUsersTable).where(eq(hrmsUsersTable.id, assignedToUserId)).limit(1);
+          .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, assignedToUserId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
         if (newAssignee?.email) {
           dispatchNotification({
             eventType: "helpdesk_ticket_raised", module: "helpdesk",
@@ -547,7 +561,7 @@ router.get("/helpdesk/tickets/:id/comments", requireHrmsUser, requireRole(...ALL
       createdAt: ticketCommentsTable.createdAt,
     }).from(ticketCommentsTable)
       .leftJoin(hrmsUsersTable, eq(ticketCommentsTable.authorId, hrmsUsersTable.id))
-      .where(eq(ticketCommentsTable.ticketId, ticketId))
+      .where(and(eq(ticketCommentsTable.ticketId, ticketId), eq(ticketCommentsTable.tenantId, u.tenantId)))
       .orderBy(ticketCommentsTable.createdAt);
 
     res.json(isManagerRole ? comments : comments.filter(c => !c.isInternal));
@@ -579,6 +593,7 @@ router.post("/helpdesk/tickets/:id/comments", requireHrmsUser, requireRole(...AL
     const internalFlag = isManagerRole ? Boolean(isInternal) : false;
 
     const [comment] = await db.insert(ticketCommentsTable).values({
+      tenantId: u.tenantId,
       ticketId,
       authorId: u.id,
       message,
@@ -587,14 +602,14 @@ router.post("/helpdesk/tickets/:id/comments", requireHrmsUser, requireRole(...AL
 
     let createdAttachments: Array<typeof ticketAttachmentsTable.$inferSelect> = [];
     if (validatedAttachments.length) {
-      createdAttachments = await insertAttachments(ticketId, u.id, validatedAttachments, comment.id);
+      createdAttachments = await insertAttachments(ticketId, u.id, u.tenantId, validatedAttachments, comment.id);
     }
 
     await db.update(helpdeskTicketsTable).set({ updatedAt: new Date() })
-      .where(eq(helpdeskTicketsTable.id, ticketId));
+      .where(and(eq(helpdeskTicketsTable.id, ticketId), eq(helpdeskTicketsTable.tenantId, u.tenantId)));
 
     const [authorRow] = await db.select({ name: hrmsUsersTable.name }).from(hrmsUsersTable)
-      .where(eq(hrmsUsersTable.id, u.id));
+      .where(and(eq(hrmsUsersTable.id, u.id), eq(hrmsUsersTable.tenantId, u.tenantId)));
 
     // Notify the "other party" on a public comment (skip internal comments)
     if (!internalFlag) {
@@ -605,7 +620,7 @@ router.post("/helpdesk/tickets/:id/comments", requireHrmsUser, requireRole(...AL
         // Look up raiser via employeeId
         if (ticket.raisedByEmployeeId) {
           const [raiser] = await db.select({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
-            .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, ticket.raisedByEmployeeId)).limit(1);
+            .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, ticket.raisedByEmployeeId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
           if (raiser?.email && raiser.id !== u.id) {
             notifyMap.set(raiser.id, { email: raiser.email, name: raiser.name, employeeId: raiser.employeeId });
           }
@@ -613,7 +628,7 @@ router.post("/helpdesk/tickets/:id/comments", requireHrmsUser, requireRole(...AL
         // Look up assignee (deduped against raiser via map keyed by user id)
         if (ticket.assignedToUserId && ticket.assignedToUserId !== u.id && !notifyMap.has(ticket.assignedToUserId)) {
           const [assignee] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
-            .from(hrmsUsersTable).where(eq(hrmsUsersTable.id, ticket.assignedToUserId)).limit(1);
+            .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, ticket.assignedToUserId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
           if (assignee?.email) {
             notifyMap.set(ticket.assignedToUserId, { email: assignee.email, name: assignee.name, employeeId: assignee.employeeId });
           }
@@ -681,9 +696,9 @@ router.post("/helpdesk/tickets/:id/attachments", requireHrmsUser, requireRole(..
       res.status(400).json({ error: "attachments must be a non-empty array of {objectPath,fileName,fileSize,contentType}" }); return;
     }
 
-    const created = await insertAttachments(ticketId, u.id, attachments, null);
+    const created = await insertAttachments(ticketId, u.id, u.tenantId, attachments, null);
     await db.update(helpdeskTicketsTable).set({ updatedAt: new Date() })
-      .where(eq(helpdeskTicketsTable.id, ticketId));
+      .where(and(eq(helpdeskTicketsTable.id, ticketId), eq(helpdeskTicketsTable.tenantId, u.tenantId)));
     res.status(201).json(created);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -700,7 +715,7 @@ router.delete("/helpdesk/tickets/:id/attachments/:attachmentId", requireHrmsUser
     if (!ticket) { res.status(404).json({ error: "Ticket not found or access denied" }); return; }
 
     const [attachment] = await db.select().from(ticketAttachmentsTable)
-      .where(and(eq(ticketAttachmentsTable.id, attachmentId), eq(ticketAttachmentsTable.ticketId, ticketId)));
+      .where(and(eq(ticketAttachmentsTable.id, attachmentId), eq(ticketAttachmentsTable.ticketId, ticketId), eq(ticketAttachmentsTable.tenantId, u.tenantId)));
     if (!attachment) { res.status(404).json({ error: "Attachment not found" }); return; }
 
     const isHrRole = (HR_ROLES as readonly string[]).includes(u.role);
@@ -708,7 +723,7 @@ router.delete("/helpdesk/tickets/:id/attachments/:attachmentId", requireHrmsUser
       res.status(403).json({ error: "Only the uploader or HR can remove this attachment" }); return;
     }
 
-    await db.delete(ticketAttachmentsTable).where(eq(ticketAttachmentsTable.id, attachmentId));
+    await db.delete(ticketAttachmentsTable).where(and(eq(ticketAttachmentsTable.id, attachmentId), eq(ticketAttachmentsTable.tenantId, u.tenantId)));
     res.status(204).end();
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -717,9 +732,10 @@ router.delete("/helpdesk/tickets/:id/attachments/:attachmentId", requireHrmsUser
 router.post("/helpdesk/sla-check", requireHrmsUser, requireRole(...MANAGER_ROLES), async (req, res) => {
   try {
     const now = new Date();
+    const u = req.hrmsUser!;
     // Find all open tickets past their SLA deadline that haven't been escalated yet
     const overdueTickets = await db.select().from(helpdeskTicketsTable)
-      .where(eq(helpdeskTicketsTable.slaBreached, false));
+      .where(and(eq(helpdeskTicketsTable.slaBreached, false), eq(helpdeskTicketsTable.tenantId, u.tenantId)));
 
     const breachTargets = overdueTickets.filter(t =>
       t.slaDeadline &&
@@ -741,8 +757,10 @@ router.post("/helpdesk/sla-check", requireHrmsUser, requireRole(...MANAGER_ROLES
 // ─── SLA REPORT ───────────────────────────────────────────────────────────────
 // Loads tickets + assignee names from the DB and delegates the KPI/CSV math to
 // the pure builders in `lib/sla-report.ts` (which are unit-tested in isolation).
-async function loadSlaReportInputs(): Promise<{ tickets: SlaTicket[]; assigneeNameById: Map<number, string | null> }> {
-  const all = await db.select().from(helpdeskTicketsTable).orderBy(desc(helpdeskTicketsTable.createdAt));
+async function loadSlaReportInputs(tenantId: number): Promise<{ tickets: SlaTicket[]; assigneeNameById: Map<number, string | null> }> {
+  const all = await db.select().from(helpdeskTicketsTable)
+    .where(eq(helpdeskTicketsTable.tenantId, tenantId))
+    .orderBy(desc(helpdeskTicketsTable.createdAt));
   const tickets: SlaTicket[] = all.map(t => ({
     id: t.id,
     subject: t.subject,
@@ -755,12 +773,13 @@ async function loadSlaReportInputs(): Promise<{ tickets: SlaTicket[]; assigneeNa
     resolvedAt: t.resolvedAt,
     closedAt: t.closedAt,
     createdAt: t.createdAt,
+    tenantId: t.tenantId,
   }));
   const assigneeIds = [...new Set(tickets.map(t => t.assignedToUserId).filter((v): v is number => v !== null))];
   const userRows = assigneeIds.length > 0
     ? await db.select({ id: hrmsUsersTable.id, name: hrmsUsersTable.name })
         .from(hrmsUsersTable)
-        .where(inArray(hrmsUsersTable.id, assigneeIds))
+        .where(and(inArray(hrmsUsersTable.id, assigneeIds), eq(hrmsUsersTable.tenantId, tenantId)))
     : [];
   return { tickets, assigneeNameById: new Map(userRows.map(u => [u.id, u.name])) };
 }
@@ -780,7 +799,8 @@ router.get("/helpdesk/sla-report", requireHrmsUser, requireRole(...MANAGER_ROLES
   try {
     const from = parseDateParam(req.query.from, "from");
     const to = parseDateParam(req.query.to, "to");
-    const { tickets, assigneeNameById } = await loadSlaReportInputs();
+    const u = req.hrmsUser!;
+    const { tickets, assigneeNameById } = await loadSlaReportInputs(u.tenantId);
     const payload = buildSlaReport({ tickets, assigneeNameById, now: new Date(), from, to });
     res.json(payload);
   } catch (err) {
@@ -794,7 +814,8 @@ router.get("/helpdesk/sla-report.csv", requireHrmsUser, requireRole(...MANAGER_R
   try {
     const from = parseDateParam(req.query.from, "from");
     const to = parseDateParam(req.query.to, "to");
-    const { tickets } = await loadSlaReportInputs();
+    const u = req.hrmsUser!;
+    const { tickets } = await loadSlaReportInputs(u.tenantId);
     const csv = buildSlaReportCsv(tickets, { now: new Date(), from, to });
     const fileLabel = `helpdesk-sla-report-${new Date().toISOString().slice(0, 10)}.csv`;
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -825,7 +846,7 @@ router.get("/helpdesk/tickets/:id/assignments", requireHrmsUser, requireRole(...
       assigneeName: hrmsUsersTable.name,
     }).from(ticketAssignmentsTable)
       .leftJoin(hrmsUsersTable, eq(ticketAssignmentsTable.assignedToUserId, hrmsUsersTable.id))
-      .where(eq(ticketAssignmentsTable.ticketId, ticketId))
+      .where(and(eq(ticketAssignmentsTable.ticketId, ticketId), eq(ticketAssignmentsTable.tenantId, u.tenantId)))
       .orderBy(desc(ticketAssignmentsTable.assignedAt));
     res.json(rows);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -843,16 +864,17 @@ router.post("/helpdesk/tickets/:id/assignments", requireHrmsUser, requireRole(..
 
     // Verify ticket exists
     const [ticket] = await db.select().from(helpdeskTicketsTable)
-      .where(eq(helpdeskTicketsTable.id, ticketId));
+      .where(and(eq(helpdeskTicketsTable.id, ticketId), eq(helpdeskTicketsTable.tenantId, u.tenantId)));
     if (!ticket) { res.status(404).json({ error: "Ticket not found" }); return; }
 
     // Update assignedToUserId on ticket
     await db.update(helpdeskTicketsTable)
       .set({ assignedToUserId, updatedAt: new Date() })
-      .where(eq(helpdeskTicketsTable.id, ticketId));
+      .where(and(eq(helpdeskTicketsTable.id, ticketId), eq(helpdeskTicketsTable.tenantId, u.tenantId)));
 
     // Record in assignment history
     const [assignment] = await db.insert(ticketAssignmentsTable).values({
+      tenantId: u.tenantId,
       ticketId,
       assignedToUserId,
       assignedByUserId: u.id,
@@ -861,6 +883,7 @@ router.post("/helpdesk/tickets/:id/assignments", requireHrmsUser, requireRole(..
 
     // Notify the newly assigned user
     await db.insert(userNotificationsTable).values({
+      tenantId: u.tenantId,
       recipientUserId: assignedToUserId,
       title: "Ticket Assigned to You",
       message: `Ticket #${ticketId} "${ticket.subject}" has been assigned to you.`,

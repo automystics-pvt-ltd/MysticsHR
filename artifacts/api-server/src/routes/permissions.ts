@@ -23,10 +23,16 @@ const DEFAULT_LIMIT_MINUTES = 240; // 4 hours per month
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-async function getEmployeeForUser(userId: number) {
-  const [user] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(eq(hrmsUsersTable.id, userId));
+async function getEmployeeForUser(userId: number, tenantId: number) {
+  const [user] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(and(
+    eq(hrmsUsersTable.id, userId),
+    eq(hrmsUsersTable.tenantId, tenantId)
+  ));
   if (!user?.employeeId) return null;
-  const [emp] = await db.select({ id: employeesTable.id, departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, user.employeeId));
+  const [emp] = await db.select({ id: employeesTable.id, departmentId: employeesTable.departmentId }).from(employeesTable).where(and(
+    eq(employeesTable.id, user.employeeId),
+    eq(employeesTable.tenantId, tenantId)
+  ));
   return emp ?? null;
 }
 
@@ -36,13 +42,19 @@ function computeDurationMinutes(startTime: string, endTime: string): number {
   return (eh * 60 + em) - (sh * 60 + sm);
 }
 
-async function getOrCreateRegister(employeeId: number, year: number, month: number) {
+async function getOrCreateRegister(employeeId: number, year: number, month: number, tenantId: number) {
   const [existing] = await db.select().from(permissionRegistersTable).where(
-    and(eq(permissionRegistersTable.employeeId, employeeId), eq(permissionRegistersTable.year, year), eq(permissionRegistersTable.month, month))
+    and(
+      eq(permissionRegistersTable.employeeId, employeeId),
+      eq(permissionRegistersTable.year, year),
+      eq(permissionRegistersTable.month, month),
+      eq(permissionRegistersTable.tenantId, tenantId)
+    )
   );
   if (existing) return existing;
   const [created] = await db.insert(permissionRegistersTable).values({
     employeeId, year, month, usedMinutes: 0, limitMinutes: DEFAULT_LIMIT_MINUTES,
+    tenantId: tenantId,
   }).returning();
   return created;
 }
@@ -55,17 +67,21 @@ router.get("/permissions", requireHrmsUser, requireRole(...ALL_ROLES), async (re
       employeeId?: string; status?: string; month?: string; departmentId?: string;
     };
 
-    const conds: SQL[] = [];
+    const conds: SQL[] = [eq(permissionApplicationsTable.tenantId, req.hrmsUser!.tenantId)];
 
-    if (req.hrmsUser.role === "employee") {
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+    if (req.hrmsUser!.role === "employee") {
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!emp) { res.json([]); return; }
       conds.push(eq(permissionApplicationsTable.employeeId, emp.id));
-    } else if (req.hrmsUser.role === "hod") {
-      const hodEmp = await getEmployeeForUser(req.hrmsUser.id);
+    } else if (req.hrmsUser!.role === "hod") {
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!hodEmp?.departmentId) { res.json([]); return; }
       const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(and(eq(employeesTable.departmentId, hodEmp.departmentId), isNull(employeesTable.deletedAt)));
+        .where(and(
+          eq(employeesTable.departmentId, hodEmp.departmentId),
+          isNull(employeesTable.deletedAt),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+        ));
       if (deptEmps.length > 0) {
         conds.push(sql`${permissionApplicationsTable.employeeId} = ANY(ARRAY[${sql.join(deptEmps.map(e => sql`${e.id}`), sql`, `)}]::int[])`);
       } else {
@@ -117,7 +133,11 @@ router.get("/permissions", requireHrmsUser, requireRole(...ALL_ROLES), async (re
     if (departmentId) {
       const deptId = Number(departmentId);
       const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(and(eq(employeesTable.departmentId, deptId), isNull(employeesTable.deletedAt)));
+        .where(and(
+          eq(employeesTable.departmentId, deptId),
+          isNull(employeesTable.deletedAt),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+        ));
       const empIds = new Set(deptEmps.map(e => e.id));
       apps = apps.filter(a => empIds.has(a.employeeId));
     }
@@ -134,13 +154,16 @@ router.get("/permissions/register", requireHrmsUser, requireRole(...ALL_ROLES), 
     if (employeeId) {
       // HR/HOD/admin explicitly querying a specific employee — validate access
       empId = Number(employeeId);
-      if (req.hrmsUser.role === "employee") {
+      if (req.hrmsUser!.role === "employee") {
         // Employees cannot query other employees' registers
-        const emp = await getEmployeeForUser(req.hrmsUser.id);
+        const emp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
         if (!emp || emp.id !== empId) { res.status(403).json({ error: "Forbidden" }); return; }
-      } else if (req.hrmsUser.role === "hod") {
-        const hodEmp = await getEmployeeForUser(req.hrmsUser.id);
-        const [targetEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, empId));
+      } else if (req.hrmsUser!.role === "hod") {
+        const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
+        const [targetEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(
+          eq(employeesTable.id, empId),
+          eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+        ));
         if (!hodEmp?.departmentId || hodEmp.departmentId !== targetEmp?.departmentId) {
           res.status(403).json({ error: "You can only view registers for employees in your department" }); return;
         }
@@ -148,7 +171,7 @@ router.get("/permissions/register", requireHrmsUser, requireRole(...ALL_ROLES), 
       // payroll_admin/hr_*/super_admin: unrestricted
     } else {
       // No employeeId provided — resolve current user's own employee record
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!emp) { res.status(422).json({ error: "No employee profile linked to your account" }); return; }
       empId = emp.id;
     }
@@ -156,7 +179,7 @@ router.get("/permissions/register", requireHrmsUser, requireRole(...ALL_ROLES), 
     const now = new Date();
     const [y, m] = month ? month.split("-").map(Number) : [now.getFullYear(), now.getMonth() + 1];
 
-    const register = await getOrCreateRegister(empId, y, m);
+    const register = await getOrCreateRegister(empId, y, m, req.hrmsUser!.tenantId);
     const applications = await db
       .select({
         id: permissionApplicationsTable.id,
@@ -184,6 +207,7 @@ router.get("/permissions/register", requireHrmsUser, requireRole(...ALL_ROLES), 
       .where(
         and(
           eq(permissionApplicationsTable.employeeId, empId),
+          eq(permissionApplicationsTable.tenantId, req.hrmsUser!.tenantId),
           gte(permissionApplicationsTable.permissionDate, `${y}-${String(m).padStart(2, "0")}-01`),
           lte(permissionApplicationsTable.permissionDate, `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate()}`),
         )
@@ -228,16 +252,22 @@ router.get("/permissions/:id", requireHrmsUser, requireRole(...ALL_ROLES), async
       .from(permissionApplicationsTable)
       .innerJoin(employeesTable, eq(permissionApplicationsTable.employeeId, employeesTable.id))
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
-      .where(eq(permissionApplicationsTable.id, Number(req.params.id)));
+      .where(and(
+        eq(permissionApplicationsTable.id, Number(req.params.id)),
+        eq(permissionApplicationsTable.tenantId, req.hrmsUser!.tenantId)
+      ));
     if (!app) { res.status(404).json({ error: "Not found" }); return; }
 
     // Scope check: employee can only read own; HOD can only read dept employees'
-    if (req.hrmsUser.role === "employee") {
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+    if (req.hrmsUser!.role === "employee") {
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!emp || emp.id !== app.employeeId) { res.status(403).json({ error: "Forbidden" }); return; }
-    } else if (req.hrmsUser.role === "hod") {
-      const hodEmp = await getEmployeeForUser(req.hrmsUser.id);
-      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, app.employeeId));
+    } else if (req.hrmsUser!.role === "hod") {
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
+      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(
+        eq(employeesTable.id, app.employeeId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ));
       if (!hodEmp?.departmentId || hodEmp.departmentId !== reqEmp?.departmentId) {
         res.status(403).json({ error: "Forbidden" }); return;
       }
@@ -255,8 +285,8 @@ router.post("/permissions", requireHrmsUser, requireRole(...ALL_ROLES), async (r
       isOverride?: boolean; overrideJustification?: string;
     };
 
-    const emp = await getEmployeeForUser(req.hrmsUser.id);
-    if (!emp && req.hrmsUser.role === "employee") {
+    const emp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
+    if (!emp && req.hrmsUser!.role === "employee") {
       res.status(422).json({ error: "No employee profile linked" }); return;
     }
     const employeeId = emp?.id;
@@ -269,7 +299,7 @@ router.post("/permissions", requireHrmsUser, requireRole(...ALL_ROLES), async (r
     const year = permDate.getFullYear();
     const month = permDate.getMonth() + 1;
 
-    const register = await getOrCreateRegister(employeeId, year, month);
+    const register = await getOrCreateRegister(employeeId, year, month, req.hrmsUser!.tenantId);
 
     // Compute effective remaining: subtract both approved (usedMinutes) AND pending requests
     // so that multiple pending submissions cannot together exceed the limit.
@@ -283,13 +313,14 @@ router.post("/permissions", requireHrmsUser, requireRole(...ALL_ROLES), async (r
         eq(permissionApplicationsTable.status, "Pending"),
         gte(permissionApplicationsTable.permissionDate, monthStart),
         lte(permissionApplicationsTable.permissionDate, monthEndStr),
+        eq(permissionApplicationsTable.tenantId, req.hrmsUser!.tenantId)
       ));
     const pendingMinutes = pendingPerms.reduce((sum, p) => sum + p.dur, 0);
     const effectiveUsed = register.usedMinutes + pendingMinutes;
     const remaining = register.limitMinutes - effectiveUsed;
 
     // Only HR roles may set isOverride=true
-    const isHrRole = ["customer_admin", "hr_manager", "hr_executive"].includes(req.hrmsUser.role);
+    const isHrRole = ["customer_admin", "hr_manager", "hr_executive"].includes(req.hrmsUser!.role);
     if (isOverride && !isHrRole) {
       res.status(403).json({ error: "Only HR can submit override permissions" }); return;
     }
@@ -320,9 +351,10 @@ router.post("/permissions", requireHrmsUser, requireRole(...ALL_ROLES), async (r
       reason,
       isOverride: isOverride ?? false,
       overrideJustification: isOverride ? overrideJustification : null,
+      tenantId: req.hrmsUser!.tenantId,
     }).returning();
 
-    await logAudit({ user: req.hrmsUser, action: "SUBMIT_PERMISSION", module: "Permissions", recordId: created.id, newValue: `${permissionDate} ${startTime}-${endTime}`, ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: "SUBMIT_PERMISSION", module: "Permissions", recordId: created.id, newValue: `${permissionDate} ${startTime}-${endTime}`, ipAddress: req.ip });
     res.status(201).json(created);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -332,14 +364,23 @@ router.post("/permissions/:id/action", requireHrmsUser, requireRole("customer_ad
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const permId = Number(req.params.id);
 
-    const [perm] = await db.select().from(permissionApplicationsTable).where(eq(permissionApplicationsTable.id, permId));
+    const [perm] = await db.select().from(permissionApplicationsTable).where(and(
+      eq(permissionApplicationsTable.id, permId),
+      eq(permissionApplicationsTable.tenantId, req.hrmsUser!.tenantId)
+    ));
     if (!perm) { res.status(404).json({ error: "Not found" }); return; }
     if (perm.status !== "Pending") { res.status(422).json({ error: "Permission is not in Pending state" }); return; }
 
     // HOD scope check
-    if (req.hrmsUser.role === "hod" && req.hrmsUser.employeeId) {
-      const [hodEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, req.hrmsUser.employeeId));
-      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, perm.employeeId));
+    if (req.hrmsUser!.role === "hod" && req.hrmsUser!.employeeId) {
+      const [hodEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(
+        eq(employeesTable.id, req.hrmsUser!.employeeId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ));
+      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(
+        eq(employeesTable.id, perm.employeeId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ));
       if (hodEmp?.departmentId == null || hodEmp.departmentId !== reqEmp?.departmentId) {
         res.status(403).json({ error: "You can only action permission requests from employees in your department" });
         return;
@@ -349,7 +390,10 @@ router.post("/permissions/:id/action", requireHrmsUser, requireRole("customer_ad
     const updated = await db.transaction(async (tx) => {
       const [row] = await tx.update(permissionApplicationsTable)
         .set({ status: action, hodActionedById: req.hrmsUser!.id, hodRemarks: remarks ?? null, hodActionedAt: new Date(), updatedAt: new Date() })
-        .where(eq(permissionApplicationsTable.id, permId))
+        .where(and(
+          eq(permissionApplicationsTable.id, permId),
+          eq(permissionApplicationsTable.tenantId, req.hrmsUser!.tenantId)
+        ))
         .returning();
 
       if (action === "Approved") {
@@ -357,12 +401,13 @@ router.post("/permissions/:id/action", requireHrmsUser, requireRole("customer_ad
         const year = permDate.getFullYear();
         const month = permDate.getMonth() + 1;
         // Use getOrCreateRegister to ensure row exists, then re-read INSIDE transaction for atomic check
-        await getOrCreateRegister(perm.employeeId, year, month);
+        await getOrCreateRegister(perm.employeeId, year, month, req.hrmsUser!.tenantId);
         const [liveReg] = await tx.select().from(permissionRegistersTable)
           .where(and(
             eq(permissionRegistersTable.employeeId, perm.employeeId),
             eq(permissionRegistersTable.year, year),
             eq(permissionRegistersTable.month, month),
+            eq(permissionRegistersTable.tenantId, req.hrmsUser!.tenantId)
           ))
           .for("update"); // row-level lock prevents race conditions
         if (!liveReg) throw new Error("Permission register not found");
@@ -372,12 +417,19 @@ router.post("/permissions/:id/action", requireHrmsUser, requireRole("customer_ad
         }
         await tx.update(permissionRegistersTable)
           .set({ usedMinutes: liveReg.usedMinutes + perm.durationMinutes, updatedAt: new Date() })
-          .where(eq(permissionRegistersTable.id, liveReg.id));
+          .where(and(
+            eq(permissionRegistersTable.id, liveReg.id),
+            eq(permissionRegistersTable.tenantId, req.hrmsUser!.tenantId)
+          ));
 
         // Reflect approved permission in attendance record for that day
         const permDateStr = perm.permissionDate as string;
         const [existingAtt] = await tx.select().from(attendanceRecordsTable).where(
-          and(eq(attendanceRecordsTable.employeeId, perm.employeeId), eq(attendanceRecordsTable.attendanceDate, permDateStr))
+          and(
+            eq(attendanceRecordsTable.employeeId, perm.employeeId),
+            eq(attendanceRecordsTable.attendanceDate, permDateStr),
+            eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)
+          )
         );
         const permNote = `Permission: ${perm.startTime}–${perm.endTime} (${perm.durationMinutes} min) — Ref #${perm.id}`;
         if (existingAtt) {
@@ -387,20 +439,24 @@ router.post("/permissions/:id/action", requireHrmsUser, requireRole("customer_ad
               notes: existingAtt.notes ? `${existingAtt.notes}; ${permNote}` : permNote,
               updatedAt: new Date(),
             })
-            .where(eq(attendanceRecordsTable.id, existingAtt.id));
+            .where(and(
+              eq(attendanceRecordsTable.id, existingAtt.id),
+              eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)
+            ));
         } else {
           await tx.insert(attendanceRecordsTable).values({
             employeeId: perm.employeeId,
             attendanceDate: permDateStr,
             status: "On Permission",
             notes: permNote,
+            tenantId: req.hrmsUser!.tenantId,
           });
         }
       }
       return row;
     });
 
-    await logAudit({ user: req.hrmsUser, action: `${action.toUpperCase()}_PERMISSION`, module: "Permissions", recordId: permId, newValue: action, ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: `${action.toUpperCase()}_PERMISSION`, module: "Permissions", recordId: permId, newValue: action, ipAddress: req.ip });
     res.json(updated);
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "LIMIT_EXCEEDED") {
@@ -415,19 +471,25 @@ router.post("/permissions/:id/action", requireHrmsUser, requireRole("customer_ad
 router.post("/permissions/:id/cancel", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const permId = Number(req.params.id);
-    const [perm] = await db.select().from(permissionApplicationsTable).where(eq(permissionApplicationsTable.id, permId));
+    const [perm] = await db.select().from(permissionApplicationsTable).where(and(
+      eq(permissionApplicationsTable.id, permId),
+      eq(permissionApplicationsTable.tenantId, req.hrmsUser!.tenantId)
+    ));
     if (!perm) { res.status(404).json({ error: "Not found" }); return; }
     if (["Rejected", "Cancelled"].includes(perm.status)) {
       res.status(422).json({ error: "Cannot cancel an already rejected or cancelled permission" }); return;
     }
 
     // Ownership / scope check
-    if (req.hrmsUser.role === "employee" || req.hrmsUser.role === "payroll_admin") {
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+    if (req.hrmsUser!.role === "employee" || req.hrmsUser!.role === "payroll_admin") {
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!emp || emp.id !== perm.employeeId) { res.status(403).json({ error: "You can only cancel your own permission requests" }); return; }
-    } else if (req.hrmsUser.role === "hod") {
-      const hodEmp = await getEmployeeForUser(req.hrmsUser.id);
-      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, perm.employeeId));
+    } else if (req.hrmsUser!.role === "hod") {
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
+      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(
+        eq(employeesTable.id, perm.employeeId),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ));
       if (!hodEmp?.departmentId || hodEmp.departmentId !== reqEmp?.departmentId) {
         res.status(403).json({ error: "You can only cancel permission requests from employees in your department" }); return;
       }
@@ -437,24 +499,35 @@ router.post("/permissions/:id/cancel", requireHrmsUser, requireRole(...ALL_ROLES
     const updated = await db.transaction(async (tx) => {
       const [row] = await tx.update(permissionApplicationsTable)
         .set({ status: "Cancelled", updatedAt: new Date() })
-        .where(eq(permissionApplicationsTable.id, permId))
+        .where(and(
+          eq(permissionApplicationsTable.id, permId),
+          eq(permissionApplicationsTable.tenantId, req.hrmsUser!.tenantId)
+        ))
         .returning();
 
       if (perm.status === "Approved") {
         const permDate = new Date(perm.permissionDate as string);
         const [reg] = await tx.select().from(permissionRegistersTable).where(
-          and(eq(permissionRegistersTable.employeeId, perm.employeeId), eq(permissionRegistersTable.year, permDate.getFullYear()), eq(permissionRegistersTable.month, permDate.getMonth() + 1))
+          and(
+            eq(permissionRegistersTable.employeeId, perm.employeeId),
+            eq(permissionRegistersTable.year, permDate.getFullYear()),
+            eq(permissionRegistersTable.month, permDate.getMonth() + 1),
+            eq(permissionRegistersTable.tenantId, req.hrmsUser!.tenantId)
+          )
         );
         if (reg) {
           await tx.update(permissionRegistersTable)
             .set({ usedMinutes: Math.max(0, reg.usedMinutes - perm.durationMinutes), updatedAt: new Date() })
-            .where(eq(permissionRegistersTable.id, reg.id));
+            .where(and(
+              eq(permissionRegistersTable.id, reg.id),
+              eq(permissionRegistersTable.tenantId, req.hrmsUser!.tenantId)
+            ));
         }
       }
       return row;
     });
 
-    await logAudit({ user: req.hrmsUser, action: "CANCEL_PERMISSION", module: "Permissions", recordId: permId, newValue: "Cancelled", ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: "CANCEL_PERMISSION", module: "Permissions", recordId: permId, newValue: "Cancelled", ipAddress: req.ip });
     res.json(updated);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -465,13 +538,16 @@ router.post("/permissions/register/override", requireHrmsUser, requireRole(...HR
       employeeId: number; year: number; month: number; newLimitMinutes: number; justification: string;
     };
 
-    const register = await getOrCreateRegister(employeeId, year, month);
+    const register = await getOrCreateRegister(employeeId, year, month, req.hrmsUser!.tenantId);
     const [updated] = await db.update(permissionRegistersTable)
       .set({ limitMinutes: newLimitMinutes, updatedAt: new Date() })
-      .where(eq(permissionRegistersTable.id, register.id))
+      .where(and(
+        eq(permissionRegistersTable.id, register.id),
+        eq(permissionRegistersTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .returning();
 
-    await logAudit({ user: req.hrmsUser, action: "OVERRIDE_PERMISSION_LIMIT", module: "Permissions", recordId: updated.id, newValue: `${newLimitMinutes} min (${justification})`, ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser!, action: "OVERRIDE_PERMISSION_LIMIT", module: "Permissions", recordId: updated.id, newValue: `${newLimitMinutes} min (${justification})`, ipAddress: req.ip });
     res.json({
       employeeId,
       year,

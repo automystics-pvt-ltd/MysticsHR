@@ -18,8 +18,9 @@ import {
   helpdeskTicketsTable,
   employeesTable,
   employeeDocumentsTable,
+  hrmsUsersTable,
 } from "@workspace/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -47,10 +48,15 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 // belongs to. Mirrors checkTicketAccess() in helpdesk.ts: HR roles always
 // allowed; the assignee always allowed; the raising employee always allowed;
 // HODs allowed when the raiser is on their team (manager-of relationship).
-async function userCanAccessAttachment(userId: number, role: string, objectPath: string): Promise<boolean> {
+async function userCanAccessAttachment(userId: number, role: string, objectPath: string, tenantId: number): Promise<boolean> {
   const [attachment] = await db.select({ ticketId: ticketAttachmentsTable.ticketId })
     .from(ticketAttachmentsTable)
-    .where(eq(ticketAttachmentsTable.objectPath, objectPath))
+    .where(
+      and(
+        eq(ticketAttachmentsTable.objectPath, objectPath),
+        eq(ticketAttachmentsTable.tenantId, tenantId)
+      )
+    )
     .limit(1);
   if (attachment) {
     if (HR_ROLES.has(role)) return true;
@@ -58,19 +64,35 @@ async function userCanAccessAttachment(userId: number, role: string, objectPath:
     const [ticket] = await db.select({
       raisedByEmployeeId: helpdeskTicketsTable.raisedByEmployeeId,
       assignedToUserId: helpdeskTicketsTable.assignedToUserId,
-    }).from(helpdeskTicketsTable).where(eq(helpdeskTicketsTable.id, attachment.ticketId));
+    }).from(helpdeskTicketsTable).where(
+      and(
+        eq(helpdeskTicketsTable.id, attachment.ticketId),
+        eq(helpdeskTicketsTable.tenantId, tenantId)
+      )
+    );
     if (!ticket) return false;
     if (ticket.assignedToUserId === userId) return true;
 
     // Find the employee record(s) belonging to this user (used for raised-by + HOD checks).
     const empRows = await db.select({ id: employeesTable.id })
-      .from(employeesTable).where(eq(employeesTable.userId, userId));
+      .from(employeesTable).where(
+        and(
+          eq(hrmsUsersTable.id, userId),
+          eq(employeesTable.tenantId, tenantId)
+        )
+      )
+      .innerJoin(hrmsUsersTable, eq(employeesTable.id, hrmsUsersTable.employeeId));
     if (ticket.raisedByEmployeeId && empRows.some(e => e.id === ticket.raisedByEmployeeId)) return true;
 
     if (role === "hod" && empRows.length > 0 && ticket.raisedByEmployeeId !== null) {
       const hodEmpIds = empRows.map(e => e.id);
       const reports = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(inArray(employeesTable.managerId, hodEmpIds));
+        .where(
+          and(
+            inArray(employeesTable.managerId, hodEmpIds),
+            eq(employeesTable.tenantId, tenantId)
+          )
+        );
       const teamIds = new Set<number>([...hodEmpIds, ...reports.map(r => r.id)]);
       if (teamIds.has(ticket.raisedByEmployeeId)) return true;
     }
@@ -84,12 +106,23 @@ async function userCanAccessAttachment(userId: number, role: string, objectPath:
   const apiPrefixed = `/api/storage${objectPath}`;
   const docRows = await db.select({ employeeId: employeeDocumentsTable.employeeId })
     .from(employeeDocumentsTable)
-    .where(inArray(employeeDocumentsTable.fileUrl, [objectPath, apiPrefixed]));
+    .where(
+      and(
+        inArray(employeeDocumentsTable.fileUrl, [objectPath, apiPrefixed]),
+        eq(employeeDocumentsTable.tenantId, tenantId)
+      )
+    );
   if (docRows.length > 0) {
     if (HR_ROLES.has(role)) return true;
     // The employee whose document this is can always read it back.
     const empRows = await db.select({ id: employeesTable.id })
-      .from(employeesTable).where(eq(employeesTable.userId, userId));
+      .from(employeesTable).where(
+        and(
+          eq(hrmsUsersTable.id, userId),
+          eq(employeesTable.tenantId, tenantId)
+        )
+      )
+      .innerJoin(hrmsUsersTable, eq(employeesTable.id, hrmsUsersTable.employeeId));
     const ownEmpIds = new Set(empRows.map(e => e.id));
     if (docRows.some(d => ownEmpIds.has(d.employeeId))) return true;
   }
@@ -187,7 +220,7 @@ router.get("/storage/objects/*path", requireHrmsUser, async (req: Request, res: 
     const objectPath = `/objects/${wildcardPath}`;
 
     const u = req.hrmsUser!;
-    const allowed = await userCanAccessAttachment(u.id, u.role, objectPath);
+    const allowed = await userCanAccessAttachment(u.id, u.role, objectPath, u.tenantId);
     if (!allowed) {
       res.status(403).json({ error: "Forbidden" });
       return;
@@ -214,7 +247,12 @@ router.get("/storage/objects/*path", requireHrmsUser, async (req: Request, res: 
       fileName: ticketAttachmentsTable.fileName,
       contentType: ticketAttachmentsTable.contentType,
     }).from(ticketAttachmentsTable)
-      .where(eq(ticketAttachmentsTable.objectPath, objectPath))
+      .where(
+        and(
+          eq(ticketAttachmentsTable.objectPath, objectPath),
+          eq(ticketAttachmentsTable.tenantId, u.tenantId)
+        )
+      )
       .limit(1);
 
     const safeContentType = meta && ALLOWED_CONTENT_TYPES.has(meta.contentType)

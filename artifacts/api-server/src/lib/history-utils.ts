@@ -7,10 +7,12 @@ export async function recordHistory(
   fieldName: string,
   oldValue: string | null,
   newValue: string | null,
-  changedById: number | null | undefined
+  changedById: number | null | undefined,
+  tenantId: number
 ) {
   if (oldValue !== newValue) {
     await db.insert(employeeHistoryTable).values({
+      tenantId,
       employeeId,
       module,
       fieldName,

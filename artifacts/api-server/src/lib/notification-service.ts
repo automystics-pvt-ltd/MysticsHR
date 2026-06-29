@@ -127,6 +127,7 @@ interface SendEmailOptions {
   entityType?: string;
   entityId?: number;
   metadata?: Record<string, unknown>;
+  tenantId?: number;
 }
 
 interface SendWhatsAppOptions {
@@ -137,6 +138,7 @@ interface SendWhatsAppOptions {
   module: string;
   entityType?: string;
   entityId?: number;
+  tenantId?: number;
 }
 
 /**
@@ -201,9 +203,11 @@ async function logNotification(params: {
   entityType?: string;
   entityId?: number;
   metadata?: Record<string, unknown>;
+  tenantId?: number;
 }) {
   try {
     await db.insert(notificationLogsTable).values({
+      tenantId: params.tenantId ?? null,
       channel: params.channel,
       eventType: params.eventType,
       module: params.module,
@@ -238,6 +242,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
       errorMessage: "SMTP not configured",
       entityType: opts.entityType,
       entityId: opts.entityId,
+      tenantId: opts.tenantId,
       metadata: opts.metadata,
     });
     return false;
@@ -269,6 +274,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
       entityType: opts.entityType,
       entityId: opts.entityId,
       metadata: opts.metadata,
+      tenantId: opts.tenantId,
     });
     return true;
   } catch (err: unknown) {
@@ -286,6 +292,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
       entityType: opts.entityType,
       entityId: opts.entityId,
       metadata: opts.metadata,
+      tenantId: opts.tenantId,
     });
     console.error("[notification-service] Email send failed:", msg);
     return false;
@@ -306,6 +313,7 @@ export async function sendWhatsApp(opts: SendWhatsAppOptions): Promise<boolean> 
       errorMessage: "WhatsApp not configured",
       entityType: opts.entityType,
       entityId: opts.entityId,
+      tenantId: opts.tenantId,
     });
     return false;
   }
@@ -339,6 +347,7 @@ export async function sendWhatsApp(opts: SendWhatsAppOptions): Promise<boolean> 
       errorMessage: ok ? undefined : await res.text(),
       entityType: opts.entityType,
       entityId: opts.entityId,
+      tenantId: opts.tenantId,
     });
     return ok;
   } catch (err: unknown) {
@@ -354,6 +363,7 @@ export async function sendWhatsApp(opts: SendWhatsAppOptions): Promise<boolean> 
       errorMessage: msg,
       entityType: opts.entityType,
       entityId: opts.entityId,
+      tenantId: opts.tenantId,
     });
     return false;
   }
@@ -422,6 +432,7 @@ export async function dispatchNotification(params: {
   /** Restrict dispatch to a specific set of channels regardless of template
    * configuration. Useful for compliance flows that must be email-only. */
   channels?: Array<"email" | "whatsapp">;
+  tenantId?: number;
 }): Promise<void> {
   try {
     const templates = await db.select().from(notificationTemplatesTable).where(
@@ -463,6 +474,7 @@ export async function dispatchNotification(params: {
         entityType: params.entityType,
         entityId: params.entityId,
         metadata: params.metadata,
+        tenantId: params.tenantId,
       });
     }
 
@@ -482,6 +494,7 @@ export async function dispatchNotification(params: {
           module: params.module,
           entityType: params.entityType,
           entityId: params.entityId,
+          tenantId: params.tenantId,
         });
       }
     }

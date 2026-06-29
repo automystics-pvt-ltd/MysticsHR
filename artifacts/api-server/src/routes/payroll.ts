@@ -152,7 +152,8 @@ function computeESI(grossMonthly: number): { esiEmployee: number; esiEmployer: n
 router.get("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const { employeeId, isActive } = req.query as { employeeId?: string; isActive?: string };
-    const conds = [];
+    const tenantId = req.hrmsUser!.tenantId;
+    const conds = [eq(salaryStructuresTable.tenantId, tenantId)];
     if (employeeId) conds.push(eq(salaryStructuresTable.employeeId, Number(employeeId)));
     if (isActive !== undefined) conds.push(eq(salaryStructuresTable.isActive, isActive === "true"));
     const structures = await db
@@ -172,7 +173,7 @@ router.get("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_READ
       })
       .from(salaryStructuresTable)
       .leftJoin(employeesTable, eq(salaryStructuresTable.employeeId, employeesTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(...conds))
       .orderBy(desc(salaryStructuresTable.createdAt));
     res.json(structures);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -184,6 +185,7 @@ router.get("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_READ
 router.get("/payroll/my-active-salary-structure", requireHrmsUser, async (req, res) => {
   try {
     const employeeId = req.hrmsUser?.employeeId;
+    const tenantId = req.hrmsUser!.tenantId;
     if (!employeeId) { res.status(204).end(); return; }
     const [structure] = await db
       .select({
@@ -196,6 +198,7 @@ router.get("/payroll/my-active-salary-structure", requireHrmsUser, async (req, r
       .from(salaryStructuresTable)
       .where(and(
         eq(salaryStructuresTable.employeeId, employeeId),
+        eq(salaryStructuresTable.tenantId, tenantId),
         eq(salaryStructuresTable.isActive, true),
       ))
       .orderBy(desc(salaryStructuresTable.effectiveFrom))
@@ -208,10 +211,11 @@ router.get("/payroll/my-active-salary-structure", requireHrmsUser, async (req, r
 router.get("/payroll/salary-structures/:id", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const [structure] = await db.select().from(salaryStructuresTable).where(eq(salaryStructuresTable.id, id));
+    const tenantId = req.hrmsUser!.tenantId;
+    const [structure] = await db.select().from(salaryStructuresTable).where(and(eq(salaryStructuresTable.id, id), eq(salaryStructuresTable.tenantId, tenantId)));
     if (!structure) { res.status(404).json({ error: "Not found" }); return; }
     const components = await db.select().from(salaryComponentsTable)
-      .where(and(eq(salaryComponentsTable.salaryStructureId, id), eq(salaryComponentsTable.isActive, true)))
+      .where(and(eq(salaryComponentsTable.salaryStructureId, id), eq(salaryComponentsTable.tenantId, tenantId), eq(salaryComponentsTable.isActive, true)))
       .orderBy(asc(salaryComponentsTable.sequence));
     res.json({ ...structure, components });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -220,6 +224,7 @@ router.get("/payroll/salary-structures/:id", requireHrmsUser, requireRole(...HR_
 
 router.post("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     const body = req.body as {
       employeeId: number; name: string; effectiveFrom: string; grossCtc: string; annualCtc: string;
       notes?: string; components: Array<{
@@ -228,10 +233,11 @@ router.post("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_ROL
       }>;
     };
 
-    const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_salary");
+    const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_salary", undefined, undefined, req.hrmsUser!.email ?? undefined, req.hrmsUser!.tenantId);
     if (lockError) { res.status(422).json({ error: lockError }); return; }
 
     const [structure] = await db.insert(salaryStructuresTable).values({
+      tenantId,
       employeeId: body.employeeId,
       name: body.name,
       effectiveFrom: body.effectiveFrom,
@@ -244,6 +250,7 @@ router.post("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_ROL
     if (body.components?.length) {
       await db.insert(salaryComponentsTable).values(
         body.components.map((c, i) => ({
+          tenantId,
           salaryStructureId: structure.id,
           componentType: c.componentType as (typeof salaryComponentTypeEnum.enumValues)[number],
           componentName: c.componentName,
@@ -263,6 +270,7 @@ router.post("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_ROL
 router.put("/payroll/salary-structures/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = Number(req.params.id);
+    const tenantId = req.hrmsUser!.tenantId;
     const body = req.body as {
       name?: string; effectiveFrom?: string; effectiveTo?: string;
       grossCtc?: string; annualCtc?: string; isActive?: boolean; notes?: string;
@@ -272,7 +280,7 @@ router.put("/payroll/salary-structures/:id", requireHrmsUser, requireRole(...HR_
       }>;
     };
 
-    const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_salary");
+    const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_salary", undefined, undefined, req.hrmsUser!.email ?? undefined, req.hrmsUser!.tenantId);
     if (lockError) { res.status(422).json({ error: lockError }); return; }
 
     const [updated] = await db.update(salaryStructuresTable).set({
@@ -284,14 +292,15 @@ router.put("/payroll/salary-structures/:id", requireHrmsUser, requireRole(...HR_
       ...(body.isActive !== undefined && { isActive: body.isActive }),
       ...(body.notes !== undefined && { notes: body.notes }),
       updatedAt: new Date(),
-    }).where(eq(salaryStructuresTable.id, id)).returning();
+    }).where(and(eq(salaryStructuresTable.id, id), eq(salaryStructuresTable.tenantId, tenantId))).returning();
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
     if (body.components) {
-      await db.delete(salaryComponentsTable).where(eq(salaryComponentsTable.salaryStructureId, id));
+      await db.delete(salaryComponentsTable).where(and(eq(salaryComponentsTable.salaryStructureId, id), eq(salaryComponentsTable.tenantId, tenantId)));
       if (body.components.length) {
         await db.insert(salaryComponentsTable).values(
           body.components.map((c, i) => ({
+            tenantId,
             salaryStructureId: id,
             componentType: c.componentType as (typeof salaryComponentTypeEnum.enumValues)[number],
             componentName: c.componentName,
@@ -315,7 +324,8 @@ router.put("/payroll/salary-structures/:id", requireHrmsUser, requireRole(...HR_
 router.get("/payroll/loans", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const { employeeId, isActive } = req.query as { employeeId?: string; isActive?: string };
-    const conds = [];
+    const tenantId = req.hrmsUser!.tenantId;
+    const conds = [eq(loanRepaymentsTable.tenantId, tenantId)];
     if (employeeId) conds.push(eq(loanRepaymentsTable.employeeId, Number(employeeId)));
     if (isActive !== undefined) conds.push(eq(loanRepaymentsTable.isActive, isActive === "true"));
     const loans = await db.select({
@@ -334,7 +344,7 @@ router.get("/payroll/loans", requireHrmsUser, requireRole(...HR_ROLES), async (r
       employeeCode: employeesTable.employeeId,
     }).from(loanRepaymentsTable)
       .leftJoin(employeesTable, eq(loanRepaymentsTable.employeeId, employeesTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(...conds))
       .orderBy(desc(loanRepaymentsTable.createdAt));
     res.json(loans);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -342,12 +352,14 @@ router.get("/payroll/loans", requireHrmsUser, requireRole(...HR_ROLES), async (r
 
 router.post("/payroll/loans", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     const body = req.body as {
       employeeId: number; loanType: string; principalAmount: string;
       monthlyDeduction: string; startDate: string; endDate?: string; notes?: string;
     };
     const [loan] = await db.insert(loanRepaymentsTable).values({
       ...body,
+      tenantId,
       outstandingAmount: body.principalAmount,
       createdById: req.hrmsUser!.id,
     }).returning();
@@ -357,6 +369,7 @@ router.post("/payroll/loans", requireHrmsUser, requireRole(...HR_ROLES), async (
 
 router.patch("/payroll/loans/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     const body = req.body as { outstandingAmount?: string; monthlyDeduction?: string; isActive?: boolean; notes?: string };
     const [updated] = await db.update(loanRepaymentsTable).set({
       ...(body.outstandingAmount !== undefined && { outstandingAmount: body.outstandingAmount }),
@@ -364,7 +377,7 @@ router.patch("/payroll/loans/:id", requireHrmsUser, requireRole(...HR_ROLES), as
       ...(body.isActive !== undefined && { isActive: body.isActive }),
       ...(body.notes !== undefined && { notes: body.notes }),
       updatedAt: new Date(),
-    }).where(eq(loanRepaymentsTable.id, Number(req.params.id))).returning();
+    }).where(and(eq(loanRepaymentsTable.id, Number(req.params.id)), eq(loanRepaymentsTable.tenantId, tenantId))).returning();
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
     res.json(updated);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -375,14 +388,15 @@ router.patch("/payroll/loans/:id", requireHrmsUser, requireRole(...HR_ROLES), as
 router.get("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const u = req.hrmsUser!;
+    const tenantId = u.tenantId;
     const { employeeId, financialYear } = req.query as { employeeId?: string; financialYear?: string };
-    const conds = [];
+    const conds = [eq(taxRegimeDeclarationsTable.tenantId, tenantId)];
 
     // Employees and HODs can only see their own tax declarations
     if (u.role === "employee" || u.role === "hod") {
       const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable)
         .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
-        .where(eq(hrmsUsersTable.id, u.id));
+        .where(and(eq(hrmsUsersTable.id, u.id), eq(employeesTable.tenantId, tenantId)));
       if (!emp) { res.status(403).json({ error: "No employee record found for current user." }); return; }
       conds.push(eq(taxRegimeDeclarationsTable.employeeId, emp.id));
     } else if (employeeId) {
@@ -402,7 +416,7 @@ router.get("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROLE
       employeeName: sql<string>`${employeesTable.firstName} || ' ' || ${employeesTable.lastName}`,
     }).from(taxRegimeDeclarationsTable)
       .leftJoin(employeesTable, eq(taxRegimeDeclarationsTable.employeeId, employeesTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(...conds))
       .orderBy(desc(taxRegimeDeclarationsTable.createdAt));
     res.json(declarations);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -411,6 +425,7 @@ router.get("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROLE
 router.post("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const u = req.hrmsUser!;
+    const tenantId = u.tenantId;
     const body = req.body as {
       employeeId?: number; financialYear: string; regime: "Old" | "New";
       investmentDeclarations?: Record<string, number>; declarationDate: string;
@@ -423,7 +438,7 @@ router.post("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROL
       // Employee and HOD can only declare for themselves — derive from auth, ignore body value
       const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable)
         .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
-        .where(eq(hrmsUsersTable.id, u.id));
+        .where(and(eq(hrmsUsersTable.id, u.id), eq(employeesTable.tenantId, tenantId)));
       if (!emp) { res.status(403).json({ error: "No employee record found for current user." }); return; }
       resolvedEmployeeId = emp.id;
 
@@ -431,10 +446,10 @@ router.post("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROL
       // HR/Super Admin/Payroll Admin can always submit declarations.
       const [windowStart] = await db.select({ settingValue: payrollSettingsTable.settingValue })
         .from(payrollSettingsTable)
-        .where(eq(payrollSettingsTable.settingKey, `declaration_window_start_${body.financialYear}`));
+        .where(and(eq(payrollSettingsTable.settingKey, `declaration_window_start_${body.financialYear}`), eq(payrollSettingsTable.tenantId, tenantId)));
       const [windowEnd] = await db.select({ settingValue: payrollSettingsTable.settingValue })
         .from(payrollSettingsTable)
-        .where(eq(payrollSettingsTable.settingKey, `declaration_window_end_${body.financialYear}`));
+        .where(and(eq(payrollSettingsTable.settingKey, `declaration_window_end_${body.financialYear}`), eq(payrollSettingsTable.tenantId, tenantId)));
       if (windowStart && windowEnd) {
         const today = new Date().toISOString().split("T")[0];
         if (today < windowStart.settingValue || today > windowEnd.settingValue) {
@@ -453,9 +468,11 @@ router.post("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROL
     await db.update(taxRegimeDeclarationsTable).set({ isCurrent: false, updatedAt: new Date() })
       .where(and(
         eq(taxRegimeDeclarationsTable.employeeId, resolvedEmployeeId),
+        eq(taxRegimeDeclarationsTable.tenantId, tenantId),
         eq(taxRegimeDeclarationsTable.financialYear, body.financialYear),
       ));
     const [decl] = await db.insert(taxRegimeDeclarationsTable).values({
+      tenantId,
       employeeId: resolvedEmployeeId,
       financialYear: body.financialYear,
       regime: body.regime,
@@ -475,7 +492,8 @@ router.post("/payroll/tax-declarations", requireHrmsUser, requireRole(...ALL_ROL
 
 router.get("/payroll/settings", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
-    const settings = await db.select().from(payrollSettingsTable).orderBy(asc(payrollSettingsTable.settingKey));
+    const tenantId = req.hrmsUser!.tenantId;
+    const settings = await db.select().from(payrollSettingsTable).where(eq(payrollSettingsTable.tenantId, tenantId)).orderBy(asc(payrollSettingsTable.settingKey));
     res.json(settings);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -483,19 +501,20 @@ router.get("/payroll/settings", requireHrmsUser, requireRole(...HR_READ_ROLES), 
 router.put("/payroll/settings/:key", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const key = req.params.key;
+    const tenantId = req.hrmsUser!.tenantId;
     const { value, description } = req.body as { value: string; description?: string };
     if (!value) { res.status(400).json({ error: "value is required." }); return; }
     const u = req.hrmsUser!;
-    const existing = await db.select().from(payrollSettingsTable).where(eq(payrollSettingsTable.settingKey, key));
+    const existing = await db.select().from(payrollSettingsTable).where(and(eq(payrollSettingsTable.settingKey, key), eq(payrollSettingsTable.tenantId, tenantId)));
     if (existing.length) {
       const [updated] = await db.update(payrollSettingsTable)
         .set({ settingValue: value, description: description ?? existing[0].description, updatedById: u.id, updatedAt: new Date() })
-        .where(eq(payrollSettingsTable.settingKey, key))
+        .where(and(eq(payrollSettingsTable.settingKey, key), eq(payrollSettingsTable.tenantId, tenantId)))
         .returning();
       res.json(updated);
     } else {
       const [created] = await db.insert(payrollSettingsTable)
-        .values({ settingKey: key, settingValue: value, description, updatedById: u.id })
+        .values({ tenantId, settingKey: key, settingValue: value, description, updatedById: u.id })
         .returning();
       res.status(201).json(created);
     }
@@ -507,11 +526,12 @@ router.put("/payroll/settings/:key", requireHrmsUser, requireRole(...PAYROLL_ADM
 router.get("/payroll/locks", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const { year, month } = req.query as { year?: string; month?: string };
-    const conds = [];
+    const tenantId = req.hrmsUser!.tenantId;
+    const conds = [eq(payrollLocksTable.tenantId, tenantId)];
     if (year) conds.push(eq(payrollLocksTable.year, Number(year)));
     if (month) conds.push(eq(payrollLocksTable.month, Number(month)));
     const locks = await db.select().from(payrollLocksTable)
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(...conds))
       .orderBy(desc(payrollLocksTable.year), desc(payrollLocksTable.month));
     res.json(locks);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -521,13 +541,14 @@ router.post("/payroll/locks/:year/:month/lock", requireHrmsUser, requireRole(...
   try {
     const year = Number(req.params.year);
     const month = Number(req.params.month);
-    const [existing] = await db.select().from(payrollLocksTable).where(and(eq(payrollLocksTable.year, year), eq(payrollLocksTable.month, month)));
+    const tenantId = req.hrmsUser!.tenantId;
+    const [existing] = await db.select().from(payrollLocksTable).where(and(eq(payrollLocksTable.year, year), eq(payrollLocksTable.month, month), eq(payrollLocksTable.tenantId, tenantId)));
     let lock;
     if (existing) {
       [lock] = await db.update(payrollLocksTable).set({ isLocked: true, lockedById: req.hrmsUser!.id, lockedAt: new Date(), updatedAt: new Date() })
         .where(eq(payrollLocksTable.id, existing.id)).returning();
     } else {
-      [lock] = await db.insert(payrollLocksTable).values({ year, month, isLocked: true, lockedById: req.hrmsUser!.id, lockedAt: new Date() }).returning();
+      [lock] = await db.insert(payrollLocksTable).values({ tenantId, year, month, isLocked: true, lockedById: req.hrmsUser!.id, lockedAt: new Date() }).returning();
     }
     await logAudit({ user: req.hrmsUser, action: "PAYROLL_LOCK", module: "Payroll", recordId: lock.id, newValue: `${year}-${month}`, ipAddress: req.ip });
     // Notify all HR + Payroll Admin users about payroll lock
@@ -535,7 +556,7 @@ router.post("/payroll/locks/:year/:month/lock", requireHrmsUser, requireRole(...
     const periodLabel = `${monthNames[(month - 1) % 12]} ${year}`;
     import("../lib/notification-service").then(async ({ dispatchNotification }) => {
       const { getUsersByRoles } = await import("./system-config");
-      const recipients = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"]);
+      const recipients = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"], req.hrmsUser!.tenantId);
       await Promise.allSettled(recipients.map(u =>
         dispatchNotification({
           eventType: "payroll_locked", module: "payroll",
@@ -553,7 +574,8 @@ router.post("/payroll/locks/:year/:month/unlock", requireHrmsUser, requireRole("
   try {
     const year = Number(req.params.year);
     const month = Number(req.params.month);
-    const [existing] = await db.select().from(payrollLocksTable).where(and(eq(payrollLocksTable.year, year), eq(payrollLocksTable.month, month)));
+    const tenantId = req.hrmsUser!.tenantId;
+    const [existing] = await db.select().from(payrollLocksTable).where(and(eq(payrollLocksTable.year, year), eq(payrollLocksTable.month, month), eq(payrollLocksTable.tenantId, tenantId)));
     if (!existing) { res.status(404).json({ error: "Lock record not found" }); return; }
     const [lock] = await db.update(payrollLocksTable).set({ isLocked: false, unlockedById: req.hrmsUser!.id, unlockedAt: new Date(), updatedAt: new Date() })
       .where(eq(payrollLocksTable.id, existing.id)).returning();
@@ -565,6 +587,7 @@ router.post("/payroll/locks/:year/:month/unlock", requireHrmsUser, requireRole("
 // Lock Exceptions
 router.get("/payroll/lock-exceptions", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     const exceptions = await db.select({
       id: payrollLockExceptionsTable.id,
       payrollLockId: payrollLockExceptionsTable.payrollLockId,
@@ -582,6 +605,7 @@ router.get("/payroll/lock-exceptions", requireHrmsUser, requireRole(...HR_ROLES)
     }).from(payrollLockExceptionsTable)
       .leftJoin(hrmsUsersTable, eq(payrollLockExceptionsTable.requestedById, hrmsUsersTable.id))
       .leftJoin(payrollLocksTable, eq(payrollLockExceptionsTable.payrollLockId, payrollLocksTable.id))
+      .where(eq(payrollLockExceptionsTable.tenantId, tenantId))
       .orderBy(desc(payrollLockExceptionsTable.createdAt));
     res.json(exceptions);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -589,8 +613,10 @@ router.get("/payroll/lock-exceptions", requireHrmsUser, requireRole(...HR_ROLES)
 
 router.post("/payroll/lock-exceptions", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     const body = req.body as { payrollLockId: number; reason: string; exceptionType: string };
     const [exc] = await db.insert(payrollLockExceptionsTable).values({
+      tenantId,
       payrollLockId: body.payrollLockId,
       requestedById: req.hrmsUser!.id,
       reason: body.reason,
@@ -602,6 +628,7 @@ router.post("/payroll/lock-exceptions", requireHrmsUser, requireRole(...HR_ROLES
 
 router.post("/payroll/lock-exceptions/:id/action", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     const { action, approvalRemarks } = req.body as { action: "approve" | "reject"; approvalRemarks?: string };
     const [exc] = await db.update(payrollLockExceptionsTable).set({
       status: action === "approve" ? "Approved" : "Rejected",
@@ -609,7 +636,7 @@ router.post("/payroll/lock-exceptions/:id/action", requireHrmsUser, requireRole(
       approvalRemarks,
       approvedAt: new Date(),
       updatedAt: new Date(),
-    }).where(eq(payrollLockExceptionsTable.id, Number(req.params.id))).returning();
+    }).where(and(eq(payrollLockExceptionsTable.id, Number(req.params.id)), eq(payrollLockExceptionsTable.tenantId, tenantId))).returning();
     if (!exc) { res.status(404).json({ error: "Not found" }); return; }
     await logAudit({ user: req.hrmsUser, action: `LOCK_EXCEPTION_${action.toUpperCase()}`, module: "Payroll", recordId: exc.id, newValue: action, ipAddress: req.ip });
     res.json(exc);
@@ -621,7 +648,8 @@ router.post("/payroll/lock-exceptions/:id/action", requireHrmsUser, requireRole(
 router.get("/payroll/salary-revisions", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const { employeeId, status } = req.query as { employeeId?: string; status?: string };
-    const conds = [];
+    const tenantId = req.hrmsUser!.tenantId;
+    const conds = [eq(salaryRevisionsTable.tenantId, tenantId)];
     if (employeeId) conds.push(eq(salaryRevisionsTable.employeeId, Number(employeeId)));
     if (status) conds.push(eq(salaryRevisionsTable.status, status as (typeof salaryRevisionStatusEnum.enumValues)[number]));
     const revisions = await db.select({
@@ -641,7 +669,7 @@ router.get("/payroll/salary-revisions", requireHrmsUser, requireRole(...HR_READ_
       employeeCode: employeesTable.employeeId,
     }).from(salaryRevisionsTable)
       .leftJoin(employeesTable, eq(salaryRevisionsTable.employeeId, employeesTable.id))
-      .where(conds.length ? and(...conds) : undefined)
+      .where(and(...conds))
       .orderBy(desc(salaryRevisionsTable.createdAt));
     res.json(revisions);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -649,11 +677,13 @@ router.get("/payroll/salary-revisions", requireHrmsUser, requireRole(...HR_READ_
 
 router.post("/payroll/salary-revisions", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     const body = req.body as {
       employeeId: number; oldStructureId?: number; newStructureId: number; effectiveDate: string; reason: string;
     };
     const [revision] = await db.insert(salaryRevisionsTable).values({
       ...body,
+      tenantId,
       requestedById: req.hrmsUser!.id,
       status: "Pending",
     }).returning();
@@ -665,15 +695,16 @@ router.post("/payroll/salary-revisions", requireHrmsUser, requireRole(...HR_ROLE
 router.post("/payroll/salary-revisions/:id/action", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
     const { action, approvalRemarks } = req.body as { action: "approve" | "reject"; approvalRemarks?: string };
+    const tenantId = req.hrmsUser!.tenantId;
 
     // Fetch the revision before mutation so we can read effectiveDate for lock check
-    const [existing] = await db.select().from(salaryRevisionsTable).where(eq(salaryRevisionsTable.id, Number(req.params.id)));
+    const [existing] = await db.select().from(salaryRevisionsTable).where(and(eq(salaryRevisionsTable.id, Number(req.params.id)), eq(salaryRevisionsTable.tenantId, tenantId)));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
     // Salary revision approval mutates salary structures — enforce payroll lock for effective month
     if (action === "approve" && existing.effectiveDate) {
       const d = new Date(existing.effectiveDate as string);
-      const lockErr = await checkPayrollLock(req.hrmsUser!.id, "edit_salary", d.getFullYear(), d.getMonth() + 1, req.hrmsUser!.email ?? undefined);
+      const lockErr = await checkPayrollLock(req.hrmsUser!.id, "edit_salary", d.getFullYear(), d.getMonth() + 1, req.hrmsUser!.email ?? undefined, req.hrmsUser!.tenantId);
       if (lockErr) { res.status(423).json({ error: lockErr }); return; }
     }
 
@@ -683,15 +714,15 @@ router.post("/payroll/salary-revisions/:id/action", requireHrmsUser, requireRole
       approvalRemarks,
       approvedAt: new Date(),
       updatedAt: new Date(),
-    }).where(eq(salaryRevisionsTable.id, Number(req.params.id))).returning();
+    }).where(and(eq(salaryRevisionsTable.id, Number(req.params.id)), eq(salaryRevisionsTable.tenantId, tenantId))).returning();
     if (!revision) { res.status(404).json({ error: "Not found" }); return; }
 
     if (action === "approve") {
       await db.update(salaryStructuresTable).set({ isActive: false, effectiveTo: revision.effectiveDate, updatedAt: new Date() })
-        .where(and(eq(salaryStructuresTable.employeeId, revision.employeeId), eq(salaryStructuresTable.isActive, true)));
+        .where(and(eq(salaryStructuresTable.employeeId, revision.employeeId), eq(salaryStructuresTable.isActive, true), eq(salaryStructuresTable.tenantId, tenantId)));
       if (revision.newStructureId) {
         await db.update(salaryStructuresTable).set({ isActive: true, effectiveFrom: revision.effectiveDate, updatedAt: new Date() })
-          .where(eq(salaryStructuresTable.id, revision.newStructureId));
+          .where(and(eq(salaryStructuresTable.id, revision.newStructureId), eq(salaryStructuresTable.tenantId, tenantId)));
       }
     }
 
@@ -704,6 +735,7 @@ router.post("/payroll/salary-revisions/:id/action", requireHrmsUser, requireRole
 
 router.get("/payroll/runs", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     const runs = await db.select({
       id: payrollRunsTable.id,
       periodYear: payrollRunsTable.periodYear,
@@ -720,6 +752,7 @@ router.get("/payroll/runs", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES)
       initiatorName: sql<string>`u1.name`,
     }).from(payrollRunsTable)
       .leftJoin(sql`hrms_users u1`, sql`u1.id = ${payrollRunsTable.initiatedById}`)
+      .where(eq(payrollRunsTable.tenantId, tenantId))
       .orderBy(desc(payrollRunsTable.periodYear), desc(payrollRunsTable.periodMonth));
     res.json(runs);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -727,18 +760,21 @@ router.get("/payroll/runs", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES)
 
 router.post("/payroll/runs", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     const body = req.body as { periodYear: number; periodMonth: number; notes?: string };
     const [existing] = await db.select().from(payrollRunsTable).where(
-      and(eq(payrollRunsTable.periodYear, body.periodYear), eq(payrollRunsTable.periodMonth, body.periodMonth))
+      and(eq(payrollRunsTable.periodYear, body.periodYear), eq(payrollRunsTable.periodMonth, body.periodMonth), eq(payrollRunsTable.tenantId, tenantId))
     );
     if (existing) { res.status(422).json({ error: "A payroll run already exists for this period." }); return; }
 
     const [lock] = await db.insert(payrollLocksTable).values({
+      tenantId,
       year: body.periodYear, month: body.periodMonth, isLocked: true,
       lockedById: req.hrmsUser!.id, lockedAt: new Date(),
     }).onConflictDoNothing().returning();
 
     const [run] = await db.insert(payrollRunsTable).values({
+      tenantId,
       periodYear: body.periodYear,
       periodMonth: body.periodMonth,
       initiatedById: req.hrmsUser!.id,
@@ -748,7 +784,7 @@ router.post("/payroll/runs", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES
 
     if (!lock) {
       await db.update(payrollLocksTable).set({ isLocked: true, lockedById: req.hrmsUser!.id, lockedAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(payrollLocksTable.year, body.periodYear), eq(payrollLocksTable.month, body.periodMonth)));
+        .where(and(eq(payrollLocksTable.year, body.periodYear), eq(payrollLocksTable.month, body.periodMonth), eq(payrollLocksTable.tenantId, tenantId)));
     }
 
     await logAudit({ user: req.hrmsUser, action: "PAYROLL_RUN_INITIATE", module: "Payroll", recordId: run.id, newValue: `${body.periodYear}-${body.periodMonth}`, ipAddress: req.ip });
@@ -759,7 +795,8 @@ router.post("/payroll/runs", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES
 router.get("/payroll/runs/:id", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const [run] = await db.select().from(payrollRunsTable).where(eq(payrollRunsTable.id, id));
+    const tenantId = req.hrmsUser!.tenantId;
+    const [run] = await db.select().from(payrollRunsTable).where(and(eq(payrollRunsTable.id, id), eq(payrollRunsTable.tenantId, tenantId)));
     if (!run) { res.status(404).json({ error: "Not found" }); return; }
     res.json(run);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -1065,6 +1102,7 @@ router.post("/payroll/runs/:id/approve", requireHrmsUser, requireRole(...PAYROLL
         await db.update(payslipsTable).set({ payslipData, htmlContent: html, generatedAt: new Date() }).where(eq(payslipsTable.id, existingSlip.id));
       } else {
         await db.insert(payslipsTable).values({
+          tenantId: run.tenantId,
           payrollRecordId: record.id,
           employeeId: record.employeeId,
           periodYear: run.periodYear,

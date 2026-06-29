@@ -66,11 +66,14 @@ function normalizeOffices(value: unknown): AttendanceSuspicionOffice[] {
     .filter((o): o is AttendanceSuspicionOffice => o !== null);
 }
 
-export async function loadAttendanceSuspicionConfig(): Promise<AttendanceSuspicionConfig> {
+export async function loadAttendanceSuspicionConfig(tenantId?: number): Promise<AttendanceSuspicionConfig> {
+  const conditions = tenantId
+    ? and(eq(systemSettingsTable.category, CATEGORY), eq(systemSettingsTable.key, KEY), eq(systemSettingsTable.tenantId, tenantId))
+    : and(eq(systemSettingsTable.category, CATEGORY), eq(systemSettingsTable.key, KEY));
   const [row] = await db
     .select()
     .from(systemSettingsTable)
-    .where(and(eq(systemSettingsTable.category, CATEGORY), eq(systemSettingsTable.key, KEY)))
+    .where(conditions)
     .limit(1);
   if (!row || !row.value || typeof row.value !== "object") return DEFAULT_ATTENDANCE_SUSPICION_CONFIG;
   const v = row.value as Record<string, unknown>;
@@ -81,17 +84,20 @@ export async function loadAttendanceSuspicionConfig(): Promise<AttendanceSuspici
   };
 }
 
-export async function saveAttendanceSuspicionConfig(input: Partial<AttendanceSuspicionConfig>): Promise<AttendanceSuspicionConfig> {
-  const current = await loadAttendanceSuspicionConfig();
+export async function saveAttendanceSuspicionConfig(input: Partial<AttendanceSuspicionConfig>, tenantId?: number): Promise<AttendanceSuspicionConfig> {
+  const current = await loadAttendanceSuspicionConfig(tenantId);
   const merged: AttendanceSuspicionConfig = {
     maxAccuracyMeters: clampNumber(input.maxAccuracyMeters, current.maxAccuracyMeters, 0),
     maxRadiusMeters: clampNumber(input.maxRadiusMeters, current.maxRadiusMeters, 0),
     offices: input.offices ? normalizeOffices(input.offices) : current.offices,
   };
+  const conds = tenantId
+    ? and(eq(systemSettingsTable.category, CATEGORY), eq(systemSettingsTable.key, KEY), eq(systemSettingsTable.tenantId, tenantId))
+    : and(eq(systemSettingsTable.category, CATEGORY), eq(systemSettingsTable.key, KEY));
   const [existing] = await db
     .select({ id: systemSettingsTable.id })
     .from(systemSettingsTable)
-    .where(and(eq(systemSettingsTable.category, CATEGORY), eq(systemSettingsTable.key, KEY)))
+    .where(conds)
     .limit(1);
   if (existing) {
     await db
@@ -99,7 +105,7 @@ export async function saveAttendanceSuspicionConfig(input: Partial<AttendanceSus
       .set({ value: merged, updatedAt: new Date() })
       .where(eq(systemSettingsTable.id, existing.id));
   } else {
-    await db.insert(systemSettingsTable).values({ category: CATEGORY, key: KEY, value: merged });
+    await db.insert(systemSettingsTable).values({ tenantId: tenantId ?? null, category: CATEGORY, key: KEY, value: merged });
   }
   return merged;
 }

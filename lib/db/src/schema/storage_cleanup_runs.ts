@@ -3,7 +3,7 @@ import { tenantsTable } from "./tenants";
 
 export const storageCleanupRunsTable = pgTable("storage_cleanup_runs", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   scanned: integer("scanned").notNull().default(0),

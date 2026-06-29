@@ -11,7 +11,7 @@ const router: ReturnType<typeof Router> = Router();
 // Only super admins can mint or revoke API keys.
 const ADMIN = ["customer_admin"] as const;
 
-router.get("/api-keys", requireHrmsUser, requireRole(...ADMIN), async (_req, res) => {
+router.get("/api-keys", requireHrmsUser, requireRole(...ADMIN), async (req, res) => {
   try {
     const rows = await db
       .select({
@@ -26,6 +26,7 @@ router.get("/api-keys", requireHrmsUser, requireRole(...ADMIN), async (_req, res
         revokedAt: apiKeysTable.revokedAt,
       })
       .from(apiKeysTable)
+      .where(eq(apiKeysTable.tenantId, req.hrmsUser!.tenantId))
       .orderBy(desc(apiKeysTable.createdAt));
     res.json({ data: rows, total: rows.length });
   } catch (err) {
@@ -74,6 +75,7 @@ router.post("/api-keys", requireHrmsUser, requireRole(...ADMIN), async (req, res
     const [row] = await db
       .insert(apiKeysTable)
       .values({
+        tenantId: req.hrmsUser!.tenantId,
         name: name.trim(),
         prefix: issued.prefix,
         hashedSecret: issued.hashedSecret,
@@ -118,7 +120,13 @@ router.post("/api-keys/:id/revoke", requireHrmsUser, requireRole(...ADMIN), asyn
     const [updated] = await db
       .update(apiKeysTable)
       .set({ revokedAt: new Date() })
-      .where(and(eq(apiKeysTable.id, id), isNull(apiKeysTable.revokedAt)))
+      .where(
+        and(
+          eq(apiKeysTable.id, id),
+          isNull(apiKeysTable.revokedAt),
+          eq(apiKeysTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      )
       .returning();
     if (!updated) {
       res.status(404).json({ error: "Key not found or already revoked" });

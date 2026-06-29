@@ -24,6 +24,7 @@ const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payro
 router.get("/documents/templates", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const templates = await db.select().from(documentTemplatesTable)
+      .where(eq(documentTemplatesTable.tenantId, req.hrmsUser!.tenantId))
       .orderBy(desc(documentTemplatesTable.createdAt));
     res.json(templates);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -46,6 +47,7 @@ router.post("/documents/templates", requireHrmsUser, requireRole(...HR_ROLES), a
       footerText: footerText ?? null,
       bodyTemplate,
       isActive: isActive ?? true,
+      tenantId: req.hrmsUser!.tenantId,
     }).returning();
 
     res.status(201).json(tmpl);
@@ -68,7 +70,7 @@ router.put("/documents/templates/:id", requireHrmsUser, requireRole(...HR_ROLES)
       bodyTemplate,
       isActive: isActive ?? true,
       updatedAt: new Date(),
-    }).where(eq(documentTemplatesTable.id, id)).returning();
+    }).where(and(eq(documentTemplatesTable.id, id), eq(documentTemplatesTable.tenantId, req.hrmsUser!.tenantId))).returning();
 
     if (!updated) { res.status(404).json({ error: "Template not found" }); return; }
     res.json(updated);
@@ -82,14 +84,14 @@ router.get("/documents/issued", requireHrmsUser, requireRole(...ALL_ROLES), asyn
     const u = req.hrmsUser!;
     const isHrRole = (HR_ROLES as readonly string[]).includes(u.role);
 
-    const conds = [];
+    const conds = [eq(issuedDocumentsTable.tenantId, u.tenantId)];
     if (documentType) conds.push(eq(issuedDocumentsTable.documentType, documentType as "Experience Certificate"));
     if (employeeId) conds.push(eq(issuedDocumentsTable.employeeId, Number(employeeId)));
 
     if (!isHrRole) {
       // non-HR roles can only see their own docs
       const [user] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable)
-        .where(eq(hrmsUsersTable.id, u.id));
+        .where(and(eq(hrmsUsersTable.id, u.id), eq(hrmsUsersTable.tenantId, u.tenantId)));
       if (!user?.employeeId) { res.json([]); return; }
       conds.push(eq(issuedDocumentsTable.employeeId, user.employeeId));
     }
@@ -149,7 +151,7 @@ router.post("/documents/generate", requireHrmsUser, requireRole(...HR_ROLES), as
         employeeId: documentRequestsTable.employeeId,
         documentType: documentRequestsTable.documentType,
         createdAt: documentRequestsTable.createdAt,
-      }).from(documentRequestsTable).where(eq(documentRequestsTable.id, Number(documentRequestId))).limit(1);
+      }).from(documentRequestsTable).where(and(eq(documentRequestsTable.id, Number(documentRequestId)), eq(documentRequestsTable.tenantId, u.tenantId))).limit(1);
       if (!reqRow) { res.status(404).json({ error: "Document request not found" }); return; }
       if (reqRow.status !== "Pending") {
         res.status(409).json({ error: `Document request is already ${reqRow.status}` }); return;
@@ -161,7 +163,7 @@ router.post("/documents/generate", requireHrmsUser, requireRole(...HR_ROLES), as
     }
 
     const [template] = await db.select().from(documentTemplatesTable)
-      .where(eq(documentTemplatesTable.id, templateId));
+      .where(and(eq(documentTemplatesTable.id, templateId), eq(documentTemplatesTable.tenantId, u.tenantId)));
     if (!template) { res.status(404).json({ error: "Template not found" }); return; }
 
     const [emp] = await db.select({
@@ -170,7 +172,7 @@ router.post("/documents/generate", requireHrmsUser, requireRole(...HR_ROLES), as
       lastName: employeesTable.lastName,
       employeeCode: employeesTable.employeeId,
       dateOfJoining: employeesTable.dateOfJoining,
-    }).from(employeesTable).where(eq(employeesTable.id, employeeId));
+    }).from(employeesTable).where(and(eq(employeesTable.id, employeeId), eq(employeesTable.tenantId, u.tenantId)));
     if (!emp) { res.status(404).json({ error: "Employee not found" }); return; }
 
     // Auto-populate common fields from employee data
@@ -203,6 +205,7 @@ router.post("/documents/generate", requireHrmsUser, requireRole(...HR_ROLES), as
       generatedBy: u.id,
       fieldValues: autoFields,
       fileContent,
+      tenantId: u.tenantId,
     }).returning();
 
     await logAudit({ user: u, action: "generate_document", module: "documents", recordId: issued.id });
@@ -216,11 +219,11 @@ router.post("/documents/generate", requireHrmsUser, requireRole(...HR_ROLES), as
         fulfilledAt: new Date(),
         hrNote: `Issued: ${filename}`,
         updatedAt: new Date(),
-      }).where(eq(documentRequestsTable.id, linkedRequest.id));
+      }).where(and(eq(documentRequestsTable.id, linkedRequest.id), eq(documentRequestsTable.tenantId, u.tenantId)));
       await logAudit({ user: u, action: "document_request_fulfilled", module: "documents", recordId: linkedRequest.id });
 
       const [reqEmpUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-        .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, employeeId)).limit(1);
+        .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, employeeId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
       if (reqEmpUser?.email) {
         const appBase = process.env.APP_URL
           ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
@@ -244,7 +247,7 @@ router.post("/documents/generate", requireHrmsUser, requireRole(...HR_ROLES), as
 
     // Notify the employee that a document has been issued to them
     const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-      .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, employeeId)).limit(1);
+      .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, employeeId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
     if (empUser?.email) {
       dispatchNotification({
         eventType: "document_issued", module: "documents",
@@ -278,6 +281,9 @@ router.post("/documents/generate", requireHrmsUser, requireRole(...HR_ROLES), as
 // used. We intentionally allow >1 download (the user may legitimately retry
 // or re-download from another device) but cap at HARD_DOWNLOAD_CAP to limit
 // abuse if a token leaks.
+// Note: This endpoint is public (no req.hrmsUser) so we cannot apply tenant filters
+// to the initial token lookup, but the token itself is globally unique and 
+// points to a specific issuedDocumentId.
 const HARD_DOWNLOAD_CAP = 20;
 router.get("/documents/public/download/:token", async (req, res) => {
   try {
@@ -359,13 +365,13 @@ router.get("/documents/issued/:id/download", requireHrmsUser, requireRole(...ALL
     const u = req.hrmsUser!;
     const isHrRole = (HR_ROLES as readonly string[]).includes(u.role);
 
-    const [doc] = await db.select().from(issuedDocumentsTable).where(eq(issuedDocumentsTable.id, id));
+    const [doc] = await db.select().from(issuedDocumentsTable).where(and(eq(issuedDocumentsTable.id, id), eq(issuedDocumentsTable.tenantId, u.tenantId)));
     if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
 
     // Non-HR users can only download their own documents
     if (!isHrRole) {
       const [user] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable)
-        .where(eq(hrmsUsersTable.id, u.id));
+        .where(and(eq(hrmsUsersTable.id, u.id), eq(hrmsUsersTable.tenantId, u.tenantId)));
       if (!user?.employeeId || user.employeeId !== doc.employeeId) {
         res.status(403).json({ error: "Access denied" }); return;
       }
@@ -375,6 +381,7 @@ router.get("/documents/issued/:id/download", requireHrmsUser, requireRole(...ALL
         .where(and(
           eq(exitRequestsTable.employeeId, user.employeeId),
           eq(exitRequestsTable.status, "Separated"),
+          eq(exitRequestsTable.tenantId, u.tenantId),
         ))
         .orderBy(desc(exitRequestsTable.updatedAt))
         .limit(1);
@@ -422,7 +429,7 @@ router.post("/employees/:id/fnf-approve", requireHrmsUser, requireRole(...HR_ROL
       lastName: employeesTable.lastName,
       employeeCode: employeesTable.employeeId,
       dateOfJoining: employeesTable.dateOfJoining,
-    }).from(employeesTable).where(eq(employeesTable.id, employeeId));
+    }).from(employeesTable).where(and(eq(employeesTable.id, employeeId), eq(employeesTable.tenantId, u.tenantId)));
     if (!emp) { res.status(404).json({ error: "Employee not found" }); return; }
 
     // Find an active Relieving Letter template
@@ -431,6 +438,7 @@ router.post("/employees/:id/fnf-approve", requireHrmsUser, requireRole(...HR_ROL
         and(
           eq(documentTemplatesTable.documentType, "Relieving Letter"),
           eq(documentTemplatesTable.isActive, true),
+          eq(documentTemplatesTable.tenantId, u.tenantId),
         )
       ).limit(1);
 
@@ -467,6 +475,7 @@ router.post("/employees/:id/fnf-approve", requireHrmsUser, requireRole(...HR_ROL
       generatedBy: u.id,
       fieldValues: autoFields,
       fileContent,
+      tenantId: u.tenantId,
     }).returning();
 
     await logAudit({ user: u, action: "fnf_approve", module: "documents", recordId: issued.id });
@@ -481,9 +490,9 @@ router.post("/employees/:id/fnf-approve", requireHrmsUser, requireRole(...HR_ROL
 });
 
 // ─── DOCUMENT REQUESTS ────────────────────────────────────────────────────────
-async function getEmployeeIdForUser(userId: number): Promise<number | null> {
+async function getEmployeeIdForUser(userId: number, tenantId: number): Promise<number | null> {
   const [u] = await db.select({ employeeId: hrmsUsersTable.employeeId })
-    .from(hrmsUsersTable).where(eq(hrmsUsersTable.id, userId));
+    .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, userId), eq(hrmsUsersTable.tenantId, tenantId)));
   return u?.employeeId ?? null;
 }
 
@@ -493,16 +502,16 @@ router.get("/documents/requests", requireHrmsUser, requireRole(...ALL_ROLES), as
     const { status } = req.query as Record<string, string>;
     const isHrRole = (HR_ROLES as readonly string[]).includes(u.role);
 
-    const conds = [];
+    const conds = [eq(documentRequestsTable.tenantId, u.tenantId)];
     if (status) conds.push(eq(documentRequestsTable.status, status as "Pending"));
 
     if (!isHrRole) {
-      const empId = await getEmployeeIdForUser(u.id);
+      const empId = await getEmployeeIdForUser(u.id, u.tenantId);
       if (!empId) { res.json([]); return; }
 
       if (u.role === "hod") {
         const reports = await db.select({ id: employeesTable.id }).from(employeesTable)
-          .where(eq(employeesTable.managerId, empId));
+          .where(and(eq(employeesTable.managerId, empId), eq(employeesTable.tenantId, u.tenantId)));
         const teamIds = [empId, ...reports.map(r => r.id)];
         conds.push(inArray(documentRequestsTable.employeeId, teamIds));
       } else {
@@ -574,10 +583,11 @@ router.post("/documents/requests", requireHrmsUser, requireRole(...ALL_ROLES), a
         }
       }
     }
-    const empId = await getEmployeeIdForUser(u.id);
+    const empId = await getEmployeeIdForUser(u.id, u.tenantId);
     if (!empId) { res.status(400).json({ error: "No employee record linked to your account" }); return; }
 
     const [created] = await db.insert(documentRequestsTable).values({
+      tenantId: u.tenantId,
       employeeId: empId,
       documentType,
       reason: reason ?? null,

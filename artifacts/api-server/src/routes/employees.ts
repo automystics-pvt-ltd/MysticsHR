@@ -16,11 +16,11 @@ import { recordHistory } from "../lib/history-utils";
 import { seedNotificationPreferencesForEmployee } from "../lib/notification-service";
 import { DEFAULT_TIMEZONE, isValidIanaTimezone } from "../lib/timezones";
 
-async function getCompanyDefaultTimezone(): Promise<string> {
+async function getCompanyDefaultTimezone(tenantId: number): Promise<string> {
   const [row] = await db
     .select({ value: systemSettingsTable.value })
     .from(systemSettingsTable)
-    .where(and(eq(systemSettingsTable.category, "org_profile"), eq(systemSettingsTable.key, "timezone")))
+    .where(and(eq(systemSettingsTable.category, "org_profile"), eq(systemSettingsTable.key, "timezone"), eq(systemSettingsTable.tenantId, tenantId)))
     .limit(1);
   const v = row?.value;
   if (typeof v === "string" && isValidIanaTimezone(v)) return v;
@@ -71,7 +71,7 @@ router.patch("/employees/me/timezone", requireHrmsUser, async (req, res) => {
     const [existing] = await db
       .select({ tz: employeesTable.timezone })
       .from(employeesTable)
-      .where(and(eq(employeesTable.id, empId), isNull(employeesTable.deletedAt)))
+      .where(and(eq(employeesTable.id, empId), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
       .limit(1);
     if (!existing) {
       res.status(404).json({ error: "Employee not found" });
@@ -80,10 +80,10 @@ router.patch("/employees/me/timezone", requireHrmsUser, async (req, res) => {
     const [emp] = await db
       .update(employeesTable)
       .set({ timezone, updatedAt: new Date() })
-      .where(and(eq(employeesTable.id, empId), isNull(employeesTable.deletedAt)))
+      .where(and(eq(employeesTable.id, empId), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     if (existing.tz !== timezone) {
-      await recordHistory(empId, "Employee", "timezone", existing.tz, timezone, req.hrmsUser?.id ?? null);
+      await recordHistory(empId, "Employee", "timezone", existing.tz, timezone, req.hrmsUser?.id ?? null, req.hrmsUser!.tenantId);
     }
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Employees", recordId: empId, ipAddress: req.ip });
     res.json(emp);
@@ -100,7 +100,7 @@ router.get("/employees", requireHrmsUser, async (req, res) => {
       limit = "50", offset = "0",
     } = req.query as Record<string, string>;
 
-    const conditions = [isNull(employeesTable.deletedAt)];
+    const conditions = [isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)];
 
     if (status) {
       conditions.push(
@@ -118,6 +118,7 @@ router.get("/employees", requireHrmsUser, async (req, res) => {
       conditions.push(
         sql`EXISTS (SELECT 1 FROM ${employeeSkillsTable}
           WHERE ${employeeSkillsTable.employeeId} = ${employeesTable.id}
+          AND ${employeeSkillsTable.tenantId} = ${req.hrmsUser!.tenantId}
           AND ${employeeSkillsTable.name} ilike ${`%${skill.trim()}%`})`
       );
     }
@@ -125,6 +126,7 @@ router.get("/employees", requireHrmsUser, async (req, res) => {
       conditions.push(
         sql`EXISTS (SELECT 1 FROM ${employeeCertificationsTable}
           WHERE ${employeeCertificationsTable.employeeId} = ${employeesTable.id}
+          AND ${employeeCertificationsTable.tenantId} = ${req.hrmsUser!.tenantId}
           AND ${employeeCertificationsTable.name} ilike ${`%${certification.trim()}%`})`
       );
     }
@@ -177,7 +179,7 @@ router.post(
 
       let resolvedTimezone: string;
       if (timezone === undefined || timezone === null || timezone === "") {
-        resolvedTimezone = await getCompanyDefaultTimezone();
+        resolvedTimezone = await getCompanyDefaultTimezone(req.hrmsUser!.tenantId);
       } else if (!isValidIanaTimezone(timezone)) {
         res.status(400).json({ error: "Invalid IANA timezone identifier" });
         return;
@@ -192,6 +194,7 @@ router.post(
           gender, departmentId, designationId, employmentType, status,
           dateOfJoining, ctc, managerId, location, avatarUrl,
           timezone: resolvedTimezone,
+          tenantId: req.hrmsUser!.tenantId,
         })
         .returning();
 
@@ -209,7 +212,7 @@ router.post(
 
       if (dateOfJoining) {
         try {
-          await autoCreateOnboardingChecklist(emp.id, dateOfJoining);
+          await autoCreateOnboardingChecklist(emp.id, dateOfJoining, req.hrmsUser!.tenantId);
         } catch (e) {
           console.error("Auto-checklist creation failed (non-fatal):", e);
         }
@@ -248,7 +251,7 @@ router.get("/employees/org-chart", requireHrmsUser, async (_req, res) => {
       .from(employeesTable)
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
-      .where(and(isNull(employeesTable.deletedAt), eq(employeesTable.isActive, true)));
+      .where(and(isNull(employeesTable.deletedAt), eq(employeesTable.isActive, true), eq(employeesTable.tenantId, _req.hrmsUser!.tenantId)));
 
     res.json({ data: rows });
   } catch (err) {
@@ -264,7 +267,7 @@ router.get("/employees/skills/distinct", requireHrmsUser, async (_req, res) => {
       .selectDistinct({ name: employeeSkillsTable.name })
       .from(employeeSkillsTable)
       .innerJoin(employeesTable, eq(employeesTable.id, employeeSkillsTable.employeeId))
-      .where(isNull(employeesTable.deletedAt))
+      .where(and(isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, _req.hrmsUser!.tenantId)))
       .orderBy(asc(employeeSkillsTable.name));
     res.json({ data: rows.map((r) => r.name) });
   } catch (err) {
@@ -280,7 +283,7 @@ router.get("/employees/certifications/distinct", requireHrmsUser, async (_req, r
       .selectDistinct({ name: employeeCertificationsTable.name })
       .from(employeeCertificationsTable)
       .innerJoin(employeesTable, eq(employeesTable.id, employeeCertificationsTable.employeeId))
-      .where(isNull(employeesTable.deletedAt))
+      .where(and(isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, _req.hrmsUser!.tenantId)))
       .orderBy(asc(employeeCertificationsTable.name));
     res.json({ data: rows.map((r) => r.name) });
   } catch (err) {
@@ -297,7 +300,7 @@ router.get("/employees/:id", requireHrmsUser, async (req, res) => {
       .from(employeesTable)
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
-      .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt)))
+      .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
       .limit(1);
 
     if (!emp) {
@@ -332,7 +335,7 @@ router.patch(
       const [existing] = await db
         .select()
         .from(employeesTable)
-        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt)))
+        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
         .limit(1);
 
       if (!existing) {
@@ -349,7 +352,7 @@ router.patch(
           ...(timezone !== undefined ? { timezone } : {}),
           updatedAt: new Date(),
         })
-        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt)))
+        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
         .returning();
 
       if (!emp) {
@@ -380,7 +383,7 @@ router.patch(
         if (val !== undefined) {
           const oldVal = String(existing[key] ?? "");
           const newVal = String(val ?? "");
-          await recordHistory(id, "Employee", key, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById);
+          await recordHistory(id, "Employee", key as string, oldVal === "null" ? null : oldVal, newVal === "null" ? null : newVal, changedById, req.hrmsUser!.tenantId);
         }
       }
 
@@ -388,7 +391,7 @@ router.patch(
 
       if (dateOfJoining) {
         try {
-          await autoCreateOnboardingChecklist(id, dateOfJoining);
+          await autoCreateOnboardingChecklist(id, dateOfJoining, req.hrmsUser!.tenantId);
         } catch (e) {
           console.error("Auto-checklist creation on update failed (non-fatal):", e);
         }
@@ -417,7 +420,7 @@ router.delete(
       const [emp] = await db
         .update(employeesTable)
         .set({ deletedAt: new Date(), isActive: false, updatedAt: new Date() })
-        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt)))
+        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
         .returning();
       if (!emp) {
         res.status(404).json({ error: "Employee not found" });
@@ -447,7 +450,7 @@ router.patch(
       const [existing] = await db
         .select({ status: employeesTable.status })
         .from(employeesTable)
-        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt)))
+        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
         .limit(1);
       if (!existing) {
         res.status(404).json({ error: "Employee not found" });
@@ -456,13 +459,13 @@ router.patch(
       const [emp] = await db
         .update(employeesTable)
         .set({ status, updatedAt: new Date() })
-        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt)))
+        .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
         .returning();
       if (!emp) {
         res.status(404).json({ error: "Employee not found" });
         return;
       }
-      await recordHistory(id, "Employee", "status", existing.status, status, req.hrmsUser?.id ?? null);
+      await recordHistory(id, "Employee", "status", existing.status, status, req.hrmsUser?.id ?? null, req.hrmsUser!.tenantId);
       await logAudit({ user: req.hrmsUser, action: "STATUS_CHANGE", module: "Employees", recordId: id, newValue: status, ipAddress: req.ip });
       res.json(emp);
     } catch (err) {

@@ -15,7 +15,8 @@ const router = Router();
 
 router.get("/dashboard/kpis", requireHrmsUser, async (req, res) => {
   try {
-    const notDeleted = isNull(employeesTable.deletedAt);
+    const tenantId = req.hrmsUser!.tenantId;
+    const notDeleted = and(isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, tenantId));
 
     const [headcountRow] = await db
       .select({ count: sql<number>`count(*)::int` })
@@ -84,6 +85,7 @@ router.get("/dashboard/recent-activity", requireHrmsUser, async (req, res) => {
     const logs = await db
       .select()
       .from(auditLogsTable)
+      .where(eq(auditLogsTable.tenantId, req.hrmsUser!.tenantId))
       .orderBy(desc(auditLogsTable.createdAt))
       .limit(limit);
 
@@ -114,9 +116,9 @@ router.get("/dashboard/headcount-by-department", requireHrmsUser, async (req, re
       .from(departmentsTable)
       .leftJoin(
         employeesTable,
-        sql`${employeesTable.departmentId} = ${departmentsTable.id} AND ${employeesTable.deletedAt} IS NULL AND ${employeesTable.status} != 'Separated'`
+        sql`${employeesTable.departmentId} = ${departmentsTable.id} AND ${employeesTable.deletedAt} IS NULL AND ${employeesTable.status} != 'Separated' AND ${employeesTable.tenantId} = ${req.hrmsUser!.tenantId}`
       )
-      .where(and(eq(departmentsTable.isActive, true), isNull(departmentsTable.deletedAt)))
+      .where(and(eq(departmentsTable.isActive, true), isNull(departmentsTable.deletedAt), eq(departmentsTable.tenantId, req.hrmsUser!.tenantId)))
       .groupBy(departmentsTable.id, departmentsTable.name)
       .orderBy(desc(sql`count(${employeesTable.id})`));
 
@@ -135,7 +137,7 @@ router.get("/dashboard/employee-status-breakdown", requireHrmsUser, async (req, 
         count: sql<number>`count(*)::int`,
       })
       .from(employeesTable)
-      .where(isNull(employeesTable.deletedAt))
+      .where(and(isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
       .groupBy(employeesTable.status)
       .orderBy(desc(sql`count(*)`));
 
@@ -170,6 +172,7 @@ router.get("/dashboard/expiring-certifications", requireHrmsUser, requireRole(..
         and(
           isNotNull(employeeCertificationsTable.expiryDate),
           isNull(employeesTable.deletedAt),
+          eq(employeeCertificationsTable.tenantId, req.hrmsUser!.tenantId),
           lte(
             employeeCertificationsTable.expiryDate,
             sql`(CURRENT_DATE + (${days} || ' days')::interval)::date`

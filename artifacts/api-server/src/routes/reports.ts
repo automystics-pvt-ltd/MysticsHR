@@ -36,13 +36,17 @@ router.get("/analytics/dashboard", requireHrmsUser, requireRole(...MANAGER_ROLES
     const todayStr = now.toISOString().split("T")[0];
 
     const [totalHeadcount] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(employeesTable).where(eq(employeesTable.isActive, true));
+      .from(employeesTable).where(and(
+        eq(employeesTable.isActive, true),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
+      ));
 
     const [newJoiners] = await db.select({ count: sql<number>`count(*)::int` })
       .from(employeesTable)
       .where(and(
         eq(employeesTable.isActive, true),
         gte(employeesTable.dateOfJoining, firstOfMonth.toISOString().split("T")[0]),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
       ));
 
     const [separatedThisMonth] = await db.select({ count: sql<number>`count(*)::int` })
@@ -50,19 +54,29 @@ router.get("/analytics/dashboard", requireHrmsUser, requireRole(...MANAGER_ROLES
       .where(and(
         eq(exitRequestsTable.status, "Separated"),
         gte(exitRequestsTable.separatedAt, firstOfMonth),
+        eq(exitRequestsTable.tenantId, req.hrmsUser!.tenantId)
       ));
 
     const [openPositions] = await db.select({ count: sql<number>`count(*)::int` })
       .from(jobRequisitionsTable)
-      .where(eq(jobRequisitionsTable.status, "Approved"));
+      .where(and(
+        eq(jobRequisitionsTable.status, "Approved"),
+        eq(jobRequisitionsTable.tenantId, req.hrmsUser!.tenantId)
+      ));
 
     const [pendingLeave] = await db.select({ count: sql<number>`count(*)::int` })
       .from(leaveApplicationsTable)
-      .where(eq(leaveApplicationsTable.status, "Pending"));
+      .where(and(
+        eq(leaveApplicationsTable.status, "Pending"),
+        eq(leaveApplicationsTable.tenantId, req.hrmsUser!.tenantId)
+      ));
 
     const [openTickets] = await db.select({ count: sql<number>`count(*)::int` })
       .from(helpdeskTicketsTable)
-      .where(eq(helpdeskTicketsTable.status, "Open"));
+      .where(and(
+        eq(helpdeskTicketsTable.status, "Open"),
+        eq(helpdeskTicketsTable.tenantId, req.hrmsUser!.tenantId)
+      ));
 
     const pendingApprovals = (pendingLeave?.count ?? 0) + (openTickets?.count ?? 0);
 
@@ -714,6 +728,7 @@ router.post("/report-schedules", requireHrmsUser, requireRole(...HR_ROLES), asyn
     }
 
     const [schedule] = await db.insert(reportSchedulesTable).values({
+      tenantId: u.tenantId,
       reportType,
       name,
       frequency,
@@ -773,6 +788,7 @@ router.post("/report-templates", requireHrmsUser, requireRole(...MANAGER_ROLES),
     }
 
     const [template] = await db.insert(savedReportTemplatesTable).values({
+      tenantId: u.tenantId,
       name,
       reportType,
       selectedFields,

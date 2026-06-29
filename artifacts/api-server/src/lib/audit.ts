@@ -4,6 +4,7 @@ import type { HrmsUser } from "@workspace/db/schema";
 
 export async function logAudit(params: {
   user?: HrmsUser | null;
+  tenantId?: number | null;
   action: string;
   module: string;
   recordId?: string | number;
@@ -14,6 +15,7 @@ export async function logAudit(params: {
 }) {
   try {
     await db.insert(auditLogsTable).values({
+      tenantId: params.tenantId ?? params.user?.tenantId ?? null,
       userId: params.user?.id ?? null,
       userEmail: params.user?.email ?? null,
       action: params.action,

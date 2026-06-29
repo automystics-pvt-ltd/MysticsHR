@@ -30,15 +30,15 @@ const deptGroupBy = [
   departmentsTable.updatedAt,
 ] as const;
 
-const activeEmployeesJoin = sql`${employeesTable.departmentId} = ${departmentsTable.id} AND ${employeesTable.deletedAt} IS NULL AND ${employeesTable.status} != 'Separated'`;
+const activeEmployeesJoin = (tenantId: number) => sql`${employeesTable.departmentId} = ${departmentsTable.id} AND ${employeesTable.deletedAt} IS NULL AND ${employeesTable.status} != 'Separated' AND ${employeesTable.tenantId} = ${tenantId}`;
 
 router.get("/departments", requireHrmsUser, async (req, res) => {
   try {
     const rows = await db
       .select(deptSelect)
       .from(departmentsTable)
-      .leftJoin(employeesTable, activeEmployeesJoin)
-      .where(isNull(departmentsTable.deletedAt))
+      .leftJoin(employeesTable, activeEmployeesJoin(req.hrmsUser!.tenantId))
+      .where(and(isNull(departmentsTable.deletedAt), eq(departmentsTable.tenantId, req.hrmsUser!.tenantId)))
       .groupBy(...deptGroupBy)
       .orderBy(departmentsTable.name);
     res.json(rows);
@@ -61,7 +61,7 @@ router.post(
       }
       const [dept] = await db
         .insert(departmentsTable)
-        .values({ name, code, description, headId })
+        .values({ tenantId: req.hrmsUser!.tenantId, name, code, description, headId })
         .returning();
       await logAudit({ user: req.hrmsUser, action: "CREATE", module: "Departments", recordId: dept.id, ipAddress: req.ip });
       res.status(201).json({ ...dept, employeeCount: 0 });
@@ -83,8 +83,8 @@ router.get("/departments/:id", requireHrmsUser, async (req, res) => {
     const [dept] = await db
       .select(deptSelect)
       .from(departmentsTable)
-      .leftJoin(employeesTable, activeEmployeesJoin)
-      .where(and(eq(departmentsTable.id, id), isNull(departmentsTable.deletedAt)))
+      .leftJoin(employeesTable, activeEmployeesJoin(req.hrmsUser!.tenantId))
+      .where(and(eq(departmentsTable.id, id), isNull(departmentsTable.deletedAt), eq(departmentsTable.tenantId, req.hrmsUser!.tenantId)))
       .groupBy(...deptGroupBy)
       .limit(1);
     if (!dept) {
@@ -109,7 +109,7 @@ router.patch(
       const [dept] = await db
         .update(departmentsTable)
         .set({ name, code, description, headId, isActive, updatedAt: new Date() })
-        .where(and(eq(departmentsTable.id, id), isNull(departmentsTable.deletedAt)))
+        .where(and(eq(departmentsTable.id, id), isNull(departmentsTable.deletedAt), eq(departmentsTable.tenantId, req.hrmsUser!.tenantId)))
         .returning();
       if (!dept) {
         res.status(404).json({ error: "Department not found" });
@@ -139,7 +139,7 @@ router.delete(
       const [dept] = await db
         .update(departmentsTable)
         .set({ deletedAt: new Date(), isActive: false, updatedAt: new Date() })
-        .where(and(eq(departmentsTable.id, id), isNull(departmentsTable.deletedAt)))
+        .where(and(eq(departmentsTable.id, id), isNull(departmentsTable.deletedAt), eq(departmentsTable.tenantId, req.hrmsUser!.tenantId)))
         .returning();
       if (!dept) {
         res.status(404).json({ error: "Department not found" });

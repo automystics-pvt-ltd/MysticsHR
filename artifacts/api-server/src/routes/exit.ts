@@ -31,11 +31,11 @@ const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payro
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-async function getEmployeeForUser(userId: number) {
+async function getEmployeeForUser(userId: number, tenantId: number) {
   const [u] = await db.select({ employeeId: hrmsUsersTable.employeeId })
-    .from(hrmsUsersTable).where(eq(hrmsUsersTable.id, userId));
+    .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, userId), eq(hrmsUsersTable.tenantId, tenantId)));
   if (!u?.employeeId) return null;
-  const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.id, u.employeeId));
+  const [emp] = await db.select().from(employeesTable).where(and(eq(employeesTable.id, u.employeeId), eq(employeesTable.tenantId, tenantId)));
   return emp ?? null;
 }
 
@@ -63,24 +63,24 @@ function computeNoticePeriodDays(joinDate: string | null, employmentType?: strin
  * HR tasks → assigned to an hr_manager user; Finance → payroll_admin; Manager → employee's HOD;
  * IT tasks → assigned to super_admin (system admin) as a proxy since there is no dedicated IT role.
  */
-async function autoGenerateClearanceTasks(exitRequestId: number, actualLwd: string, employeeId?: number) {
+async function autoGenerateClearanceTasks(exitRequestId: number, actualLwd: string, tenantId: number, employeeId?: number) {
   // Resolve role-based assignees
   const [hrUser] = await db.select({ id: hrmsUsersTable.id }).from(hrmsUsersTable)
-    .where(eq(hrmsUsersTable.role, "hr_manager")).limit(1);
+    .where(and(eq(hrmsUsersTable.role, "hr_manager"), eq(hrmsUsersTable.tenantId, tenantId))).limit(1);
   const [financeUser] = await db.select({ id: hrmsUsersTable.id }).from(hrmsUsersTable)
-    .where(eq(hrmsUsersTable.role, "payroll_admin")).limit(1);
+    .where(and(eq(hrmsUsersTable.role, "payroll_admin"), eq(hrmsUsersTable.tenantId, tenantId))).limit(1);
   const [adminUser] = await db.select({ id: hrmsUsersTable.id }).from(hrmsUsersTable)
-    .where(eq(hrmsUsersTable.role, "customer_admin")).limit(1);
+    .where(and(eq(hrmsUsersTable.role, "customer_admin"), eq(hrmsUsersTable.tenantId, tenantId))).limit(1);
 
   // Resolve the employee's reporting manager (HOD of their department)
   let managerUserId: number | undefined;
   if (employeeId) {
     const [emp] = await db.select({ departmentId: employeesTable.departmentId })
-      .from(employeesTable).where(eq(employeesTable.id, employeeId));
+      .from(employeesTable).where(and(eq(employeesTable.id, employeeId), eq(employeesTable.tenantId, tenantId)));
     if (emp?.departmentId) {
       const [hod] = await db.select({ id: hrmsUsersTable.id }).from(hrmsUsersTable)
         .innerJoin(employeesTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
-        .where(and(eq(hrmsUsersTable.role, "hod"), eq(employeesTable.departmentId, emp.departmentId)))
+        .where(and(eq(hrmsUsersTable.role, "hod"), eq(employeesTable.departmentId, emp.departmentId), eq(hrmsUsersTable.tenantId, tenantId)))
         .limit(1);
       managerUserId = hod?.id;
     }
@@ -138,6 +138,7 @@ async function autoGenerateClearanceTasks(exitRequestId: number, actualLwd: stri
       description: task.description,
       dueDate,
       assignedToUserId: task.assignedToUserId ?? null,
+      tenantId,
     });
 
     // Notify the assignee (if any) that a clearance task has been assigned to them
@@ -167,18 +168,18 @@ async function autoGenerateClearanceTasks(exitRequestId: number, actualLwd: stri
   }
 }
 
-async function enrichExitRequest(req: typeof exitRequestsTable.$inferSelect) {
+async function enrichExitRequest(req: typeof exitRequestsTable.$inferSelect, tenantId: number) {
   const [emp] = await db.select({
     firstName: employeesTable.firstName,
     lastName: employeesTable.lastName,
     employeeCode: employeesTable.employeeId,
     departmentId: employeesTable.departmentId,
-  }).from(employeesTable).where(eq(employeesTable.id, req.employeeId));
+  }).from(employeesTable).where(and(eq(employeesTable.id, req.employeeId), eq(employeesTable.tenantId, tenantId)));
 
   let departmentName: string | null = null;
   if (emp?.departmentId) {
     const [dept] = await db.select({ name: departmentsTable.name })
-      .from(departmentsTable).where(eq(departmentsTable.id, emp.departmentId));
+      .from(departmentsTable).where(and(eq(departmentsTable.id, emp.departmentId), eq(departmentsTable.tenantId, tenantId)));
     departmentName = dept?.name ?? null;
   }
 
@@ -197,12 +198,12 @@ router.get("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async (
     const { status, exitType, employeeId } = req.query as Record<string, string>;
     const isHr = (HR_ROLES as readonly string[]).includes(u.role);
 
-    const conds: SQL<unknown>[] = [];
+    const conds: SQL<unknown>[] = [eq(exitRequestsTable.tenantId, u.tenantId)];
     if (status) conds.push(sql`${exitRequestsTable.status} = ${status}`);
     if (exitType) conds.push(sql`${exitRequestsTable.exitType} = ${exitType}`);
 
     if (!isHr) {
-      const emp = await getEmployeeForUser(u.id);
+      const emp = await getEmployeeForUser(u.id, u.tenantId);
       if (!emp) { res.json([]); return; }
       conds.push(eq(exitRequestsTable.employeeId, emp.id));
     } else if (employeeId) {
@@ -213,7 +214,7 @@ router.get("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async (
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(desc(exitRequestsTable.createdAt));
 
-    const enriched = await Promise.all(rows.map(enrichExitRequest));
+    const enriched = await Promise.all(rows.map((r) => enrichExitRequest(r, u.tenantId)));
     res.json(enriched);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -244,18 +245,18 @@ router.post("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async 
     if (isHr && bodyEmployeeId) {
       empId = Number(bodyEmployeeId);
     } else {
-      const emp = await getEmployeeForUser(u.id);
+      const emp = await getEmployeeForUser(u.id, u.tenantId);
       if (!emp) { res.status(400).json({ error: "No employee record linked to your account" }); return; }
       empId = emp.id;
     }
 
-    const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.id, empId));
+    const [emp] = await db.select().from(employeesTable).where(and(eq(employeesTable.id, empId), eq(employeesTable.tenantId, u.tenantId)));
     if (!emp) { res.status(404).json({ error: "Employee not found" }); return; }
 
     // Fetch contractual notice period from employee profile (takes precedence over employment-type defaults)
     const [empProfile] = await db.select({ noticePeriodDays: employeeProfilesTable.noticePeriodDays })
       .from(employeeProfilesTable)
-      .where(eq(employeeProfilesTable.employeeId, empId))
+      .where(and(eq(employeeProfilesTable.employeeId, empId), eq(employeeProfilesTable.tenantId, u.tenantId)))
       .limit(1);
     const contractualNoticePeriodDays = empProfile?.noticePeriodDays ?? null;
 
@@ -291,12 +292,13 @@ router.post("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async 
       noticePeriodDays,
       status: "Submitted",
       initiatedByUserId: u.id,
+      tenantId: u.tenantId,
     }).returning();
 
     // Mark employee status as Notice Period
     await db.update(employeesTable)
       .set({ status: "Notice Period", updatedAt: new Date() })
-      .where(eq(employeesTable.id, empId));
+      .where(and(eq(employeesTable.id, empId), eq(employeesTable.tenantId, u.tenantId)));
 
     await logAudit({ user: u, action: "create_exit_request", module: "exit", recordId: exitReq.id });
 
@@ -308,7 +310,7 @@ router.post("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async 
     (async () => {
       const empName = `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim() || "an employee";
       const empCodeStr = emp.employeeId ?? String(empId);
-      const hrRecipients = await getUsersByRoles(["customer_admin", "hr_manager", "hr_executive"]);
+      const hrRecipients = await getUsersByRoles(["customer_admin", "hr_manager", "hr_executive"], req.hrmsUser!.tenantId);
       await Promise.allSettled(hrRecipients.map((r) =>
         dispatchNotification({
           eventType: "exit_request_submitted", module: "exit",
@@ -327,7 +329,7 @@ router.post("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async 
       ));
     })().catch(() => {});
 
-    res.status(201).json(await enrichExitRequest(exitReq));
+    res.status(201).json(await enrichExitRequest(exitReq, u.tenantId));
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
@@ -338,12 +340,12 @@ router.get("/exit/requests/:id", requireHrmsUser, requireRole(...ALL_ROLES), asy
     const id = Number(req.params.id);
     const isHr = (HR_ROLES as readonly string[]).includes(u.role);
 
-    const [exitReq] = await db.select().from(exitRequestsTable).where(eq(exitRequestsTable.id, id));
+    const [exitReq] = await db.select().from(exitRequestsTable).where(and(eq(exitRequestsTable.id, id), eq(exitRequestsTable.tenantId, u.tenantId)));
     if (!exitReq) { res.status(404).json({ error: "Exit request not found" }); return; }
 
     // Non-HR users can only see their own
     if (!isHr) {
-      const emp = await getEmployeeForUser(u.id);
+      const emp = await getEmployeeForUser(u.id, u.tenantId);
       if (!emp || emp.id !== exitReq.employeeId) {
         res.status(403).json({ error: "Access denied" }); return;
       }
@@ -363,14 +365,14 @@ router.get("/exit/requests/:id", requireHrmsUser, requireRole(...ALL_ROLES), asy
       remarks: exitClearanceTasksTable.remarks,
     }).from(exitClearanceTasksTable)
       .leftJoin(hrmsUsersTable, eq(exitClearanceTasksTable.assignedToUserId, hrmsUsersTable.id))
-      .where(eq(exitClearanceTasksTable.exitRequestId, id))
+      .where(and(eq(exitClearanceTasksTable.exitRequestId, id), eq(exitClearanceTasksTable.tenantId, u.tenantId)))
       .orderBy(exitClearanceTasksTable.department);
 
     const [fnf] = await db.select().from(fnfComputationsTable)
-      .where(eq(fnfComputationsTable.exitRequestId, id));
+      .where(and(eq(fnfComputationsTable.exitRequestId, id), eq(fnfComputationsTable.tenantId, u.tenantId)));
 
     const [interview] = isHr
-      ? await db.select().from(exitInterviewsTable).where(eq(exitInterviewsTable.exitRequestId, id))
+      ? await db.select().from(exitInterviewsTable).where(and(eq(exitInterviewsTable.exitRequestId, id), eq(exitInterviewsTable.tenantId, u.tenantId)))
       : [null];
 
     // Mask exit-interview responses for hr_executive — only hr_manager and super_admin may view them
@@ -379,7 +381,7 @@ router.get("/exit/requests/:id", requireHrmsUser, requireRole(...ALL_ROLES), asy
       ? { ...interview, responses: canReadResponses ? interview.responses : [] }
       : null;
 
-    const enriched = await enrichExitRequest(exitReq);
+    const enriched = await enrichExitRequest(exitReq, u.tenantId);
     res.json({ ...enriched, clearanceTasks, fnfComputation: fnf ?? null, exitInterview });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -391,7 +393,7 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
     const id = Number(req.params.id);
     const { status, actualLwd, noticePeriodDays, noticePeriodWaived, noticePeriodBuyout, hrRemarks } = req.body;
 
-    const [existing] = await db.select().from(exitRequestsTable).where(eq(exitRequestsTable.id, id));
+    const [existing] = await db.select().from(exitRequestsTable).where(and(eq(exitRequestsTable.id, id), eq(exitRequestsTable.tenantId, u.tenantId)));
     if (!existing) { res.status(404).json({ error: "Exit request not found" }); return; }
 
     // Notice period waiver/buyout requires HR Manager or super_admin authorization
@@ -416,10 +418,10 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
       // the first time the request enters Clearance Pending. Repeated PUTs must not re-spam assignees.
       const existingTasks = await db.select({ id: exitClearanceTasksTable.id })
         .from(exitClearanceTasksTable)
-        .where(eq(exitClearanceTasksTable.exitRequestId, id))
+        .where(and(eq(exitClearanceTasksTable.exitRequestId, id), eq(exitClearanceTasksTable.tenantId, u.tenantId)))
         .limit(1);
       if (existingTasks.length === 0) {
-        await autoGenerateClearanceTasks(id, lwd, existing.employeeId);
+        await autoGenerateClearanceTasks(id, lwd, u.tenantId, existing.employeeId);
       }
     }
 
@@ -434,20 +436,20 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
         // LWD+1 has passed — revoke system access immediately on both tables
         await db.update(employeesTable)
           .set({ status: "Separated", isActive: false, updatedAt: new Date() })
-          .where(eq(employeesTable.id, existing.employeeId));
+          .where(and(eq(employeesTable.id, existing.employeeId), eq(employeesTable.tenantId, u.tenantId)));
         await db.update(hrmsUsersTable)
           .set({ isActive: false, updatedAt: new Date() })
-          .where(eq(hrmsUsersTable.employeeId, existing.employeeId));
+          .where(and(eq(hrmsUsersTable.employeeId, existing.employeeId), eq(hrmsUsersTable.tenantId, u.tenantId)));
       } else {
         // LWD+1 is in the future — mark as Separated but keep access until LWD+1
         await db.update(employeesTable)
           .set({ status: "Separated", updatedAt: new Date() })
-          .where(eq(employeesTable.id, existing.employeeId));
+          .where(and(eq(employeesTable.id, existing.employeeId), eq(employeesTable.tenantId, u.tenantId)));
       }
     }
 
     const [updated] = await db.update(exitRequestsTable).set(updates)
-      .where(eq(exitRequestsTable.id, id)).returning();
+      .where(and(eq(exitRequestsTable.id, id), eq(exitRequestsTable.tenantId, u.tenantId))).returning();
 
     await logAudit({ user: u, action: "update_exit_request", module: "exit", recordId: id });
 
@@ -457,7 +459,7 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
       void (async () => {
         try {
           const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-            .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, existing.employeeId)).limit(1);
+            .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, existing.employeeId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
           if (empUser?.email) {
             await dispatchNotification({
               eventType: "exit_request_rejected", module: "exit",
@@ -479,7 +481,7 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
     // "FnF Pending" is the real clearance-complete event (all clearance tasks done → FnF initiated)
     if (status === "Clearance Pending" || status === "FnF Pending" || status === "Separated") {
       const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-        .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, existing.employeeId)).limit(1);
+        .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, existing.employeeId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
       const isCompletion = status === "FnF Pending" || status === "Separated";
       const eventType = isCompletion ? "exit_clearance_done" : "exit_initiated";
       // Notify the employee that their exit clearance is complete (or in progress)
@@ -495,7 +497,7 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
       // On completion, also notify HR + Finance to initiate FnF
       if (isCompletion) {
         (async () => {
-          const hrUsers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"]);
+          const hrUsers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"], req.hrmsUser!.tenantId);
           const empName = empUser?.name ?? "An employee";
           await Promise.allSettled(hrUsers.map(hr =>
             dispatchNotification({
@@ -510,7 +512,7 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
       }
     }
 
-    res.json(await enrichExitRequest(updated));
+    res.json(await enrichExitRequest(updated, u.tenantId));
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
@@ -526,7 +528,7 @@ router.get("/exit/requests/:id/clearance-tasks", requireHrmsUser, requireRole(..
     if (!exitReq) { res.status(404).json({ error: "Exit request not found" }); return; }
 
     if (!isHr) {
-      const emp = await getEmployeeForUser(u.id);
+      const emp = await getEmployeeForUser(u.id, u.tenantId);
       if (!emp || emp.id !== exitReq.employeeId) {
         res.status(403).json({ error: "Access denied" }); return;
       }
@@ -546,7 +548,7 @@ router.get("/exit/requests/:id/clearance-tasks", requireHrmsUser, requireRole(..
       remarks: exitClearanceTasksTable.remarks,
     }).from(exitClearanceTasksTable)
       .leftJoin(hrmsUsersTable, eq(exitClearanceTasksTable.assignedToUserId, hrmsUsersTable.id))
-      .where(eq(exitClearanceTasksTable.exitRequestId, id))
+      .where(and(eq(exitClearanceTasksTable.exitRequestId, id), eq(exitClearanceTasksTable.tenantId, req.hrmsUser!.tenantId)))
       .orderBy(exitClearanceTasksTable.department);
     res.json(rows);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -562,7 +564,7 @@ router.put("/exit/clearance-tasks/:taskId", requireHrmsUser, requireRole(...ALL_
     const { status, remarks } = req.body;
     if (!status) { res.status(400).json({ error: "status is required" }); return; }
 
-    const [task] = await db.select().from(exitClearanceTasksTable).where(eq(exitClearanceTasksTable.id, taskId));
+    const [task] = await db.select().from(exitClearanceTasksTable).where(and(eq(exitClearanceTasksTable.id, taskId), eq(exitClearanceTasksTable.tenantId, u.tenantId)));
     if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
     const isHr = (HR_ROLES as readonly string[]).includes(u.role);
@@ -585,11 +587,11 @@ router.put("/exit/clearance-tasks/:taskId", requireHrmsUser, requireRole(...ALL_
     }
 
     const [updated] = await db.update(exitClearanceTasksTable).set(updates)
-      .where(eq(exitClearanceTasksTable.id, taskId)).returning();
+      .where(and(eq(exitClearanceTasksTable.id, taskId), eq(exitClearanceTasksTable.tenantId, u.tenantId))).returning();
 
     // Check if all tasks for this exit request are complete — if so, move to FnF Pending
     const allTasks = await db.select().from(exitClearanceTasksTable)
-      .where(eq(exitClearanceTasksTable.exitRequestId, task.exitRequestId));
+      .where(and(eq(exitClearanceTasksTable.exitRequestId, task.exitRequestId), eq(exitClearanceTasksTable.tenantId, u.tenantId)));
     const allDone = allTasks.every(t =>
       t.id === taskId
         ? (status === "Completed" || status === "Waived")
@@ -598,12 +600,12 @@ router.put("/exit/clearance-tasks/:taskId", requireHrmsUser, requireRole(...ALL_
     if (allDone) {
       const [exitReq] = await db.update(exitRequestsTable)
         .set({ status: "FnF Pending", updatedAt: new Date() })
-        .where(eq(exitRequestsTable.id, task.exitRequestId)).returning();
+        .where(and(eq(exitRequestsTable.id, task.exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId))).returning();
 
       // Notify the employee that exit clearance is complete, and HR/Finance to initiate FnF
       if (exitReq) {
         const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-          .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, exitReq.employeeId)).limit(1);
+          .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, exitReq.employeeId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
         if (empUser?.email) {
           dispatchNotification({
             eventType: "exit_clearance_done", module: "exit",
@@ -614,7 +616,7 @@ router.put("/exit/clearance-tasks/:taskId", requireHrmsUser, requireRole(...ALL_
           }).catch(() => {});
         }
         (async () => {
-          const hrUsers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"]);
+          const hrUsers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"], req.hrmsUser!.tenantId);
           const empName = empUser?.name ?? "An employee";
           await Promise.allSettled(hrUsers.map(hr =>
             dispatchNotification({
@@ -637,15 +639,16 @@ router.put("/exit/clearance-tasks/:taskId", requireHrmsUser, requireRole(...ALL_
 router.get("/exit/requests/:id/fnf/suggest", requireHrmsUser, requireRole(...HR_ROLES, "payroll_admin"), async (req, res) => {
   try {
     const exitRequestId = Number(req.params.id);
-    const [exitReq] = await db.select().from(exitRequestsTable).where(eq(exitRequestsTable.id, exitRequestId));
+    const u = req.hrmsUser!;
+    const [exitReq] = await db.select().from(exitRequestsTable).where(and(eq(exitRequestsTable.id, exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId)));
     if (!exitReq) { res.status(404).json({ error: "Exit request not found" }); return; }
 
-    const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.id, exitReq.employeeId));
+    const [emp] = await db.select().from(employeesTable).where(and(eq(employeesTable.id, exitReq.employeeId), eq(employeesTable.tenantId, u.tenantId)));
     if (!emp) { res.status(404).json({ error: "Employee not found" }); return; }
 
     // ── Last payroll record ──────────────────────────────────────────────────
     const latestPayrollRun = await db.select().from(payrollRunsTable)
-      .where(eq(payrollRunsTable.status, "Approved"))
+      .where(and(eq(payrollRunsTable.status, "Approved"), eq(payrollRunsTable.tenantId, u.tenantId)))
       .orderBy(desc(payrollRunsTable.periodYear), desc(payrollRunsTable.periodMonth))
       .limit(1);
 
@@ -656,6 +659,7 @@ router.get("/exit/requests/:id/fnf/suggest", requireHrmsUser, requireRole(...HR_
         .where(and(
           eq(payrollRecordsTable.payrollRunId, latestPayrollRun[0].id),
           eq(payrollRecordsTable.employeeId, exitReq.employeeId),
+          eq(payrollRecordsTable.tenantId, u.tenantId),
         ));
       if (record) {
         const gross = Number(record.grossEarnings ?? 0);
@@ -688,7 +692,7 @@ router.get("/exit/requests/:id/fnf/suggest", requireHrmsUser, requireRole(...HR_
       encashmentEnabled: leaveTypesTable.encashmentEnabled,
     }).from(leaveBalancesTable)
       .leftJoin(leaveTypesTable, eq(leaveBalancesTable.leaveTypeId, leaveTypesTable.id))
-      .where(eq(leaveBalancesTable.employeeId, exitReq.employeeId));
+      .where(and(eq(leaveBalancesTable.employeeId, exitReq.employeeId), eq(leaveBalancesTable.tenantId, u.tenantId)));
 
     for (const b of balances) {
       if (b.encashmentEnabled) {
@@ -729,8 +733,9 @@ router.get("/exit/requests/:id/fnf/suggest", requireHrmsUser, requireRole(...HR_
 router.get("/exit/requests/:id/fnf", requireHrmsUser, requireRole(...HR_ROLES, "payroll_admin"), async (req, res) => {
   try {
     const id = Number(req.params.id);
+    const u = req.hrmsUser!;
     const [fnf] = await db.select().from(fnfComputationsTable)
-      .where(eq(fnfComputationsTable.exitRequestId, id));
+      .where(and(eq(fnfComputationsTable.exitRequestId, id), eq(fnfComputationsTable.tenantId, u.tenantId)));
     if (!fnf) { res.status(404).json({ error: "FnF computation not found" }); return; }
     res.json(fnf);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -741,13 +746,13 @@ router.post("/exit/requests/:id/fnf", requireHrmsUser, requireRole(...HR_ROLES, 
   try {
     const u = req.hrmsUser!;
     const exitRequestId = Number(req.params.id);
-    const [exitReq] = await db.select().from(exitRequestsTable).where(eq(exitRequestsTable.id, exitRequestId));
+    const [exitReq] = await db.select().from(exitRequestsTable).where(and(eq(exitRequestsTable.id, exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId)));
     if (!exitReq) { res.status(404).json({ error: "Exit request not found" }); return; }
 
     // Gate: all clearance tasks must be Completed or Waived before FnF can be computed
     const clearanceTasks = await db.select({ id: exitClearanceTasksTable.id, status: exitClearanceTasksTable.status })
       .from(exitClearanceTasksTable)
-      .where(eq(exitClearanceTasksTable.exitRequestId, exitRequestId));
+      .where(and(eq(exitClearanceTasksTable.exitRequestId, exitRequestId), eq(exitClearanceTasksTable.tenantId, u.tenantId)));
     const incomplete = clearanceTasks.filter((t) => t.status !== "Completed" && t.status !== "Waived");
     if (incomplete.length > 0) {
       res.status(422).json({
@@ -773,7 +778,7 @@ router.post("/exit/requests/:id/fnf", requireHrmsUser, requireRole(...HR_ROLES, 
 
     // Upsert — delete old and create new
     const existing = await db.select().from(fnfComputationsTable)
-      .where(eq(fnfComputationsTable.exitRequestId, exitRequestId));
+      .where(and(eq(fnfComputationsTable.exitRequestId, exitRequestId), eq(fnfComputationsTable.tenantId, u.tenantId)));
 
     let fnf: typeof fnfComputationsTable.$inferSelect;
     if (existing.length > 0) {
@@ -789,7 +794,7 @@ router.post("/exit/requests/:id/fnf", requireHrmsUser, requireRole(...HR_ROLES, 
         computedAt: new Date(),
         remarks: remarks ?? null,
         updatedAt: new Date(),
-      }).where(eq(fnfComputationsTable.exitRequestId, exitRequestId)).returning();
+      }).where(and(eq(fnfComputationsTable.exitRequestId, exitRequestId), eq(fnfComputationsTable.tenantId, u.tenantId))).returning();
     } else {
       [fnf] = await db.insert(fnfComputationsTable).values({
         exitRequestId,
@@ -803,6 +808,7 @@ router.post("/exit/requests/:id/fnf", requireHrmsUser, requireRole(...HR_ROLES, 
         computedByUserId: u.id,
         computedAt: new Date(),
         remarks: remarks ?? null,
+        tenantId: u.tenantId,
       }).returning();
     }
 
@@ -810,7 +816,7 @@ router.post("/exit/requests/:id/fnf", requireHrmsUser, requireRole(...HR_ROLES, 
     if (!["FnF Pending", "FnF Approved", "Separated"].includes(exitReq.status)) {
       await db.update(exitRequestsTable)
         .set({ status: "FnF Pending", updatedAt: new Date() })
-        .where(eq(exitRequestsTable.id, exitRequestId));
+        .where(and(eq(exitRequestsTable.id, exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId)));
     }
 
     await logAudit({ user: u, action: "compute_fnf", module: "exit", recordId: fnf.id });
@@ -821,10 +827,10 @@ router.post("/exit/requests/:id/fnf", requireHrmsUser, requireRole(...HR_ROLES, 
         firstName: employeesTable.firstName,
         lastName: employeesTable.lastName,
         employeeCode: employeesTable.employeeId,
-      }).from(employeesTable).where(eq(employeesTable.id, exitReq.employeeId)).limit(1);
+      }).from(employeesTable).where(and(eq(employeesTable.id, exitReq.employeeId), eq(employeesTable.tenantId, u.tenantId))).limit(1);
       const empName = emp ? `${emp.firstName} ${emp.lastName}` : "an employee";
       const empCodeStr = emp?.employeeCode ?? String(exitReq.employeeId);
-      const approvers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"]);
+      const approvers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"], req.hrmsUser!.tenantId);
       await Promise.allSettled(approvers.map(a =>
         dispatchNotification({
           eventType: "fnf_pending_approval", module: "exit",
@@ -868,7 +874,7 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
     }
 
     const [fnf] = await db.select().from(fnfComputationsTable)
-      .where(eq(fnfComputationsTable.exitRequestId, exitRequestId));
+      .where(and(eq(fnfComputationsTable.exitRequestId, exitRequestId), eq(fnfComputationsTable.tenantId, u.tenantId)));
     if (!fnf) { res.status(404).json({ error: "FnF computation not found — compute FnF first" }); return; }
     const wasFullyApprovedBefore = !!(fnf.hrApprovedAt && fnf.financeApprovedAt);
 
@@ -883,7 +889,7 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
     if (remarks) updates.remarks = remarks;
 
     const [updated] = await db.update(fnfComputationsTable).set(updates)
-      .where(eq(fnfComputationsTable.id, fnf.id)).returning();
+      .where(and(eq(fnfComputationsTable.id, fnf.id), eq(fnfComputationsTable.tenantId, u.tenantId))).returning();
 
     // If both HR and Finance have approved, move exit request to FnF Approved and auto-generate documents
     const fullyApproved = !!(updated.hrApprovedAt && updated.financeApprovedAt);
@@ -897,11 +903,11 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
     // fresh public download tokens, expanding the unauthenticated link surface
     // and spamming the employee's inbox.
     if (fullyApproved && !wasFullyApprovedBefore) {
-      const [exitReq] = await db.select().from(exitRequestsTable).where(eq(exitRequestsTable.id, exitRequestId));
+      const [exitReq] = await db.select().from(exitRequestsTable).where(and(eq(exitRequestsTable.id, exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId)));
 
       await db.update(exitRequestsTable)
         .set({ status: "FnF Approved", updatedAt: new Date() })
-        .where(eq(exitRequestsTable.id, exitRequestId));
+        .where(and(eq(exitRequestsTable.id, exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId)));
 
       // Auto-generate Relieving Letter & Experience Certificate at FnF approval
       if (exitReq) {
@@ -911,11 +917,15 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
           lastName: employeesTable.lastName,
           employeeCode: employeesTable.employeeId,
           dateOfJoining: employeesTable.dateOfJoining,
-        }).from(employeesTable).where(eq(employeesTable.id, exitReq.employeeId));
+        }).from(employeesTable).where(and(eq(employeesTable.id, exitReq.employeeId), eq(employeesTable.tenantId, u.tenantId)));
 
         for (const docType of ["Relieving Letter", "Experience Certificate"] as const) {
           const [tmpl] = await db.select().from(documentTemplatesTable)
-            .where(and(eq(documentTemplatesTable.documentType, docType), eq(documentTemplatesTable.isActive, true)))
+            .where(and(
+              eq(documentTemplatesTable.documentType, docType),
+              eq(documentTemplatesTable.isActive, true),
+              eq(documentTemplatesTable.tenantId, u.tenantId)
+            ))
             .limit(1);
           if (tmpl && emp) {
             try {
@@ -944,6 +954,7 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
                 generatedBy: u.id,
                 fieldValues: autoFields,
                 fileContent: pdfBuffer.toString("base64"),
+                tenantId: u.tenantId,
               }).returning({ id: issuedDocumentsTable.id });
               documentsIssuedCount++;
 
@@ -955,6 +966,7 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
                 try {
                   const link = await issueDocumentDownloadToken({
                     issuedDocumentId: insertedDoc.id,
+                    tenantId: u.tenantId,
                     createdByUserId: u.id,
                   });
                   issuedDocLinks.push({ documentType: docType, downloadUrl: link.url, expiresAt: link.expiresAt });
@@ -979,10 +991,10 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
     if (fullyApproved && !wasFullyApprovedBefore) {
       void (async () => {
         try {
-          const [exitReqAfter] = await db.select().from(exitRequestsTable).where(eq(exitRequestsTable.id, exitRequestId));
+          const [exitReqAfter] = await db.select().from(exitRequestsTable).where(and(eq(exitRequestsTable.id, exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId)));
           if (!exitReqAfter) return;
           const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-            .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, exitReqAfter.employeeId)).limit(1);
+            .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, exitReqAfter.employeeId), eq(hrmsUsersTable.tenantId, u.tenantId))).limit(1);
           if (empUser?.email) {
             await dispatchNotification({
               eventType: "fnf_approved", module: "exit",
@@ -1038,18 +1050,18 @@ router.get("/exit/requests/:id/interview", requireHrmsUser, requireRole(...ALL_R
     const exitRequestId = Number(req.params.id);
     const isHr = (HR_ROLES as readonly string[]).includes(u.role);
 
-    const [exitReq] = await db.select().from(exitRequestsTable).where(eq(exitRequestsTable.id, exitRequestId));
+    const [exitReq] = await db.select().from(exitRequestsTable).where(and(eq(exitRequestsTable.id, exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId)));
     if (!exitReq) { res.status(404).json({ error: "Exit request not found" }); return; }
 
     if (!isHr) {
-      const emp = await getEmployeeForUser(u.id);
+      const emp = await getEmployeeForUser(u.id, u.tenantId);
       if (!emp || emp.id !== exitReq.employeeId) {
         res.status(403).json({ error: "Access denied" }); return;
       }
     }
 
     const [interview] = await db.select().from(exitInterviewsTable)
-      .where(eq(exitInterviewsTable.exitRequestId, exitRequestId));
+      .where(and(eq(exitInterviewsTable.exitRequestId, exitRequestId), eq(exitInterviewsTable.tenantId, u.tenantId)));
 
     if (!interview) {
       // Auto-create exit interview with default questions
@@ -1068,6 +1080,7 @@ router.get("/exit/requests/:id/interview", requireHrmsUser, requireRole(...ALL_R
         employeeId: exitReq.employeeId,
         questions: defaultQuestions,
         responses: [],
+        tenantId: u.tenantId,
       }).returning();
 
       res.json(newInterview);
@@ -1087,22 +1100,23 @@ router.get("/exit/requests/:id/interview", requireHrmsUser, requireRole(...ALL_R
 // HR Manager / Super Admin can set custom interview questions for a specific request
 router.put("/exit/requests/:id/interview/questions", requireHrmsUser, requireRole("hr_manager", "customer_admin"), async (req, res) => {
   try {
+    const u = req.hrmsUser!;
     const exitRequestId = Number(req.params.id);
     const { questions } = req.body;
     if (!questions || !Array.isArray(questions) || questions.length === 0) {
       res.status(400).json({ error: "questions must be a non-empty array of { id, question } objects" }); return;
     }
 
-    const [exitReq] = await db.select().from(exitRequestsTable).where(eq(exitRequestsTable.id, exitRequestId));
+    const [exitReq] = await db.select().from(exitRequestsTable).where(and(eq(exitRequestsTable.id, exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId)));
     if (!exitReq) { res.status(404).json({ error: "Exit request not found" }); return; }
 
     const [existing] = await db.select().from(exitInterviewsTable)
-      .where(eq(exitInterviewsTable.exitRequestId, exitRequestId));
+      .where(and(eq(exitInterviewsTable.exitRequestId, exitRequestId), eq(exitInterviewsTable.tenantId, u.tenantId)));
 
     if (existing) {
       const [updated] = await db.update(exitInterviewsTable)
         .set({ questions })
-        .where(eq(exitInterviewsTable.id, existing.id)).returning();
+        .where(and(eq(exitInterviewsTable.id, existing.id), eq(exitInterviewsTable.tenantId, u.tenantId))).returning();
       res.json(updated);
     } else {
       const [newInterview] = await db.insert(exitInterviewsTable).values({
@@ -1110,6 +1124,7 @@ router.put("/exit/requests/:id/interview/questions", requireHrmsUser, requireRol
         employeeId: exitReq.employeeId,
         questions,
         responses: [],
+        tenantId: u.tenantId,
       }).returning();
       res.json(newInterview);
     }
@@ -1122,6 +1137,7 @@ router.put("/exit/requests/:id/interview/questions", requireHrmsUser, requireRol
 router.get("/exit/alerts", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const today = new Date();
+    const u = req.hrmsUser!;
 
     // Retirement alerts: employees turning 60 within the next 60 days
     const allActive = await db.select({
@@ -1133,7 +1149,7 @@ router.get("/exit/alerts", requireHrmsUser, requireRole(...HR_ROLES), async (req
       dateOfJoining: employeesTable.dateOfJoining,
       departmentId: employeesTable.departmentId,
     }).from(employeesTable)
-      .where(and(eq(employeesTable.isActive, true), sql`date_of_birth IS NOT NULL`));
+      .where(and(eq(employeesTable.isActive, true), sql`date_of_birth IS NOT NULL`, eq(employeesTable.tenantId, u.tenantId)));
 
     const retirementAlerts = allActive.filter(emp => {
       if (!emp.dateOfBirth) return false;
@@ -1166,6 +1182,7 @@ router.get("/exit/alerts", requireHrmsUser, requireRole(...HR_ROLES), async (req
       .where(and(
         eq(exitRequestsTable.exitType, "Contract Expiry"),
         sql`COALESCE(actual_lwd, requested_lwd) BETWEEN ${todayStr} AND ${thirtyStr}`,
+        eq(exitRequestsTable.tenantId, u.tenantId),
       ));
 
     res.json({
@@ -1180,6 +1197,7 @@ router.get("/exit/alerts", requireHrmsUser, requireRole(...HR_ROLES), async (req
 // last working day was yesterday (or earlier) and who are still active.
 router.post("/exit/process-access-revocations", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    const u = req.hrmsUser!;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString().slice(0, 10);
@@ -1199,17 +1217,18 @@ router.post("/exit/process-access-revocations", requireHrmsUser, requireRole(...
           eq(exitRequestsTable.status, "Separated"),
           eq(exitRequestsTable.status, "FnF Approved"),
         ),
+        eq(exitRequestsTable.tenantId, u.tenantId),
       ));
 
     const revokedIds: number[] = [];
     for (const r of pendingRevocations) {
       await db.update(employeesTable)
         .set({ isActive: false, updatedAt: new Date() })
-        .where(eq(employeesTable.id, r.employeeId));
+        .where(and(eq(employeesTable.id, r.employeeId), eq(employeesTable.tenantId, u.tenantId)));
       // Also deactivate linked HRMS user account to block system login
       await db.update(hrmsUsersTable)
         .set({ isActive: false, updatedAt: new Date() })
-        .where(eq(hrmsUsersTable.employeeId, r.employeeId));
+        .where(and(eq(hrmsUsersTable.employeeId, r.employeeId), eq(hrmsUsersTable.tenantId, u.tenantId)));
       revokedIds.push(r.employeeId);
     }
 
@@ -1227,23 +1246,23 @@ router.post("/exit/requests/:id/interview", requireHrmsUser, requireRole(...ALL_
       res.status(400).json({ error: "responses array is required" }); return;
     }
 
-    const [exitReq] = await db.select().from(exitRequestsTable).where(eq(exitRequestsTable.id, exitRequestId));
+    const [exitReq] = await db.select().from(exitRequestsTable).where(and(eq(exitRequestsTable.id, exitRequestId), eq(exitRequestsTable.tenantId, u.tenantId)));
     if (!exitReq) { res.status(404).json({ error: "Exit request not found" }); return; }
 
-    const emp = await getEmployeeForUser(u.id);
+    const emp = await getEmployeeForUser(u.id, u.tenantId);
     const isHr = (HR_ROLES as readonly string[]).includes(u.role);
     if (!isHr && (!emp || emp.id !== exitReq.employeeId)) {
       res.status(403).json({ error: "Access denied" }); return;
     }
 
     const [existing] = await db.select().from(exitInterviewsTable)
-      .where(eq(exitInterviewsTable.exitRequestId, exitRequestId));
+      .where(and(eq(exitInterviewsTable.exitRequestId, exitRequestId), eq(exitInterviewsTable.tenantId, u.tenantId)));
 
     if (existing) {
       const [updated] = await db.update(exitInterviewsTable).set({
         responses,
         submittedAt: new Date(),
-      }).where(eq(exitInterviewsTable.id, existing.id)).returning();
+      }).where(and(eq(exitInterviewsTable.id, existing.id), eq(exitInterviewsTable.tenantId, u.tenantId))).returning();
       res.json(updated);
     } else {
       const [newInterview] = await db.insert(exitInterviewsTable).values({
@@ -1252,6 +1271,7 @@ router.post("/exit/requests/:id/interview", requireHrmsUser, requireRole(...ALL_
         questions: [],
         responses,
         submittedAt: new Date(),
+        tenantId: u.tenantId,
       }).returning();
       res.json(newInterview);
     }

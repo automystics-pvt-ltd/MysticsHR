@@ -105,6 +105,7 @@ interface CleanupOptions {
   ageDays?: number;
   dryRun?: boolean;
   triggeredBy?: string; // 'cron' | 'manual:<userId>'
+  tenantId?: number;
 }
 
 const DB_LOOKUP_CHUNK = 500;
@@ -188,6 +189,7 @@ export async function cleanupOrphanedAttachments(
   let runId: number | undefined;
   try {
     const [row] = await db.insert(storageCleanupRunsTable).values({
+      tenantId: opts.tenantId ?? null,
       startedAt,
       ageDays: result.ageDays,
       dryRun,

@@ -24,6 +24,7 @@ export async function checkPayrollLock(
   targetYear?: number,
   targetMonth?: number,
   userEmail?: string,
+  tenantId?: number,
 ): Promise<string | null> {
   const now = new Date();
   const year = targetYear ?? now.getFullYear();
@@ -57,6 +58,7 @@ export async function checkPayrollLock(
   if (exception) {
     // Log the override consumption so all lock bypass events are auditable.
     await db.insert(auditLogsTable).values({
+      tenantId: tenantId ?? null,
       userId: userId,
       userEmail: userEmail ?? null,
       action: "PAYROLL_LOCK_EXCEPTION_USED",

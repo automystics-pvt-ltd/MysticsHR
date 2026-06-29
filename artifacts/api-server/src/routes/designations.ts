@@ -14,8 +14,8 @@ router.get("/designations", requireHrmsUser, async (req, res) => {
       : undefined;
 
     const where = departmentId
-      ? and(isNull(designationsTable.deletedAt), eq(designationsTable.departmentId, departmentId))
-      : isNull(designationsTable.deletedAt);
+      ? and(isNull(designationsTable.deletedAt), eq(designationsTable.departmentId, departmentId), eq(designationsTable.tenantId, req.hrmsUser!.tenantId))
+      : and(isNull(designationsTable.deletedAt), eq(designationsTable.tenantId, req.hrmsUser!.tenantId));
 
     const rows = await db
       .select()
@@ -43,7 +43,7 @@ router.post(
       }
       const [desig] = await db
         .insert(designationsTable)
-        .values({ title, code, departmentId, level })
+        .values({ title, code, departmentId, level, tenantId: req.hrmsUser!.tenantId })
         .returning();
       await logAudit({ user: req.hrmsUser, action: "CREATE", module: "Designations", recordId: desig.id, ipAddress: req.ip });
       res.status(201).json(desig);
@@ -65,7 +65,7 @@ router.get("/designations/:id", requireHrmsUser, async (req, res) => {
     const [desig] = await db
       .select()
       .from(designationsTable)
-      .where(and(eq(designationsTable.id, id), isNull(designationsTable.deletedAt)))
+      .where(and(eq(designationsTable.id, id), isNull(designationsTable.deletedAt), eq(designationsTable.tenantId, req.hrmsUser!.tenantId)))
       .limit(1);
     if (!desig) {
       res.status(404).json({ error: "Designation not found" });
@@ -89,7 +89,7 @@ router.patch(
       const [desig] = await db
         .update(designationsTable)
         .set({ title, code, departmentId, level, isActive, updatedAt: new Date() })
-        .where(and(eq(designationsTable.id, id), isNull(designationsTable.deletedAt)))
+        .where(and(eq(designationsTable.id, id), isNull(designationsTable.deletedAt), eq(designationsTable.tenantId, req.hrmsUser!.tenantId)))
         .returning();
       if (!desig) {
         res.status(404).json({ error: "Designation not found" });
@@ -119,7 +119,7 @@ router.delete(
       const [desig] = await db
         .update(designationsTable)
         .set({ deletedAt: new Date(), isActive: false, updatedAt: new Date() })
-        .where(and(eq(designationsTable.id, id), isNull(designationsTable.deletedAt)))
+        .where(and(eq(designationsTable.id, id), isNull(designationsTable.deletedAt), eq(designationsTable.tenantId, req.hrmsUser!.tenantId)))
         .returning();
       if (!desig) {
         res.status(404).json({ error: "Designation not found" });

@@ -28,11 +28,14 @@ const recordSelect = {
   updatedAt: preOnboardingRecordsTable.updatedAt,
 };
 
-async function recomputeCompletion(recordId: number): Promise<number> {
+async function recomputeCompletion(recordId: number, tenantId: number): Promise<number> {
   const docs = await db
     .select()
     .from(preOnboardingDocumentsTable)
-    .where(eq(preOnboardingDocumentsTable.recordId, recordId));
+    .where(and(
+      eq(preOnboardingDocumentsTable.recordId, recordId),
+      eq(preOnboardingDocumentsTable.tenantId, tenantId)
+    ));
   const required = docs.filter((d) => d.isRequired === 1);
   const total = required.length || 1;
   const verified = required.filter((d) => d.status === "Verified").length;
@@ -41,20 +44,24 @@ async function recomputeCompletion(recordId: number): Promise<number> {
   await db
     .update(preOnboardingRecordsTable)
     .set({ completionPercentage: pct, status: newStatus, updatedAt: new Date() })
-    .where(eq(preOnboardingRecordsTable.id, recordId));
+    .where(and(
+      eq(preOnboardingRecordsTable.id, recordId),
+      eq(preOnboardingRecordsTable.tenantId, tenantId)
+    ));
   return pct;
 }
 
 router.get("/pre-onboarding", requireHrmsUser, requireRole(...HR_WRITE_ROLES), async (req, res) => {
   try {
     const { status } = req.query as Record<string, string>;
+    const conditions = [eq(preOnboardingRecordsTable.tenantId, req.hrmsUser!.tenantId)];
+    if (status) conditions.push(sql`${preOnboardingRecordsTable.status} = ${status}`);
     const query = db
       .select(recordSelect)
       .from(preOnboardingRecordsTable)
-      .leftJoin(candidatesTable, eq(preOnboardingRecordsTable.candidateId, candidatesTable.id));
-    const rows = status
-      ? await query.where(sql`${preOnboardingRecordsTable.status} = ${status}`).orderBy(desc(preOnboardingRecordsTable.createdAt))
-      : await query.orderBy(desc(preOnboardingRecordsTable.createdAt));
+      .leftJoin(candidatesTable, eq(preOnboardingRecordsTable.candidateId, candidatesTable.id))
+      .where(and(...conditions));
+    const rows = await query.orderBy(desc(preOnboardingRecordsTable.createdAt));
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -69,7 +76,10 @@ router.get("/pre-onboarding/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES
       .select(recordSelect)
       .from(preOnboardingRecordsTable)
       .leftJoin(candidatesTable, eq(preOnboardingRecordsTable.candidateId, candidatesTable.id))
-      .where(eq(preOnboardingRecordsTable.id, id))
+      .where(and(
+        eq(preOnboardingRecordsTable.id, id),
+        eq(preOnboardingRecordsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .limit(1);
     if (!row) {
       res.status(404).json({ error: "Pre-onboarding record not found" });
@@ -92,7 +102,10 @@ router.patch("/pre-onboarding/:id", requireHrmsUser, requireRole(...HR_WRITE_ROL
     const [row] = await db
       .update(preOnboardingRecordsTable)
       .set(updates)
-      .where(eq(preOnboardingRecordsTable.id, id))
+      .where(and(
+        eq(preOnboardingRecordsTable.id, id),
+        eq(preOnboardingRecordsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Pre-onboarding record not found" });
@@ -130,7 +143,10 @@ router.get("/pre-onboarding/:id/documents", requireHrmsUser, requireRole(...HR_W
       .select(docSelect)
       .from(preOnboardingDocumentsTable)
       .leftJoin(hrmsUsersTable, eq(preOnboardingDocumentsTable.verifiedById, hrmsUsersTable.id))
-      .where(eq(preOnboardingDocumentsTable.recordId, id))
+      .where(and(
+        eq(preOnboardingDocumentsTable.recordId, id),
+        eq(preOnboardingDocumentsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(preOnboardingDocumentsTable.id);
     res.json(rows);
   } catch (err) {
@@ -157,9 +173,10 @@ router.post("/pre-onboarding/:id/documents", requireHrmsUser, requireRole(...HR_
         status: b.fileUrl ? "Under Verification" : "Pending",
         uploadedAt: b.fileUrl ? new Date() : null,
         isRequired: b.isRequired ?? 1,
+        tenantId: req.hrmsUser!.tenantId,
       })
       .returning();
-    await recomputeCompletion(id);
+    await recomputeCompletion(id, req.hrmsUser!.tenantId);
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "PreOnboardingDocs", recordId: row.id, ipAddress: req.ip });
     res.status(201).json(row);
   } catch (err) {
@@ -184,13 +201,16 @@ router.patch("/pre-onboarding-documents/:docId", requireHrmsUser, requireRole(..
     const [row] = await db
       .update(preOnboardingDocumentsTable)
       .set(updates)
-      .where(eq(preOnboardingDocumentsTable.id, docId))
+      .where(and(
+        eq(preOnboardingDocumentsTable.id, docId),
+        eq(preOnboardingDocumentsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Document not found" });
       return;
     }
-    await recomputeCompletion(row.recordId);
+    await recomputeCompletion(row.recordId, req.hrmsUser!.tenantId);
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "PreOnboardingDocs", recordId: docId, ipAddress: req.ip });
     res.json(row);
   } catch (err) {
@@ -211,13 +231,16 @@ router.post("/pre-onboarding-documents/:docId/verify", requireHrmsUser, requireR
         rejectionReason: null,
         updatedAt: new Date(),
       })
-      .where(eq(preOnboardingDocumentsTable.id, docId))
+      .where(and(
+        eq(preOnboardingDocumentsTable.id, docId),
+        eq(preOnboardingDocumentsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Document not found" });
       return;
     }
-    await recomputeCompletion(row.recordId);
+    await recomputeCompletion(row.recordId, req.hrmsUser!.tenantId);
     await logAudit({ user: req.hrmsUser, action: "VERIFY", module: "PreOnboardingDocs", recordId: docId, ipAddress: req.ip });
     res.json(row);
   } catch (err) {
@@ -242,13 +265,16 @@ router.post("/pre-onboarding-documents/:docId/reject", requireHrmsUser, requireR
         rejectionReason: req.body.reason,
         updatedAt: new Date(),
       })
-      .where(eq(preOnboardingDocumentsTable.id, docId))
+      .where(and(
+        eq(preOnboardingDocumentsTable.id, docId),
+        eq(preOnboardingDocumentsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Document not found" });
       return;
     }
-    await recomputeCompletion(row.recordId);
+    await recomputeCompletion(row.recordId, req.hrmsUser!.tenantId);
     await logAudit({ user: req.hrmsUser, action: "REJECT", module: "PreOnboardingDocs", recordId: docId, ipAddress: req.ip });
     res.json(row);
   } catch (err) {

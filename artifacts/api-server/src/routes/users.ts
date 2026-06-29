@@ -4,7 +4,7 @@ import { requireHrmsUser, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { db } from "../lib/db";
 import { hrmsUsersTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const router = Router();
 
@@ -19,7 +19,9 @@ router.get(
   requireRole("customer_admin", "hr_manager"),
   async (req, res) => {
     try {
-      const users = await db.select().from(hrmsUsersTable).orderBy(hrmsUsersTable.name);
+      const users = await db.select().from(hrmsUsersTable)
+        .where(eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId))
+        .orderBy(hrmsUsersTable.name);
       res.json(users.map(safeUser));
     } catch (err) {
       console.error(err);
@@ -56,6 +58,7 @@ router.post(
       const [user] = await db
         .insert(hrmsUsersTable)
         .values({
+          tenantId: req.hrmsUser!.tenantId,
           employeeId: employeeId ?? null,
           email: email.toLowerCase().trim(),
           name,
@@ -98,7 +101,12 @@ router.get(
       const [user] = await db
         .select()
         .from(hrmsUsersTable)
-        .where(eq(hrmsUsersTable.id, id))
+        .where(
+          and(
+            eq(hrmsUsersTable.id, id),
+            eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)
+          )
+        )
         .limit(1);
       if (!user) {
         res.status(404).json({ error: "User not found" });
@@ -145,7 +153,12 @@ router.patch(
       const [user] = await db
         .update(hrmsUsersTable)
         .set(patch)
-        .where(eq(hrmsUsersTable.id, id))
+        .where(
+          and(
+            eq(hrmsUsersTable.id, id),
+            eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)
+          )
+        )
         .returning();
       if (!user) {
         res.status(404).json({ error: "User not found" });

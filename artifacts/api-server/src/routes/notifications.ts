@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "../lib/db";
-import { notificationLogsTable, notificationTemplatesTable, notificationPreferencesTable, systemSettingsTable } from "@workspace/db/schema";
-import { eq, and, desc, count, ilike, or, gte, isNotNull } from "drizzle-orm";
+import { notificationLogsTable, notificationTemplatesTable, notificationPreferencesTable, systemSettingsTable, userNotificationsTable } from "@workspace/db/schema";
+import { eq, and, desc, count, ilike, or, gte, isNotNull, inArray, sql, SQL } from "drizzle-orm";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import {
   NOTIFICATION_EVENT_TYPES,
@@ -18,6 +18,47 @@ const HR_ROLES = ["customer_admin", "hr_manager"] as const;
 const SUPER_ADMIN = ["customer_admin"] as const;
 const ALL_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"] as const;
 
+// ─── User Notifications (In-App) ──────────────────────────────────────────────
+
+router.get("/notifications", requireHrmsUser, async (req, res) => {
+  try {
+    const { isRead, limit = 50 } = req.query as { isRead?: string; limit?: string };
+    const conds: SQL[] = [eq(userNotificationsTable.recipientUserId, req.hrmsUser!.id), eq(userNotificationsTable.tenantId, req.hrmsUser!.tenantId)];
+    if (isRead !== undefined) conds.push(eq(userNotificationsTable.isRead, isRead === "true"));
+
+    const rows = await db.select().from(userNotificationsTable)
+      .where(and(...conds))
+      .orderBy(desc(userNotificationsTable.createdAt))
+      .limit(Number(limit));
+    res.json(rows);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/notifications/mark-read", requireHrmsUser, async (req, res) => {
+  try {
+    const { notificationIds } = req.body as { notificationIds?: number[] };
+    const conds: SQL[] = [eq(userNotificationsTable.recipientUserId, req.hrmsUser!.id), eq(userNotificationsTable.tenantId, req.hrmsUser!.tenantId)];
+    if (notificationIds && notificationIds.length > 0) {
+      conds.push(inArray(userNotificationsTable.id, notificationIds));
+    }
+    await db.update(userNotificationsTable).set({ isRead: true, updatedAt: new Date() })
+      .where(and(...conds));
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.get("/notifications/unread-count", requireHrmsUser, async (req, res) => {
+  try {
+    const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(userNotificationsTable)
+      .where(and(
+        eq(userNotificationsTable.recipientUserId, req.hrmsUser!.id),
+        eq(userNotificationsTable.tenantId, req.hrmsUser!.tenantId),
+        eq(userNotificationsTable.isRead, false)
+      ));
+    res.json(row || { count: 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
 // ─── Notification Templates ───────────────────────────────────────────────────
 
 router.get("/notification-templates", requireHrmsUser, requireRole(...HR_ROLES), async (_req, res) => {
@@ -33,6 +74,7 @@ router.post("/notification-templates", requireHrmsUser, requireRole(...SUPER_ADM
   try {
     const { eventType, channel, emailSubject, emailBody, whatsappTemplate, isActive } = req.body;
     const [created] = await db.insert(notificationTemplatesTable).values({
+      tenantId: req.hrmsUser!.tenantId,
       eventType, channel: channel ?? "email", emailSubject, emailBody, whatsappTemplate,
       isActive: isActive ?? true,
     }).returning();
@@ -72,8 +114,9 @@ router.delete("/notification-templates/:id", requireHrmsUser, requireRole(...SUP
 router.get("/notification-logs", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const { channel, module: mod, status, search, limit = "50", offset = "0" } = req.query as Record<string, string>;
+    const tenantId = req.hrmsUser!.tenantId;
 
-    const conditions = [];
+    const conditions: SQL[] = [eq(notificationLogsTable.tenantId, tenantId)];
     if (channel) conditions.push(eq(notificationLogsTable.channel, channel));
     if (mod) conditions.push(eq(notificationLogsTable.module, mod));
     if (status) conditions.push(eq(notificationLogsTable.status, status));
@@ -82,10 +125,10 @@ router.get("/notification-logs", requireHrmsUser, requireRole(...HR_ROLES), asyn
         ilike(notificationLogsTable.recipientEmail, `%${search}%`),
         ilike(notificationLogsTable.recipientName, `%${search}%`),
         ilike(notificationLogsTable.eventType, `%${search}%`),
-      ));
+      ) as SQL<unknown>);
     }
 
-    const query = conditions.length ? and(...conditions) : undefined;
+    const query = and(...conditions);
 
     const [logs, [countRow]] = await Promise.all([
       db.select().from(notificationLogsTable)
@@ -247,6 +290,7 @@ router.put("/my-preferences/notifications", requireHrmsUser, requireRole(...ALL_
             .where(eq(notificationPreferencesTable.id, existing.id));
         } else {
           await tx.insert(notificationPreferencesTable).values({
+            tenantId: req.hrmsUser!.tenantId,
             employeeId, eventType: it.eventType,
             emailEnabled: it.emailEnabled, whatsappEnabled: it.whatsappEnabled,
             silencedAt: isSilenced ? now : null,
@@ -333,6 +377,7 @@ router.post("/my-preferences/notifications/:eventType/unsilence", requireHrmsUse
         .where(eq(notificationPreferencesTable.id, existing.id));
     } else {
       await db.insert(notificationPreferencesTable).values({
+        tenantId: req.hrmsUser!.tenantId,
         employeeId, eventType, emailEnabled: true, whatsappEnabled: true, silencedAt: null,
       });
     }
@@ -407,6 +452,7 @@ router.put("/notification-defaults", requireHrmsUser, requireRole(...HR_ROLES), 
         .where(eq(systemSettingsTable.id, existing.id));
     } else {
       await db.insert(systemSettingsTable).values({
+        tenantId: req.hrmsUser!.tenantId,
         category: NOTIFICATION_DEFAULTS_CATEGORY,
         key: NOTIFICATION_DEFAULTS_KEY,
         value: map,

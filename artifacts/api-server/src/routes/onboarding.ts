@@ -13,7 +13,7 @@ import {
   preOnboardingRecordsTable,
   candidatesTable,
 } from "@workspace/db/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import QRCode from "qrcode";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { DEFAULT_ONBOARDING_TASKS } from "../lib/onboarding-utils";
@@ -23,11 +23,11 @@ const router = Router();
 const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
 const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
 
-async function recomputeChecklist(checklistId: number) {
+async function recomputeChecklist(checklistId: number, tenantId: number) {
   const tasks = await db
     .select()
     .from(onboardingTasksTable)
-    .where(eq(onboardingTasksTable.checklistId, checklistId));
+    .where(and(eq(onboardingTasksTable.checklistId, checklistId), eq(onboardingTasksTable.tenantId, tenantId)));
   const total = tasks.length || 1;
   const completed = tasks.filter((t) => t.completedAt !== null).length;
   const pct = Math.round((completed / total) * 100);
@@ -36,7 +36,7 @@ async function recomputeChecklist(checklistId: number) {
   await db
     .update(onboardingChecklistsTable)
     .set(updates)
-    .where(eq(onboardingChecklistsTable.id, checklistId));
+    .where(and(eq(onboardingChecklistsTable.id, checklistId), eq(onboardingChecklistsTable.tenantId, tenantId)));
   return { pct, status };
 }
 
@@ -59,14 +59,17 @@ const checklistSelect = {
 router.get("/onboarding/checklists", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const { status } = req.query as Record<string, string>;
+    const tenantId = req.hrmsUser!.tenantId;
     const query = db
       .select(checklistSelect)
       .from(onboardingChecklistsTable)
       .leftJoin(employeesTable, eq(onboardingChecklistsTable.employeeId, employeesTable.id))
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id));
-    const rows = status
-      ? await query.where(sql`${onboardingChecklistsTable.status} = ${status}`).orderBy(desc(onboardingChecklistsTable.createdAt))
-      : await query.orderBy(desc(onboardingChecklistsTable.createdAt));
+    
+    const conds = [eq(onboardingChecklistsTable.tenantId, tenantId)];
+    if (status) conds.push(sql`${onboardingChecklistsTable.status} = ${status}`);
+    
+    const rows = await query.where(and(...conds)).orderBy(desc(onboardingChecklistsTable.createdAt));
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -81,10 +84,11 @@ router.post(
   async (req, res) => {
     try {
       const employeeId = parseInt(String(req.params.id), 10);
+      const tenantId = req.hrmsUser!.tenantId;
       const existing = await db
         .select({ id: onboardingChecklistsTable.id })
         .from(onboardingChecklistsTable)
-        .where(eq(onboardingChecklistsTable.employeeId, employeeId))
+        .where(and(eq(onboardingChecklistsTable.employeeId, employeeId), eq(onboardingChecklistsTable.tenantId, tenantId)))
         .limit(1);
       if (existing.length > 0) {
         res.status(409).json({ error: "Onboarding checklist already exists for this employee" });
@@ -93,12 +97,13 @@ router.post(
       const { joiningDate, notes } = req.body ?? {};
       const [checklist] = await db
         .insert(onboardingChecklistsTable)
-        .values({ employeeId, joiningDate: joiningDate ?? null, notes: notes ?? null })
+        .values({ tenantId, employeeId, joiningDate: joiningDate ?? null, notes: notes ?? null })
         .returning();
 
       const taskDueDate = joiningDate ?? null;
       for (const t of DEFAULT_ONBOARDING_TASKS) {
         await db.insert(onboardingTasksTable).values({
+          tenantId,
           checklistId: checklist.id,
           title: t.title,
           category: t.category,
@@ -122,10 +127,11 @@ router.post(
   async (req, res) => {
     try {
       const employeeId = parseInt(String(req.params.id), 10);
+      const tenantId = req.hrmsUser!.tenantId;
       const [checklist] = await db
         .select({ id: onboardingChecklistsTable.id, welcomeEmailSentAt: onboardingChecklistsTable.welcomeEmailSentAt })
         .from(onboardingChecklistsTable)
-        .where(eq(onboardingChecklistsTable.employeeId, employeeId))
+        .where(and(eq(onboardingChecklistsTable.employeeId, employeeId), eq(onboardingChecklistsTable.tenantId, tenantId)))
         .limit(1);
       if (!checklist) {
         res.status(404).json({ error: "Onboarding checklist not found for this employee" });
@@ -135,12 +141,12 @@ router.post(
       const [updated] = await db
         .update(onboardingChecklistsTable)
         .set({ welcomeEmailSentAt: sentAt, updatedAt: sentAt })
-        .where(eq(onboardingChecklistsTable.id, checklist.id))
+        .where(and(eq(onboardingChecklistsTable.id, checklist.id), eq(onboardingChecklistsTable.tenantId, tenantId)))
         .returning();
       await logAudit({ user: req.hrmsUser, action: "SEND_WELCOME_EMAIL", module: "OnboardingChecklist", recordId: checklist.id, ipAddress: req.ip });
       // Dispatch onboarding_access notification to the new employee
       const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-        .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, employeeId)).limit(1);
+        .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, employeeId), eq(hrmsUsersTable.tenantId, tenantId))).limit(1);
       if (empUser?.email) {
         import("../lib/notification-service").then(({ dispatchNotification }) => {
           dispatchNotification({
@@ -160,19 +166,19 @@ router.post(
   }
 );
 
-async function getChecklistWithTasks(checklistId: number) {
+async function getChecklistWithTasks(checklistId: number, tenantId: number) {
   const [checklist] = await db
     .select(checklistSelect)
     .from(onboardingChecklistsTable)
     .leftJoin(employeesTable, eq(onboardingChecklistsTable.employeeId, employeesTable.id))
     .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
-    .where(eq(onboardingChecklistsTable.id, checklistId))
+    .where(and(eq(onboardingChecklistsTable.id, checklistId), eq(onboardingChecklistsTable.tenantId, tenantId)))
     .limit(1);
   if (!checklist) return null;
   const tasks = await db
     .select()
     .from(onboardingTasksTable)
-    .where(eq(onboardingTasksTable.checklistId, checklistId))
+    .where(and(eq(onboardingTasksTable.checklistId, checklistId), eq(onboardingTasksTable.tenantId, tenantId)))
     .orderBy(onboardingTasksTable.category, onboardingTasksTable.id);
   return { checklist, tasks };
 }
@@ -180,11 +186,12 @@ async function getChecklistWithTasks(checklistId: number) {
 router.get("/employees/:id/onboarding-checklist", requireHrmsUser, requireRole(...HR_READ_ROLES, "employee"), async (req, res) => {
   try {
     const employeeId = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     if (req.hrmsUser?.role === "employee") {
       const [hrmsUser] = await db
         .select({ employeeId: hrmsUsersTable.employeeId })
         .from(hrmsUsersTable)
-        .where(eq(hrmsUsersTable.id, req.hrmsUser.id))
+        .where(and(eq(hrmsUsersTable.id, req.hrmsUser.id), eq(hrmsUsersTable.tenantId, tenantId)))
         .limit(1);
       if (!hrmsUser?.employeeId || hrmsUser.employeeId !== employeeId) {
         res.status(403).json({ error: "Access denied. You can only view your own onboarding checklist." });
@@ -194,13 +201,13 @@ router.get("/employees/:id/onboarding-checklist", requireHrmsUser, requireRole(.
     const [cl] = await db
       .select({ id: onboardingChecklistsTable.id })
       .from(onboardingChecklistsTable)
-      .where(eq(onboardingChecklistsTable.employeeId, employeeId))
+      .where(and(eq(onboardingChecklistsTable.employeeId, employeeId), eq(onboardingChecklistsTable.tenantId, tenantId)))
       .limit(1);
     if (!cl) {
       res.status(404).json({ error: "Onboarding checklist not found" });
       return;
     }
-    const detail = await getChecklistWithTasks(cl.id);
+    const detail = await getChecklistWithTasks(cl.id, tenantId);
     res.json(detail);
   } catch (err) {
     console.error(err);
@@ -211,23 +218,24 @@ router.get("/employees/:id/onboarding-checklist", requireHrmsUser, requireRole(.
 router.get("/onboarding/checklists/:id", requireHrmsUser, requireRole(...HR_READ_ROLES, "employee"), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     if (req.hrmsUser?.role === "employee") {
       const [hrmsUser] = await db
         .select({ employeeId: hrmsUsersTable.employeeId })
         .from(hrmsUsersTable)
-        .where(eq(hrmsUsersTable.id, req.hrmsUser.id))
+        .where(and(eq(hrmsUsersTable.id, req.hrmsUser.id), eq(hrmsUsersTable.tenantId, tenantId)))
         .limit(1);
       const [cl] = await db
         .select({ employeeId: onboardingChecklistsTable.employeeId })
         .from(onboardingChecklistsTable)
-        .where(eq(onboardingChecklistsTable.id, id))
+        .where(and(eq(onboardingChecklistsTable.id, id), eq(onboardingChecklistsTable.tenantId, tenantId)))
         .limit(1);
       if (!hrmsUser?.employeeId || !cl || cl.employeeId !== hrmsUser.employeeId) {
         res.status(403).json({ error: "Access denied. You can only view your own onboarding checklist." });
         return;
       }
     }
-    const detail = await getChecklistWithTasks(id);
+    const detail = await getChecklistWithTasks(id, tenantId);
     if (!detail) {
       res.status(404).json({ error: "Checklist not found" });
       return;
@@ -242,11 +250,12 @@ router.get("/onboarding/checklists/:id", requireHrmsUser, requireRole(...HR_READ
 router.patch("/onboarding/checklists/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     const { joiningDate, notes } = req.body;
     const [row] = await db
       .update(onboardingChecklistsTable)
       .set({ joiningDate: joiningDate ?? null, notes: notes ?? null, updatedAt: new Date() })
-      .where(eq(onboardingChecklistsTable.id, id))
+      .where(and(eq(onboardingChecklistsTable.id, id), eq(onboardingChecklistsTable.tenantId, tenantId)))
       .returning();
     if (!row) { res.status(404).json({ error: "Checklist not found" }); return; }
     res.json(row);
@@ -259,10 +268,11 @@ router.patch("/onboarding/checklists/:id", requireHrmsUser, requireRole(...HR_RO
 router.get("/onboarding/checklists/:id/tasks", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     const tasks = await db
       .select()
       .from(onboardingTasksTable)
-      .where(eq(onboardingTasksTable.checklistId, id))
+      .where(and(eq(onboardingTasksTable.checklistId, id), eq(onboardingTasksTable.tenantId, tenantId)))
       .orderBy(onboardingTasksTable.category, onboardingTasksTable.id);
     res.json(tasks);
   } catch (err) {
@@ -274,6 +284,7 @@ router.get("/onboarding/checklists/:id/tasks", requireHrmsUser, requireRole(...H
 router.post("/onboarding/checklists/:id/tasks", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const checklistId = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     const { title, description, category, assigneeRole, dueDate, notes } = req.body;
     if (!title || !category) {
       res.status(400).json({ error: "title and category are required" });
@@ -281,9 +292,9 @@ router.post("/onboarding/checklists/:id/tasks", requireHrmsUser, requireRole(...
     }
     const [task] = await db
       .insert(onboardingTasksTable)
-      .values({ checklistId, title, description, category, assigneeRole, dueDate, notes })
+      .values({ tenantId, checklistId, title, description, category, assigneeRole, dueDate, notes })
       .returning();
-    await recomputeChecklist(checklistId);
+    await recomputeChecklist(checklistId, tenantId);
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "OnboardingTask", recordId: task.id, ipAddress: req.ip });
     res.status(201).json(task);
   } catch (err) {
@@ -295,11 +306,12 @@ router.post("/onboarding/checklists/:id/tasks", requireHrmsUser, requireRole(...
 router.patch("/onboarding/tasks/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     const { title, description, category, assigneeRole, dueDate, notes } = req.body;
     const [task] = await db
       .update(onboardingTasksTable)
       .set({ title, description, category, assigneeRole, dueDate, notes, updatedAt: new Date() })
-      .where(eq(onboardingTasksTable.id, id))
+      .where(and(eq(onboardingTasksTable.id, id), eq(onboardingTasksTable.tenantId, tenantId)))
       .returning();
     if (!task) { res.status(404).json({ error: "Task not found" }); return; }
     res.json(task);
@@ -312,9 +324,10 @@ router.patch("/onboarding/tasks/:id", requireHrmsUser, requireRole(...HR_ROLES),
 router.delete("/onboarding/tasks/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    const [task] = await db.delete(onboardingTasksTable).where(eq(onboardingTasksTable.id, id)).returning();
+    const tenantId = req.hrmsUser!.tenantId;
+    const [task] = await db.delete(onboardingTasksTable).where(and(eq(onboardingTasksTable.id, id), eq(onboardingTasksTable.tenantId, tenantId))).returning();
     if (!task) { res.status(404).json({ error: "Task not found" }); return; }
-    await recomputeChecklist(task.checklistId);
+    await recomputeChecklist(task.checklistId, tenantId);
     res.status(204).send();
   } catch (err) {
     console.error(err);
@@ -325,12 +338,13 @@ router.delete("/onboarding/tasks/:id", requireHrmsUser, requireRole(...HR_ROLES)
 router.post("/onboarding/tasks/:id/complete", requireHrmsUser, requireRole(...HR_ROLES, "hod", "employee"), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     const { notes } = req.body ?? {};
 
     const [existingTask] = await db
       .select()
       .from(onboardingTasksTable)
-      .where(eq(onboardingTasksTable.id, id))
+      .where(and(eq(onboardingTasksTable.id, id), eq(onboardingTasksTable.tenantId, tenantId)))
       .limit(1);
     if (!existingTask) { res.status(404).json({ error: "Task not found" }); return; }
 
@@ -342,12 +356,12 @@ router.post("/onboarding/tasks/:id/complete", requireHrmsUser, requireRole(...HR
       const [checklist] = await db
         .select({ employeeId: onboardingChecklistsTable.employeeId })
         .from(onboardingChecklistsTable)
-        .where(eq(onboardingChecklistsTable.id, existingTask.checklistId))
+        .where(and(eq(onboardingChecklistsTable.id, existingTask.checklistId), eq(onboardingChecklistsTable.tenantId, tenantId)))
         .limit(1);
       const [hrmsUser] = await db
         .select({ employeeId: hrmsUsersTable.employeeId })
         .from(hrmsUsersTable)
-        .where(eq(hrmsUsersTable.id, req.hrmsUser.id))
+        .where(and(eq(hrmsUsersTable.id, req.hrmsUser.id), eq(hrmsUsersTable.tenantId, tenantId)))
         .limit(1);
       if (!checklist || !hrmsUser?.employeeId || checklist.employeeId !== hrmsUser.employeeId) {
         res.status(403).json({ error: "You can only complete tasks in your own onboarding checklist." });
@@ -363,10 +377,10 @@ router.post("/onboarding/tasks/:id/complete", requireHrmsUser, requireRole(...HR
         notes: notes ?? null,
         updatedAt: new Date(),
       })
-      .where(eq(onboardingTasksTable.id, id))
+      .where(and(eq(onboardingTasksTable.id, id), eq(onboardingTasksTable.tenantId, tenantId)))
       .returning();
     if (!task) { res.status(404).json({ error: "Task not found" }); return; }
-    await recomputeChecklist(task.checklistId);
+    await recomputeChecklist(task.checklistId, tenantId);
     await logAudit({ user: req.hrmsUser, action: "COMPLETE", module: "OnboardingTask", recordId: id, ipAddress: req.ip });
     res.json(task);
   } catch (err) {
@@ -378,13 +392,14 @@ router.post("/onboarding/tasks/:id/complete", requireHrmsUser, requireRole(...HR
 router.post("/onboarding/tasks/:id/uncomplete", requireHrmsUser, requireRole(...HR_ROLES, "hod"), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     const [task] = await db
       .update(onboardingTasksTable)
       .set({ completedAt: null, completedById: null, updatedAt: new Date() })
-      .where(eq(onboardingTasksTable.id, id))
+      .where(and(eq(onboardingTasksTable.id, id), eq(onboardingTasksTable.tenantId, tenantId)))
       .returning();
     if (!task) { res.status(404).json({ error: "Task not found" }); return; }
-    await recomputeChecklist(task.checklistId);
+    await recomputeChecklist(task.checklistId, tenantId);
     res.json(task);
   } catch (err) {
     console.error(err);
@@ -395,10 +410,11 @@ router.post("/onboarding/tasks/:id/uncomplete", requireHrmsUser, requireRole(...
 router.get("/employees/:id/induction-sessions", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     const sessions = await db
       .select()
       .from(inductionSessionsTable)
-      .where(eq(inductionSessionsTable.employeeId, id))
+      .where(and(eq(inductionSessionsTable.employeeId, id), eq(inductionSessionsTable.tenantId, tenantId)))
       .orderBy(desc(inductionSessionsTable.sessionDate));
     res.json(sessions);
   } catch (err) {
@@ -410,6 +426,7 @@ router.get("/employees/:id/induction-sessions", requireHrmsUser, requireRole(...
 router.post("/employees/:id/induction-sessions", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     const { sessionDate, trainerName, topics, durationMinutes, notes } = req.body;
     if (!sessionDate || !trainerName) {
       res.status(400).json({ error: "sessionDate and trainerName are required" });
@@ -418,6 +435,7 @@ router.post("/employees/:id/induction-sessions", requireHrmsUser, requireRole(..
     const [session] = await db
       .insert(inductionSessionsTable)
       .values({
+        tenantId,
         employeeId: id,
         sessionDate,
         trainerName,
@@ -438,11 +456,12 @@ router.post("/employees/:id/induction-sessions", requireHrmsUser, requireRole(..
 router.patch("/induction-sessions/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     const { sessionDate, trainerName, topics, durationMinutes, notes } = req.body;
     const [session] = await db
       .update(inductionSessionsTable)
       .set({ sessionDate, trainerName, topics, durationMinutes, notes, updatedAt: new Date() })
-      .where(eq(inductionSessionsTable.id, id))
+      .where(and(eq(inductionSessionsTable.id, id), eq(inductionSessionsTable.tenantId, tenantId)))
       .returning();
     if (!session) { res.status(404).json({ error: "Session not found" }); return; }
     res.json(session);
@@ -455,7 +474,8 @@ router.patch("/induction-sessions/:id", requireHrmsUser, requireRole(...HR_ROLES
 router.delete("/induction-sessions/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    await db.delete(inductionSessionsTable).where(eq(inductionSessionsTable.id, id));
+    const tenantId = req.hrmsUser!.tenantId;
+    await db.delete(inductionSessionsTable).where(and(eq(inductionSessionsTable.id, id), eq(inductionSessionsTable.tenantId, tenantId)));
     res.status(204).send();
   } catch (err) {
     console.error(err);
@@ -466,11 +486,12 @@ router.delete("/induction-sessions/:id", requireHrmsUser, requireRole(...HR_ROLE
 router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROLES, "employee"), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
     if (req.hrmsUser?.role === "employee") {
       const [hrmsUser] = await db
         .select({ employeeId: hrmsUsersTable.employeeId })
         .from(hrmsUsersTable)
-        .where(eq(hrmsUsersTable.id, req.hrmsUser.id))
+        .where(and(eq(hrmsUsersTable.id, req.hrmsUser.id), eq(hrmsUsersTable.tenantId, tenantId)))
         .limit(1);
       if (!hrmsUser?.employeeId || hrmsUser.employeeId !== id) {
         res.status(403).json({ error: "Access denied. You can only download your own ID card." });
@@ -491,7 +512,7 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
       .from(employeesTable)
       .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
-      .where(eq(employeesTable.id, id))
+      .where(and(eq(employeesTable.id, id), eq(employeesTable.tenantId, tenantId)))
       .limit(1);
 
     if (!emp) {
@@ -502,7 +523,7 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
     const [checklist] = await db
       .select()
       .from(onboardingChecklistsTable)
-      .where(eq(onboardingChecklistsTable.employeeId, id))
+      .where(and(eq(onboardingChecklistsTable.employeeId, id), eq(onboardingChecklistsTable.tenantId, tenantId)))
       .limit(1);
 
     if (!checklist || checklist.completionPercentage < 100) {
@@ -517,7 +538,7 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
       .select({ completionPercentage: preOnboardingRecordsTable.completionPercentage })
       .from(preOnboardingRecordsTable)
       .innerJoin(candidatesTable, eq(preOnboardingRecordsTable.candidateId, candidatesTable.id))
-      .where(eq(candidatesTable.email, emp.email))
+      .where(and(eq(candidatesTable.email, emp.email), eq(preOnboardingRecordsTable.tenantId, tenantId)))
       .limit(1);
 
     if (preOnboardingRecord && preOnboardingRecord.completionPercentage < 100) {

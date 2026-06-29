@@ -487,7 +487,7 @@ async function escalateSlaBreaches() {
     if (overdue.length === 0) return;
 
     // Get HR managers for escalation
-    const hrManagers = await getUsersByRoles(["customer_admin", "hr_manager", "hr_executive"]);
+    const hrManagers = await getUsersByRoles(["customer_admin", "hr_manager", "hr_executive"], 1); // FIXME: Need to handle multiple tenants in scheduler
 
     for (const ticket of overdue) {
       const slaLabel = ticket.slaDeadline ? new Date(ticket.slaDeadline).toLocaleString("en-IN") : "";
@@ -571,7 +571,7 @@ async function processConfiguredEscalations() {
       const escalateTo = config.escalateTo;
       if (!escalateTo) continue;
 
-      const recipientUsers = await getUsersByRoles([escalateTo]);
+      const recipientUsers = await getUsersByRoles([escalateTo], 1); // FIXME: Need to handle multiple tenants in scheduler
       if (recipientUsers.length === 0) continue;
 
       if (config.transactionType === "leave") {

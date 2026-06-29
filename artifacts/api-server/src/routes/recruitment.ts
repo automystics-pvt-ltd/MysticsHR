@@ -69,7 +69,10 @@ const requisitionGroupBy = [
 router.get("/requisitions", requireHrmsUser, requireRole(...HR_WRITE_ROLES, ...APPROVE_ROLES), async (req, res) => {
   try {
     const { status, departmentId } = req.query as Record<string, string>;
-    const conditions = [isNull(jobRequisitionsTable.deletedAt)];
+    const conditions = [
+      isNull(jobRequisitionsTable.deletedAt),
+      eq(jobRequisitionsTable.tenantId, req.hrmsUser!.tenantId),
+    ];
     if (status) conditions.push(sql`${jobRequisitionsTable.status} = ${status}`);
     if (departmentId) conditions.push(eq(jobRequisitionsTable.departmentId, parseInt(departmentId, 10)));
 
@@ -118,6 +121,7 @@ router.post("/requisitions", requireHrmsUser, requireRole(...HR_WRITE_ROLES), as
         requiredSkills: body.requiredSkills ?? null,
         status: "Pending Approval",
         raisedById: req.hrmsUser?.id ?? null,
+        tenantId: req.hrmsUser!.tenantId,
       })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "Requisitions", recordId: row.id, ipAddress: req.ip });
@@ -140,7 +144,11 @@ router.get("/requisitions/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES, 
         candidatesTable,
         and(eq(candidatesTable.requisitionId, jobRequisitionsTable.id), isNull(candidatesTable.deletedAt))
       )
-      .where(and(eq(jobRequisitionsTable.id, id), isNull(jobRequisitionsTable.deletedAt)))
+      .where(and(
+        eq(jobRequisitionsTable.id, id),
+        eq(jobRequisitionsTable.tenantId, req.hrmsUser!.tenantId),
+        isNull(jobRequisitionsTable.deletedAt)
+      ))
       .groupBy(...requisitionGroupBy)
       .limit(1);
     if (!row) {
@@ -178,7 +186,11 @@ router.patch("/requisitions/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES
     const [row] = await db
       .update(jobRequisitionsTable)
       .set(updates)
-      .where(and(eq(jobRequisitionsTable.id, id), isNull(jobRequisitionsTable.deletedAt)))
+      .where(and(
+        eq(jobRequisitionsTable.id, id),
+        eq(jobRequisitionsTable.tenantId, req.hrmsUser!.tenantId),
+        isNull(jobRequisitionsTable.deletedAt)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Requisition not found" });
@@ -198,7 +210,11 @@ router.delete("/requisitions/:id", requireHrmsUser, requireRole("customer_admin"
     const [row] = await db
       .update(jobRequisitionsTable)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(jobRequisitionsTable.id, id), isNull(jobRequisitionsTable.deletedAt)))
+      .where(and(
+        eq(jobRequisitionsTable.id, id),
+        eq(jobRequisitionsTable.tenantId, req.hrmsUser!.tenantId),
+        isNull(jobRequisitionsTable.deletedAt)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Requisition not found" });
@@ -224,7 +240,11 @@ router.post("/requisitions/:id/approve", requireHrmsUser, requireRole(...APPROVE
         approvedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(and(eq(jobRequisitionsTable.id, id), isNull(jobRequisitionsTable.deletedAt)))
+      .where(and(
+        eq(jobRequisitionsTable.id, id),
+        eq(jobRequisitionsTable.tenantId, req.hrmsUser!.tenantId),
+        isNull(jobRequisitionsTable.deletedAt)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Requisition not found" });
@@ -254,7 +274,11 @@ router.post("/requisitions/:id/reject", requireHrmsUser, requireRole(...APPROVE_
         approvedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(and(eq(jobRequisitionsTable.id, id), isNull(jobRequisitionsTable.deletedAt)))
+      .where(and(
+        eq(jobRequisitionsTable.id, id),
+        eq(jobRequisitionsTable.tenantId, req.hrmsUser!.tenantId),
+        isNull(jobRequisitionsTable.deletedAt)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Requisition not found" });
@@ -298,7 +322,10 @@ const candidateSelect = {
 router.get("/candidates", requireHrmsUser, requireRole(...HR_WRITE_ROLES, "hod"), async (req, res) => {
   try {
     const { requisitionId, stage } = req.query as Record<string, string>;
-    const conditions = [isNull(candidatesTable.deletedAt)];
+    const conditions = [
+      isNull(candidatesTable.deletedAt),
+      eq(candidatesTable.tenantId, req.hrmsUser!.tenantId),
+    ];
     if (requisitionId) conditions.push(eq(candidatesTable.requisitionId, parseInt(requisitionId, 10)));
     if (stage) conditions.push(sql`${candidatesTable.stage} = ${stage}`);
 
@@ -339,6 +366,7 @@ router.post("/candidates", requireHrmsUser, requireRole(...HR_WRITE_ROLES), asyn
         resumeUrl: b.resumeUrl ?? null,
         source: b.source ?? "Other",
         notes: b.notes ?? null,
+        tenantId: req.hrmsUser!.tenantId,
       })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "Candidates", recordId: row.id, ipAddress: req.ip });
@@ -356,7 +384,11 @@ router.get("/candidates/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES, "h
       .select(candidateSelect)
       .from(candidatesTable)
       .leftJoin(jobRequisitionsTable, eq(candidatesTable.requisitionId, jobRequisitionsTable.id))
-      .where(and(eq(candidatesTable.id, id), isNull(candidatesTable.deletedAt)))
+      .where(and(
+        eq(candidatesTable.id, id),
+        eq(candidatesTable.tenantId, req.hrmsUser!.tenantId),
+        isNull(candidatesTable.deletedAt)
+      ))
       .limit(1);
     if (!row) {
       res.status(404).json({ error: "Candidate not found" });
@@ -393,7 +425,11 @@ router.patch("/candidates/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES),
     const [row] = await db
       .update(candidatesTable)
       .set(updates)
-      .where(and(eq(candidatesTable.id, id), isNull(candidatesTable.deletedAt)))
+      .where(and(
+        eq(candidatesTable.id, id),
+        eq(candidatesTable.tenantId, req.hrmsUser!.tenantId),
+        isNull(candidatesTable.deletedAt)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Candidate not found" });
@@ -413,7 +449,11 @@ router.delete("/candidates/:id", requireHrmsUser, requireRole("customer_admin", 
     const [row] = await db
       .update(candidatesTable)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(candidatesTable.id, id), isNull(candidatesTable.deletedAt)))
+      .where(and(
+        eq(candidatesTable.id, id),
+        eq(candidatesTable.tenantId, req.hrmsUser!.tenantId),
+        isNull(candidatesTable.deletedAt)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Candidate not found" });
@@ -457,7 +497,11 @@ router.post("/candidates/:id/move-stage", requireHrmsUser, requireRole(...HR_WRI
         rejectionReason: stage === "Rejected" ? rejectionReason : null,
         updatedAt: new Date(),
       })
-      .where(and(eq(candidatesTable.id, id), isNull(candidatesTable.deletedAt)))
+      .where(and(
+        eq(candidatesTable.id, id),
+        eq(candidatesTable.tenantId, req.hrmsUser!.tenantId),
+        isNull(candidatesTable.deletedAt)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Candidate not found" });
@@ -506,7 +550,10 @@ router.get("/candidates/:candidateId/interviews", requireHrmsUser, requireRole(.
       .select(interviewSelect)
       .from(interviewRoundsTable)
       .leftJoin(hrmsUsersTable, eq(interviewRoundsTable.interviewerId, hrmsUsersTable.id))
-      .where(eq(interviewRoundsTable.candidateId, candidateId))
+      .where(and(
+        eq(interviewRoundsTable.candidateId, candidateId),
+        eq(interviewRoundsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(interviewRoundsTable.roundNumber);
     res.json(rows);
   } catch (err) {
@@ -529,7 +576,10 @@ router.post("/candidates/:candidateId/interviews", requireHrmsUser, requireRole(
       const [maxRow] = await db
         .select({ max: sql<number>`coalesce(max(${interviewRoundsTable.roundNumber}), 0)::int` })
         .from(interviewRoundsTable)
-        .where(eq(interviewRoundsTable.candidateId, candidateId));
+        .where(and(
+          eq(interviewRoundsTable.candidateId, candidateId),
+          eq(interviewRoundsTable.tenantId, req.hrmsUser!.tenantId)
+        ));
       roundNumber = (maxRow?.max ?? 0) + 1;
     }
 
@@ -545,13 +595,18 @@ router.post("/candidates/:candidateId/interviews", requireHrmsUser, requireRole(
         mode: b.mode ?? "Video",
         meetingLink: b.meetingLink ?? null,
         location: b.location ?? null,
+        tenantId: req.hrmsUser!.tenantId,
       })
       .returning();
 
     await db
       .update(candidatesTable)
       .set({ stage: "Interview Scheduled", updatedAt: new Date() })
-      .where(and(eq(candidatesTable.id, candidateId), sql`${candidatesTable.stage} NOT IN ('Offer Issued', 'Offer Accepted', 'Rejected')`));
+      .where(and(
+        eq(candidatesTable.id, candidateId),
+        eq(candidatesTable.tenantId, req.hrmsUser!.tenantId),
+        sql`${candidatesTable.stage} NOT IN ('Offer Issued', 'Offer Accepted', 'Rejected')`
+      ));
 
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "Interviews", recordId: row.id, ipAddress: req.ip });
     res.status(201).json(row);
@@ -569,7 +624,13 @@ router.patch("/interviews/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES),
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     }
     if (req.body.scheduledAt !== undefined) updates.scheduledAt = new Date(req.body.scheduledAt);
-    const [row] = await db.update(interviewRoundsTable).set(updates).where(eq(interviewRoundsTable.id, id)).returning();
+    const [row] = await db.update(interviewRoundsTable)
+      .set(updates)
+      .where(and(
+        eq(interviewRoundsTable.id, id),
+        eq(interviewRoundsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
+      .returning();
     if (!row) {
       res.status(404).json({ error: "Interview not found" });
       return;
@@ -578,7 +639,11 @@ router.patch("/interviews/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES),
       await db
         .update(candidatesTable)
         .set({ stage: "Interview Completed", updatedAt: new Date() })
-        .where(and(eq(candidatesTable.id, row.candidateId), sql`${candidatesTable.stage} NOT IN ('Offer Issued', 'Offer Accepted', 'Rejected')`));
+        .where(and(
+          eq(candidatesTable.id, row.candidateId),
+          eq(candidatesTable.tenantId, req.hrmsUser!.tenantId),
+          sql`${candidatesTable.stage} NOT IN ('Offer Issued', 'Offer Accepted', 'Rejected')`
+        ));
     }
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Interviews", recordId: id, ipAddress: req.ip });
     res.json(row);
@@ -591,7 +656,12 @@ router.patch("/interviews/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES),
 router.delete("/interviews/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    const [row] = await db.delete(interviewRoundsTable).where(eq(interviewRoundsTable.id, id)).returning();
+    const [row] = await db.delete(interviewRoundsTable)
+      .where(and(
+        eq(interviewRoundsTable.id, id),
+        eq(interviewRoundsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
+      .returning();
     if (!row) {
       res.status(404).json({ error: "Interview not found" });
       return;
@@ -629,7 +699,10 @@ router.get("/interviews/:id/feedback", requireHrmsUser, requireRole(...HR_WRITE_
       .select(feedbackSelect)
       .from(interviewFeedbackTable)
       .leftJoin(hrmsUsersTable, eq(interviewFeedbackTable.interviewerId, hrmsUsersTable.id))
-      .where(eq(interviewFeedbackTable.interviewRoundId, id))
+      .where(and(
+        eq(interviewFeedbackTable.interviewRoundId, id),
+        eq(interviewFeedbackTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .orderBy(desc(interviewFeedbackTable.createdAt));
     res.json(rows);
   } catch (err) {
@@ -668,6 +741,7 @@ router.post("/interviews/:id/feedback", requireHrmsUser, requireRole(...HR_WRITE
         weaknesses: b.weaknesses ?? null,
         comments: b.comments ?? null,
         recommendation: b.recommendation ?? null,
+        tenantId: req.hrmsUser!.tenantId,
       })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "InterviewFeedback", recordId: row.id, ipAddress: req.ip });
@@ -707,7 +781,7 @@ const offerSelect = {
 router.get("/offers", requireHrmsUser, requireRole(...HR_WRITE_ROLES), async (req, res) => {
   try {
     const { status, candidateId } = req.query as Record<string, string>;
-    const conditions = [];
+    const conditions = [eq(offerLettersTable.tenantId, req.hrmsUser!.tenantId)];
     if (status) conditions.push(sql`${offerLettersTable.status} = ${status}`);
     if (candidateId) conditions.push(eq(offerLettersTable.candidateId, parseInt(candidateId, 10)));
 
@@ -797,6 +871,7 @@ router.post("/candidates/:candidateId/offer", requireHrmsUser, requireRole(...HR
         notes: b.notes ?? null,
         status: "Draft",
         issuedById: req.hrmsUser?.id ?? null,
+        tenantId: req.hrmsUser!.tenantId,
       })
       .returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "Offers", recordId: row.id, ipAddress: req.ip });
@@ -815,7 +890,10 @@ router.get("/offers/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES), async
       .from(offerLettersTable)
       .leftJoin(candidatesTable, eq(offerLettersTable.candidateId, candidatesTable.id))
       .leftJoin(hrmsUsersTable, eq(offerLettersTable.issuedById, hrmsUsersTable.id))
-      .where(eq(offerLettersTable.id, id))
+      .where(and(
+        eq(offerLettersTable.id, id),
+        eq(offerLettersTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .limit(1);
     if (!row) {
       res.status(404).json({ error: "Offer not found" });
@@ -835,7 +913,13 @@ router.patch("/offers/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES), asy
     for (const key of ["jobTitle", "ctc", "joiningDate", "expiryDate", "letterContent", "letterUrl", "notes"]) {
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     }
-    const [row] = await db.update(offerLettersTable).set(updates).where(eq(offerLettersTable.id, id)).returning();
+    const [row] = await db.update(offerLettersTable)
+      .set(updates)
+      .where(and(
+        eq(offerLettersTable.id, id),
+        eq(offerLettersTable.tenantId, req.hrmsUser!.tenantId)
+      ))
+      .returning();
     if (!row) {
       res.status(404).json({ error: "Offer not found" });
       return;
@@ -854,7 +938,10 @@ router.post("/offers/:id/issue", requireHrmsUser, requireRole(...HR_WRITE_ROLES)
     const [row] = await db
       .update(offerLettersTable)
       .set({ status: "Issued", issuedAt: new Date(), updatedAt: new Date() })
-      .where(eq(offerLettersTable.id, id))
+      .where(and(
+        eq(offerLettersTable.id, id),
+        eq(offerLettersTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Offer not found" });
@@ -901,25 +988,35 @@ const DEFAULT_DOC_CHECKLIST: Array<{ documentType: string; documentName: string;
 router.post("/offers/:id/accept", requireHrmsUser, requireRole(...HR_WRITE_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    const [offer] = await db
+    const [row] = await db
       .update(offerLettersTable)
       .set({ status: "Accepted", respondedAt: new Date(), updatedAt: new Date() })
-      .where(eq(offerLettersTable.id, id))
+      .where(and(
+        eq(offerLettersTable.id, id),
+        eq(offerLettersTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .returning();
-    if (!offer) {
+    if (!row) {
       res.status(404).json({ error: "Offer not found" });
       return;
     }
+    const offer = row;
 
     await db
       .update(candidatesTable)
       .set({ stage: "Offer Accepted", updatedAt: new Date() })
-      .where(eq(candidatesTable.id, offer.candidateId));
+      .where(and(
+        eq(candidatesTable.id, offer.candidateId),
+        eq(candidatesTable.tenantId, req.hrmsUser!.tenantId)
+      ));
 
     const [existing] = await db
       .select()
       .from(preOnboardingRecordsTable)
-      .where(eq(preOnboardingRecordsTable.candidateId, offer.candidateId))
+      .where(and(
+        eq(preOnboardingRecordsTable.candidateId, offer.candidateId),
+        eq(preOnboardingRecordsTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .limit(1);
 
     let preOnboardingRecord = existing;
@@ -932,6 +1029,7 @@ router.post("/offers/:id/accept", requireHrmsUser, requireRole(...HR_WRITE_ROLES
           expectedJoiningDate: offer.joiningDate,
           status: "Pending",
           completionPercentage: 0,
+          tenantId: req.hrmsUser!.tenantId,
         })
         .returning();
       preOnboardingRecord = created;
@@ -942,6 +1040,7 @@ router.post("/offers/:id/accept", requireHrmsUser, requireRole(...HR_WRITE_ROLES
           documentType: d.documentType as "Government ID",
           documentName: d.documentName,
           isRequired: d.isRequired,
+          tenantId: req.hrmsUser!.tenantId,
         }))
       );
     }
@@ -965,7 +1064,10 @@ router.post("/offers/:id/reject", requireHrmsUser, requireRole(...HR_WRITE_ROLES
         notes: req.body?.notes ?? null,
         updatedAt: new Date(),
       })
-      .where(eq(offerLettersTable.id, id))
+      .where(and(
+        eq(offerLettersTable.id, id),
+        eq(offerLettersTable.tenantId, req.hrmsUser!.tenantId)
+      ))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Offer not found" });

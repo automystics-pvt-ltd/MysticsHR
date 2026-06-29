@@ -18,13 +18,13 @@ function getJwtSecret(): string {
   return secret;
 }
 
-export function signToken(payload: { userId: number; email: string; role: string }): string {
+export function signToken(payload: { userId: number; email: string; role: string; tenantId: number }): string {
   return jwt.sign(payload, getJwtSecret(), { expiresIn: "7d" });
 }
 
-export function verifyToken(token: string): { userId: number; email: string; role: string } | null {
+export function verifyToken(token: string): { userId: number; email: string; role: string; tenantId: number } | null {
   try {
-    return jwt.verify(token, getJwtSecret()) as { userId: number; email: string; role: string };
+    return jwt.verify(token, getJwtSecret()) as { userId: number; email: string; role: string; tenantId: number };
   } catch {
     return null;
   }

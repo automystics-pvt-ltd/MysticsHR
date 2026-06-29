@@ -36,6 +36,7 @@ export function getAppBaseUrl(): string {
  */
 export async function issueDocumentDownloadToken(opts: {
   issuedDocumentId: number;
+  tenantId: number;
   validityDays?: number;
   createdByUserId?: number | null;
 }): Promise<{ token: string; url: string; expiresAt: Date }> {
@@ -44,6 +45,7 @@ export async function issueDocumentDownloadToken(opts: {
   const token = randomBytes(32).toString("base64url");
 
   await db.insert(documentDownloadTokensTable).values({
+    tenantId: opts.tenantId,
     issuedDocumentId: opts.issuedDocumentId,
     token,
     expiresAt,

@@ -49,21 +49,21 @@ function computeWorkingDays(from: string, to: string, isHalfDay: boolean): numbe
   return days;
 }
 
-async function getEmployeeForUser(userId: number): Promise<{
+async function getEmployeeForUser(userId: number, tenantId: number): Promise<{
   id: number; departmentId: number | null; employmentType: string | null; gender: string | null;
 } | null> {
-  const [user] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(eq(hrmsUsersTable.id, userId));
+  const [user] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, userId), eq(hrmsUsersTable.tenantId, tenantId)));
   if (!user?.employeeId) return null;
   const [emp] = await db.select({
     id: employeesTable.id,
     departmentId: employeesTable.departmentId,
     employmentType: employeesTable.employmentType,
     gender: employeesTable.gender,
-  }).from(employeesTable).where(eq(employeesTable.id, user.employeeId));
+  }).from(employeesTable).where(and(eq(employeesTable.id, user.employeeId), eq(employeesTable.tenantId, tenantId)));
   return emp ?? null;
 }
 
-async function getOrCreateBalance(employeeId: number, leaveTypeId: number, year: number, allocate?: string) {
+async function getOrCreateBalance(employeeId: number, leaveTypeId: number, year: number, tenantId: number, allocate?: string) {
   const [existing] = await db
     .select()
     .from(leaveBalancesTable)
@@ -71,9 +71,11 @@ async function getOrCreateBalance(employeeId: number, leaveTypeId: number, year:
       eq(leaveBalancesTable.employeeId, employeeId),
       eq(leaveBalancesTable.leaveTypeId, leaveTypeId),
       eq(leaveBalancesTable.year, year),
+      eq(leaveBalancesTable.tenantId, tenantId),
     ));
   if (existing) return existing;
   const [created] = await db.insert(leaveBalancesTable).values({
+    tenantId,
     employeeId,
     leaveTypeId,
     year,
@@ -90,7 +92,7 @@ async function getOrCreateBalance(employeeId: number, leaveTypeId: number, year:
 router.get("/leave/types", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const { isActive } = req.query as { isActive?: string };
-    const conds: SQL[] = [];
+    const conds: SQL[] = [eq(leaveTypesTable.tenantId, req.hrmsUser!.tenantId)];
     if (isActive !== undefined) conds.push(eq(leaveTypesTable.isActive, isActive === "true"));
     const types = await db.select().from(leaveTypesTable)
       .where(conds.length ? and(...conds) : undefined)
@@ -101,7 +103,7 @@ router.get("/leave/types", requireHrmsUser, requireRole(...ALL_ROLES), async (re
 
 router.get("/leave/types/:id", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
-    const [type] = await db.select().from(leaveTypesTable).where(eq(leaveTypesTable.id, Number(req.params.id)));
+    const [type] = await db.select().from(leaveTypesTable).where(and(eq(leaveTypesTable.id, Number(req.params.id)), eq(leaveTypesTable.tenantId, req.hrmsUser!.tenantId)));
     if (!type) { res.status(404).json({ error: "Not found" }); return; }
     res.json(type);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -117,6 +119,7 @@ router.post("/leave/types", requireHrmsUser, requireRole(...HR_ROLES), async (re
       allowHalfDay?: boolean; lopByDefault?: boolean; isActive?: boolean;
     };
     const [type] = await db.insert(leaveTypesTable).values({
+      tenantId: req.hrmsUser!.tenantId,
       name: body.name,
       code: body.code.toUpperCase(),
       description: body.description,
@@ -136,6 +139,7 @@ router.post("/leave/types", requireHrmsUser, requireRole(...HR_ROLES), async (re
     }).returning();
     // Auto-create a corresponding leave_policies record (1:1) seeded from the type's initial policy values
     await db.insert(leavePoliciesTable).values({
+      tenantId: req.hrmsUser!.tenantId,
       leaveTypeId: type.id,
       requiresHodApproval: body.requiresHodApproval ?? true,
       requiresHrApproval: body.requiresHrApproval ?? true,
@@ -159,7 +163,7 @@ router.put("/leave/types/:id", requireHrmsUser, requireRole(...HR_ROLES), async 
     const body = req.body as Partial<typeof leaveTypesTable.$inferInsert>;
     const [updated] = await db.update(leaveTypesTable)
       .set({ ...body, code: body.code ? String(body.code).toUpperCase() : undefined, updatedAt: new Date() })
-      .where(eq(leaveTypesTable.id, Number(req.params.id)))
+      .where(and(eq(leaveTypesTable.id, Number(req.params.id)), eq(leaveTypesTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
     await logAudit({ user: req.hrmsUser, action: "UPDATE_LEAVE_TYPE", module: "Leave", recordId: updated.id, newValue: updated.name, ipAddress: req.ip });
@@ -171,7 +175,7 @@ router.delete("/leave/types/:id", requireHrmsUser, requireRole(...HR_ROLES), asy
   try {
     const [updated] = await db.update(leaveTypesTable)
       .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(leaveTypesTable.id, Number(req.params.id)))
+      .where(and(eq(leaveTypesTable.id, Number(req.params.id)), eq(leaveTypesTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
     await logAudit({ user: req.hrmsUser, action: "DEACTIVATE_LEAVE_TYPE", module: "Leave", recordId: updated.id, newValue: updated.name, ipAddress: req.ip });
@@ -206,12 +210,13 @@ const POLICY_SHAPE = {
 };
 
 // Helper: upsert a policy row so the endpoint never returns 404 for seed data
-async function getOrCreatePolicy(leaveTypeId: number) {
-  const [existing] = await db.select().from(leavePoliciesTable).where(eq(leavePoliciesTable.leaveTypeId, leaveTypeId));
+async function getOrCreatePolicy(leaveTypeId: number, tenantId: number) {
+  const [existing] = await db.select().from(leavePoliciesTable).where(and(eq(leavePoliciesTable.leaveTypeId, leaveTypeId), eq(leavePoliciesTable.tenantId, tenantId)));
   if (existing) return existing;
-  const [lt] = await db.select().from(leaveTypesTable).where(eq(leaveTypesTable.id, leaveTypeId));
+  const [lt] = await db.select().from(leaveTypesTable).where(and(eq(leaveTypesTable.id, leaveTypeId), eq(leaveTypesTable.tenantId, tenantId)));
   if (!lt) return null;
   const [created] = await db.insert(leavePoliciesTable).values({
+    tenantId,
     leaveTypeId,
     requiresHodApproval: lt.requiresHodApproval,
     requiresHrApproval: lt.requiresHrApproval,
@@ -230,14 +235,16 @@ async function getOrCreatePolicy(leaveTypeId: number) {
 
 router.get("/leave/policies", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
+    const tenantId = req.hrmsUser!.tenantId;
     // Ensure policy records exist for all active leave types (handles pre-existing types)
-    const allTypes = await db.select().from(leaveTypesTable).where(eq(leaveTypesTable.isActive, true));
+    const allTypes = await db.select().from(leaveTypesTable).where(and(eq(leaveTypesTable.isActive, true), eq(leaveTypesTable.tenantId, tenantId)));
     for (const lt of allTypes) {
-      await getOrCreatePolicy(lt.id);
+      await getOrCreatePolicy(lt.id, tenantId);
     }
     const policies = await db.select(POLICY_SHAPE)
       .from(leavePoliciesTable)
       .innerJoin(leaveTypesTable, eq(leavePoliciesTable.leaveTypeId, leaveTypesTable.id))
+      .where(eq(leavePoliciesTable.tenantId, tenantId))
       .orderBy(leaveTypesTable.name);
     res.json(policies);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -246,11 +253,12 @@ router.get("/leave/policies", requireHrmsUser, requireRole(...ALL_ROLES), async 
 router.get("/leave/policies/:typeId", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const typeId = Number(req.params.typeId);
-    await getOrCreatePolicy(typeId);
+    const tenantId = req.hrmsUser!.tenantId;
+    await getOrCreatePolicy(typeId, tenantId);
     const [policy] = await db.select(POLICY_SHAPE)
       .from(leavePoliciesTable)
       .innerJoin(leaveTypesTable, eq(leavePoliciesTable.leaveTypeId, leaveTypesTable.id))
-      .where(eq(leavePoliciesTable.leaveTypeId, typeId));
+      .where(and(eq(leavePoliciesTable.leaveTypeId, typeId), eq(leavePoliciesTable.tenantId, tenantId)));
     if (!policy) { res.status(404).json({ error: "Leave type not found" }); return; }
     res.json(policy);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -259,25 +267,26 @@ router.get("/leave/policies/:typeId", requireHrmsUser, requireRole(...ALL_ROLES)
 router.put("/leave/policies/:typeId", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const typeId = Number(req.params.typeId);
+    const tenantId = req.hrmsUser!.tenantId;
     const body = req.body as {
       requiresHodApproval?: boolean; requiresHrApproval?: boolean; advanceNoticeDays?: number;
       minConsecutiveDays?: string | null; maxConsecutiveDays?: string | null; allowHalfDay?: boolean;
       lopByDefault?: boolean; carryForwardEnabled?: boolean; carryForwardMax?: string | null;
       encashmentEnabled?: boolean; applicableEmploymentTypes?: string[] | null;
     };
-    await getOrCreatePolicy(typeId);
+    await getOrCreatePolicy(typeId, tenantId);
     const [updatedPolicy] = await db.update(leavePoliciesTable)
       .set({ ...body, updatedAt: new Date() })
-      .where(eq(leavePoliciesTable.leaveTypeId, typeId))
+      .where(and(eq(leavePoliciesTable.leaveTypeId, typeId), eq(leavePoliciesTable.tenantId, tenantId)))
       .returning();
     if (!updatedPolicy) { res.status(404).json({ error: "Leave policy not found" }); return; }
     // Sync policy changes back to leave_types to keep the tables consistent
-    await db.update(leaveTypesTable).set({ ...body, updatedAt: new Date() }).where(eq(leaveTypesTable.id, typeId));
+    await db.update(leaveTypesTable).set({ ...body, updatedAt: new Date() }).where(and(eq(leaveTypesTable.id, typeId), eq(leaveTypesTable.tenantId, tenantId)));
     await logAudit({ user: req.hrmsUser, action: "UPDATE_LEAVE_POLICY", module: "Leave", recordId: typeId, newValue: String(typeId), ipAddress: req.ip });
     const [result] = await db.select(POLICY_SHAPE)
       .from(leavePoliciesTable)
       .innerJoin(leaveTypesTable, eq(leavePoliciesTable.leaveTypeId, leaveTypesTable.id))
-      .where(eq(leavePoliciesTable.leaveTypeId, typeId));
+      .where(and(eq(leavePoliciesTable.leaveTypeId, typeId), eq(leavePoliciesTable.tenantId, tenantId)));
     res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -291,18 +300,19 @@ router.get("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), as
       departmentId?: string; leaveTypeId?: string;
     };
 
-    const conds: SQL[] = [];
+    const tenantId = req.hrmsUser!.tenantId;
+    const conds: SQL[] = [eq(leaveApplicationsTable.tenantId, tenantId)];
 
     // Role-based scoping
-    if (req.hrmsUser.role === "employee") {
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+    if (req.hrmsUser!.role === "employee") {
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
       if (!emp) { res.json([]); return; }
       conds.push(eq(leaveApplicationsTable.employeeId, emp.id));
-    } else if (req.hrmsUser.role === "hod") {
-      const hodEmp = await getEmployeeForUser(req.hrmsUser.id);
+    } else if (req.hrmsUser!.role === "hod") {
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
       if (!hodEmp?.departmentId) { res.json([]); return; }
       const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(and(eq(employeesTable.departmentId, hodEmp.departmentId), isNull(employeesTable.deletedAt)));
+        .where(and(eq(employeesTable.departmentId, hodEmp.departmentId), eq(employeesTable.tenantId, tenantId), isNull(employeesTable.deletedAt)));
       conds.push(sql`${leaveApplicationsTable.employeeId} = ANY(${sql`ARRAY[${sql.join(deptEmps.map(e => sql`${e.id}`), sql`, `)}]`})`);
     } else if (employeeId) {
       conds.push(eq(leaveApplicationsTable.employeeId, Number(employeeId)));
@@ -358,7 +368,7 @@ router.get("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), as
     if (departmentId) {
       const deptId = Number(departmentId);
       const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(and(eq(employeesTable.departmentId, deptId), isNull(employeesTable.deletedAt)));
+        .where(and(eq(employeesTable.departmentId, deptId), eq(employeesTable.tenantId, tenantId), isNull(employeesTable.deletedAt)));
       const empIds = new Set(deptEmps.map(e => e.id));
       filtered = apps.filter(a => empIds.has(a.employeeId));
     }
@@ -405,16 +415,16 @@ router.get("/leave/applications/:id", requireHrmsUser, requireRole(...ALL_ROLES)
       .innerJoin(employeesTable, eq(leaveApplicationsTable.employeeId, employeesTable.id))
       .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
       .innerJoin(leaveTypesTable, eq(leaveApplicationsTable.leaveTypeId, leaveTypesTable.id))
-      .where(eq(leaveApplicationsTable.id, Number(req.params.id)));
+      .where(and(eq(leaveApplicationsTable.id, Number(req.params.id)), eq(leaveApplicationsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!app) { res.status(404).json({ error: "Not found" }); return; }
 
     // Scope check: employee can only read own; HOD can only read dept employees'
-    if (req.hrmsUser.role === "employee") {
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+    if (req.hrmsUser!.role === "employee") {
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!emp || emp.id !== app.employeeId) { res.status(403).json({ error: "Forbidden" }); return; }
-    } else if (req.hrmsUser.role === "hod") {
-      const hodEmp = await getEmployeeForUser(req.hrmsUser.id);
-      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, app.employeeId));
+    } else if (req.hrmsUser!.role === "hod") {
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
+      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(eq(employeesTable.id, app.employeeId), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)));
       if (!hodEmp?.departmentId || hodEmp.departmentId !== reqEmp?.departmentId) {
         res.status(403).json({ error: "Forbidden" }); return;
       }
@@ -446,7 +456,8 @@ router.put("/leave/applications/:id", requireHrmsUser, requireRole(...HR_ROLES),
       return;
     }
 
-    const [app] = await db.select().from(leaveApplicationsTable).where(eq(leaveApplicationsTable.id, appId));
+    const tenantId = req.hrmsUser!.tenantId;
+    const [app] = await db.select().from(leaveApplicationsTable).where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)));
     if (!app) { res.status(404).json({ error: "Not found" }); return; }
     if (app.status !== "Approved") {
       res.status(422).json({ error: "Only approved leave applications can be edited" });
@@ -497,7 +508,7 @@ router.put("/leave/applications/:id", requireHrmsUser, requireRole(...HR_ROLES),
     }
     for (const ym of touchedMonths) {
       const [y, m] = ym.split("-").map(Number);
-      const lockErr = await checkPayrollLock(req.hrmsUser!.id, "edit_attendance", y, m, req.hrmsUser?.email ?? undefined);
+      const lockErr = await checkPayrollLock(req.hrmsUser!.id, "edit_attendance", y, m, req.hrmsUser?.email ?? undefined, req.hrmsUser!.tenantId);
       if (lockErr) {
         res.status(422).json({ error: `Payroll for ${y}-${String(m).padStart(2, "0")} is locked; cannot edit leave dates that affect it` });
         return;
@@ -536,7 +547,7 @@ router.put("/leave/applications/:id", requireHrmsUser, requireRole(...HR_ROLES),
           totalDays: String(newTotalDays),
           updatedAt: new Date(),
         })
-        .where(eq(leaveApplicationsTable.id, appId))
+        .where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)))
         .returning();
 
       if (delta !== 0) {
@@ -545,6 +556,7 @@ router.put("/leave/applications/:id", requireHrmsUser, requireRole(...HR_ROLES),
             eq(leaveBalancesTable.employeeId, app.employeeId),
             eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId),
             eq(leaveBalancesTable.year, oldYear),
+            eq(leaveBalancesTable.tenantId, tenantId),
           ),
         );
         if (bal) {
@@ -579,15 +591,15 @@ router.put("/leave/applications/:id", requireHrmsUser, requireRole(...HR_ROLES),
     // can see exactly what changed.
     try {
       const [leaveTypeRow] = await db.select({ name: leaveTypesTable.name })
-        .from(leaveTypesTable).where(eq(leaveTypesTable.id, app.leaveTypeId));
+        .from(leaveTypesTable).where(and(eq(leaveTypesTable.id, app.leaveTypeId), eq(leaveTypesTable.tenantId, tenantId)));
       const recipientUserIds = new Set<number>();
       const [empUser] = await db.select({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-        .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, app.employeeId));
+        .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, app.employeeId), eq(hrmsUsersTable.tenantId, tenantId)));
       if (app.hodActionedById) recipientUserIds.add(app.hodActionedById);
       if (app.hrActionedById) recipientUserIds.add(app.hrActionedById);
       const approvers = recipientUserIds.size > 0
         ? await db.select({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
-            .from(hrmsUsersTable).where(inArray(hrmsUsersTable.id, [...recipientUserIds]))
+            .from(hrmsUsersTable).where(and(inArray(hrmsUsersTable.id, [...recipientUserIds]), eq(hrmsUsersTable.tenantId, tenantId)))
         : [];
       const sharedVars = {
         leaveType: leaveTypeRow?.name ?? "leave",
@@ -639,12 +651,13 @@ router.post("/leave/backfill-attendance", requireHrmsUser, requireRole("customer
     // transaction so it is guaranteed released on commit/rollback even with
     // a pooled connection (no risk of leaking the lock across pg clients).
     let lockBusy = false;
+    const u = req.hrmsUser!;
     const summary = await db.transaction(async (tx) => {
       const lockRes = await tx.execute<{ locked: boolean }>(
         sql`SELECT pg_try_advisory_xact_lock(${BACKFILL_LOCK_KEY}) AS locked`,
       );
       if (!lockRes.rows[0]?.locked) { lockBusy = true; return null; }
-      return await runBackfillTx(tx, dryRun ?? false);
+      return await runBackfillTx(tx, dryRun ?? false, u.tenantId);
     });
     if (lockBusy || !summary) {
       res.status(409).json({ error: "A backfill run is already in progress" });
@@ -665,7 +678,7 @@ router.post("/leave/backfill-attendance", requireHrmsUser, requireRole("customer
 
 type BackfillTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-async function runBackfillTx(tx: BackfillTx, dryRun: boolean) {
+async function runBackfillTx(tx: BackfillTx, dryRun: boolean, tenantId: number) {
   const approved = await tx
     .select({
       id: leaveApplicationsTable.id,
@@ -674,7 +687,7 @@ async function runBackfillTx(tx: BackfillTx, dryRun: boolean) {
       toDate: leaveApplicationsTable.toDate,
     })
     .from(leaveApplicationsTable)
-    .where(eq(leaveApplicationsTable.status, "Approved"));
+    .where(and(eq(leaveApplicationsTable.status, "Approved"), eq(leaveApplicationsTable.tenantId, tenantId)));
 
   let totalInserted = 0;
   let totalUpdated = 0;
@@ -717,12 +730,14 @@ router.post("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), a
       halfDaySession?: string; reason?: string; documentUrl?: string; lopConfirmed?: boolean;
     };
 
+    const tenantId = req.hrmsUser!.tenantId;
+
     // Resolve employee — must have a linked employee profile; no fallback allowed
-    const emp = await getEmployeeForUser(req.hrmsUser.id);
+    const emp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
     if (!emp) { res.status(422).json({ error: "No employee profile linked to your account. Cannot submit leave." }); return; }
     const employeeId = emp.id;
 
-    const [leaveType] = await db.select().from(leaveTypesTable).where(eq(leaveTypesTable.id, leaveTypeId));
+    const [leaveType] = await db.select().from(leaveTypesTable).where(and(eq(leaveTypesTable.id, leaveTypeId), eq(leaveTypesTable.tenantId, tenantId)));
     if (!leaveType || !leaveType.isActive) { res.status(422).json({ error: "Invalid or inactive leave type" }); return; }
 
     // Check advance notice
@@ -738,9 +753,12 @@ router.post("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), a
 
     // Check blackout dates
     const blackouts = await db.select().from(blackoutDatesTable).where(
-      or(
-        isNull(blackoutDatesTable.departmentId),
-        emp?.departmentId ? eq(blackoutDatesTable.departmentId, emp.departmentId) : isNull(blackoutDatesTable.departmentId),
+      and(
+        or(
+          isNull(blackoutDatesTable.departmentId),
+          emp?.departmentId ? eq(blackoutDatesTable.departmentId, emp.departmentId) : isNull(blackoutDatesTable.departmentId),
+        ),
+        eq(blackoutDatesTable.tenantId, tenantId)
       )
     );
     for (const bo of blackouts) {
@@ -789,6 +807,7 @@ router.post("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), a
     const overlapping = await db.select().from(leaveApplicationsTable).where(
       and(
         eq(leaveApplicationsTable.employeeId, employeeId),
+        eq(leaveApplicationsTable.tenantId, tenantId),
         sql`${leaveApplicationsTable.status} NOT IN ('Rejected', 'Cancelled')`,
         lte(leaveApplicationsTable.fromDate, toDate),
         gte(leaveApplicationsTable.toDate, fromDate),
@@ -803,7 +822,7 @@ router.post("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), a
     const year = new Date(fromDate).getFullYear();
 
     // Check balance
-    const balance = await getOrCreateBalance(employeeId, leaveTypeId, year, leaveType.annualQuota);
+    const balance = await getOrCreateBalance(employeeId, leaveTypeId, year, tenantId, leaveType.annualQuota);
     const available = parseFloat(balance.allocated as string) + parseFloat(balance.carryForward as string) - parseFloat(balance.used as string) - parseFloat(balance.pending as string);
     const isLop = available < totalDays;
 
@@ -817,6 +836,7 @@ router.post("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), a
 
     const [app] = await db.transaction(async (tx) => {
       const [created] = await tx.insert(leaveApplicationsTable).values({
+        tenantId,
         employeeId,
         leaveTypeId,
         fromDate,
@@ -840,9 +860,9 @@ router.post("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), a
     await logAudit({ user: req.hrmsUser, action: "SUBMIT_LEAVE", module: "Leave", recordId: app.id, newValue: `${leaveType.code} ${fromDate}~${toDate}`, ipAddress: req.ip });
     // Notify HOD/HR about new leave application
     const empInfo = await db.select({ name: employeesTable.firstName, lastName: employeesTable.lastName })
-      .from(employeesTable).where(eq(employeesTable.id, app.employeeId)).then(r => r[0]);
+      .from(employeesTable).where(and(eq(employeesTable.id, app.employeeId), eq(employeesTable.tenantId, tenantId))).then(r => r[0]);
     const [hodUser] = await db.select({ email: hrmsUsersTable.email }).from(hrmsUsersTable)
-      .where(eq(hrmsUsersTable.role, "hod")).limit(1);
+      .where(and(eq(hrmsUsersTable.role, "hod"), eq(hrmsUsersTable.tenantId, tenantId))).limit(1);
     if (hodUser?.email) {
       dispatchNotification({
         eventType: "leave_submitted", module: "leave",
@@ -863,21 +883,22 @@ router.post("/leave/applications/:id/hod-action", requireHrmsUser, requireRole("
   try {
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const appId = Number(req.params.id);
+    const tenantId = req.hrmsUser!.tenantId;
 
-    const [app] = await db.select().from(leaveApplicationsTable).where(eq(leaveApplicationsTable.id, appId));
+    const [app] = await db.select().from(leaveApplicationsTable).where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)));
     if (!app) { res.status(404).json({ error: "Not found" }); return; }
     if (app.status !== "Pending") { res.status(422).json({ error: "Application is not in Pending state" }); return; }
 
     // Check leave type requires HOD approval
-    const [leaveType] = await db.select().from(leaveTypesTable).where(eq(leaveTypesTable.id, app.leaveTypeId));
-    if (!leaveType?.requiresHodApproval && req.hrmsUser.role === "hod") {
+    const [leaveType] = await db.select().from(leaveTypesTable).where(and(eq(leaveTypesTable.id, app.leaveTypeId), eq(leaveTypesTable.tenantId, tenantId)));
+    if (!leaveType?.requiresHodApproval && req.hrmsUser!.role === "hod") {
       res.status(403).json({ error: "This leave type does not require HOD approval" }); return;
     }
 
     // HOD scope check
-    if (req.hrmsUser.role === "hod" && req.hrmsUser.employeeId) {
-      const [hodEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, req.hrmsUser.employeeId));
-      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, app.employeeId));
+    if (req.hrmsUser!.role === "hod" && req.hrmsUser!.employeeId) {
+      const [hodEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(eq(employeesTable.id, req.hrmsUser!.employeeId), eq(employeesTable.tenantId, tenantId)));
+      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(eq(employeesTable.id, app.employeeId), eq(employeesTable.tenantId, tenantId)));
       if (hodEmp?.departmentId == null || hodEmp.departmentId !== reqEmp?.departmentId) {
         res.status(403).json({ error: "You can only action leave requests from employees in your department" });
         return;
@@ -895,13 +916,13 @@ router.post("/leave/applications/:id/hod-action", requireHrmsUser, requireRole("
       }
       const [row] = await tx.update(leaveApplicationsTable)
         .set({ status: newStatus, hodActionedById: req.hrmsUser!.id, hodRemarks: remarks ?? null, hodActionedAt: new Date(), updatedAt: new Date() })
-        .where(eq(leaveApplicationsTable.id, appId))
+        .where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)))
         .returning();
 
       if (action === "Approved" && newStatus === "Approved") {
         // No HR approval needed — finalize balance
         const [bal] = await tx.select().from(leaveBalancesTable).where(
-          and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year))
+          and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year), eq(leaveBalancesTable.tenantId, tenantId))
         );
         if (bal) {
           await tx.update(leaveBalancesTable)
@@ -912,7 +933,7 @@ router.post("/leave/applications/:id/hod-action", requireHrmsUser, requireRole("
       } else if (action === "Rejected") {
         // Restore pending balance
         const [bal] = await tx.select().from(leaveBalancesTable).where(
-          and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year))
+          and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year), eq(leaveBalancesTable.tenantId, tenantId))
         );
         if (bal) {
           await tx.update(leaveBalancesTable)
@@ -932,6 +953,7 @@ router.post("/leave/applications/:id/hr-action", requireHrmsUser, requireRole(..
   try {
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const appId = Number(req.params.id);
+    const tenantId = req.hrmsUser!.tenantId;
 
     const [app] = await db.select().from(leaveApplicationsTable).where(eq(leaveApplicationsTable.id, appId));
     if (!app) { res.status(404).json({ error: "Not found" }); return; }
@@ -959,11 +981,11 @@ router.post("/leave/applications/:id/hr-action", requireHrmsUser, requireRole(..
       const newStatus = action === "Approved" ? "Approved" : "Rejected";
       const [row] = await tx.update(leaveApplicationsTable)
         .set({ status: newStatus, hrActionedById: req.hrmsUser!.id, hrRemarks: remarks ?? null, hrActionedAt: new Date(), updatedAt: new Date() })
-        .where(eq(leaveApplicationsTable.id, appId))
+        .where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)))
         .returning();
 
       const [bal] = await tx.select().from(leaveBalancesTable).where(
-        and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year))
+        and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year), eq(leaveBalancesTable.tenantId, tenantId))
       );
       if (bal) {
         if (action === "Approved") {
@@ -985,7 +1007,7 @@ router.post("/leave/applications/:id/hr-action", requireHrmsUser, requireRole(..
     await logAudit({ user: req.hrmsUser, action: `HR_${action.toUpperCase()}_LEAVE`, module: "Leave", recordId: appId, newValue: action, ipAddress: req.ip });
     // Notify employee about leave decision
     const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
-      .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, app.employeeId));
+      .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, app.employeeId), eq(hrmsUsersTable.tenantId, tenantId)));
     if (empUser?.email) {
       dispatchNotification({
         eventType: action === "Approved" ? "leave_approved" : "leave_rejected",
@@ -1009,28 +1031,29 @@ router.post("/leave/applications/:id/cancel", requireHrmsUser, requireRole(...AL
   try {
     const { reason } = req.body as { reason?: string };
     const appId = Number(req.params.id);
+    const tenantId = req.hrmsUser!.tenantId;
 
-    const [app] = await db.select().from(leaveApplicationsTable).where(eq(leaveApplicationsTable.id, appId));
+    const [app] = await db.select().from(leaveApplicationsTable).where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)));
     if (!app) { res.status(404).json({ error: "Not found" }); return; }
     if (["Rejected", "Cancelled", "Cancel Requested"].includes(app.status)) {
       res.status(422).json({ error: "Application is already cancelled, rejected, or has a pending cancel request" });
       return;
     }
 
-    const isHrRole = ["customer_admin", "hr_manager", "hr_executive"].includes(req.hrmsUser.role);
+    const isHrRole = ["customer_admin", "hr_manager", "hr_executive"].includes(req.hrmsUser!.role);
 
     // Ownership / scope check for non-HR roles
-    if (req.hrmsUser.role === "employee") {
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+    if (req.hrmsUser!.role === "employee") {
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
       if (!emp || emp.id !== app.employeeId) { res.status(403).json({ error: "You can only cancel your own leave applications" }); return; }
-    } else if (req.hrmsUser.role === "hod") {
-      const hodEmp = await getEmployeeForUser(req.hrmsUser.id);
-      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, app.employeeId));
+    } else if (req.hrmsUser!.role === "hod") {
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
+      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(eq(employeesTable.id, app.employeeId), eq(employeesTable.tenantId, tenantId)));
       if (!hodEmp?.departmentId || hodEmp.departmentId !== reqEmp?.departmentId) {
         res.status(403).json({ error: "You can only cancel leave applications from employees in your department" }); return;
       }
-    } else if (req.hrmsUser.role === "payroll_admin") {
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+    } else if (req.hrmsUser!.role === "payroll_admin") {
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
       if (!emp || emp.id !== app.employeeId) { res.status(403).json({ error: "Payroll admin can only cancel their own leave" }); return; }
     }
     // hr_manager, hr_executive, super_admin: unrestricted
@@ -1052,18 +1075,18 @@ router.post("/leave/applications/:id/cancel", requireHrmsUser, requireRole(...AL
             cancellationReason: reason ?? null,
             updatedAt: new Date(),
           })
-          .where(eq(leaveApplicationsTable.id, appId))
+          .where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)))
           .returning();
         return row;
       } else {
         // Immediate cancel (HR or Pending status)
         const [row] = await tx.update(leaveApplicationsTable)
           .set({ status: "Cancelled", cancelledById: req.hrmsUser!.id, cancellationReason: reason ?? null, cancelledAt: new Date(), updatedAt: new Date() })
-          .where(eq(leaveApplicationsTable.id, appId))
+          .where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)))
           .returning();
 
         const [bal] = await tx.select().from(leaveBalancesTable).where(
-          and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year))
+          and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year), eq(leaveBalancesTable.tenantId, tenantId))
         );
         if (bal) {
           if (app.status === "Approved") {
@@ -1094,15 +1117,16 @@ router.post("/leave/applications/:id/cancel-action", requireHrmsUser, requireRol
   try {
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const appId = Number(req.params.id);
+    const tenantId = req.hrmsUser!.tenantId;
 
-    const [app] = await db.select().from(leaveApplicationsTable).where(eq(leaveApplicationsTable.id, appId));
+    const [app] = await db.select().from(leaveApplicationsTable).where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)));
     if (!app) { res.status(404).json({ error: "Not found" }); return; }
     if (app.status !== "Cancel Requested") { res.status(422).json({ error: "Application is not in Cancel Requested state" }); return; }
 
     // HOD scope check
-    if (req.hrmsUser.role === "hod" && req.hrmsUser.employeeId) {
-      const [hodEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, req.hrmsUser.employeeId));
-      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(eq(employeesTable.id, app.employeeId));
+    if (req.hrmsUser!.role === "hod" && req.hrmsUser!.employeeId) {
+      const [hodEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(eq(employeesTable.id, req.hrmsUser!.employeeId), eq(employeesTable.tenantId, tenantId)));
+      const [reqEmp] = await db.select({ departmentId: employeesTable.departmentId }).from(employeesTable).where(and(eq(employeesTable.id, app.employeeId), eq(employeesTable.tenantId, tenantId)));
       if (hodEmp?.departmentId == null || hodEmp.departmentId !== reqEmp?.departmentId) {
         res.status(403).json({ error: "You can only action cancel requests from employees in your department" }); return;
       }
@@ -1115,20 +1139,20 @@ router.post("/leave/applications/:id/cancel-action", requireHrmsUser, requireRol
       if (action === "Approved") {
         const [row] = await tx.update(leaveApplicationsTable)
           .set({ status: "Cancelled", cancelledAt: new Date(), updatedAt: new Date() })
-          .where(eq(leaveApplicationsTable.id, appId))
+          .where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)))
           .returning();
         // Restore balance: determine which bucket holds the days
         // - balance moves to `used` only when HR fully approves, OR when HOD approves
         //   directly to "Approved" (requiresHrApproval=false).
         // - "HOD Approved" (waiting for HR) still has balance in `pending`.
         const [lt] = await tx.select({ requiresHrApproval: leaveTypesTable.requiresHrApproval })
-          .from(leaveTypesTable).where(eq(leaveTypesTable.id, app.leaveTypeId));
+          .from(leaveTypesTable).where(and(eq(leaveTypesTable.id, app.leaveTypeId), eq(leaveTypesTable.tenantId, tenantId)));
         const balanceInUsed =
           !!app.hrActionedAt ||                                    // HR granted final approval
           (!!app.hodActionedAt && lt?.requiresHrApproval === false); // HOD-only path → "Approved"
 
         const [bal] = await tx.select().from(leaveBalancesTable).where(
-          and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year))
+          and(eq(leaveBalancesTable.employeeId, app.employeeId), eq(leaveBalancesTable.leaveTypeId, app.leaveTypeId), eq(leaveBalancesTable.year, year), eq(leaveBalancesTable.tenantId, tenantId))
         );
         if (bal) {
           if (balanceInUsed) {
@@ -1160,7 +1184,7 @@ router.post("/leave/applications/:id/cancel-action", requireHrmsUser, requireRol
         }
         const [row] = await tx.update(leaveApplicationsTable)
           .set({ status: restoreStatus, cancelledById: null, cancellationReason: remarks ? `Cancel rejected: ${remarks}` : "Cancel request rejected", cancelledAt: null, updatedAt: new Date() })
-          .where(eq(leaveApplicationsTable.id, appId))
+          .where(and(eq(leaveApplicationsTable.id, appId), eq(leaveApplicationsTable.tenantId, tenantId)))
           .returning();
         return row;
       }
@@ -1177,32 +1201,33 @@ router.get("/leave/balances", requireHrmsUser, requireRole(...HR_READ_ROLES, "em
   try {
     let { employeeId, year } = req.query as { employeeId?: string; year?: string };
     const targetYear = year ? Number(year) : new Date().getFullYear();
-    const conds: SQL[] = [];
+    const tenantId = req.hrmsUser!.tenantId;
+    const conds: SQL[] = [eq(leaveBalancesTable.tenantId, tenantId)];
     if (year) conds.push(eq(leaveBalancesTable.year, targetYear));
 
-    if (req.hrmsUser.role === "employee") {
+    if (req.hrmsUser!.role === "employee") {
       // Always scope employees to the resolved year so lazy-init below
       // matches what we return.
       if (!year) conds.push(eq(leaveBalancesTable.year, targetYear));
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
       if (!emp) { res.json([]); return; }
       // Lazy-init: ensure this employee has a balance row for every applicable
       // active leave type for the requested year so the ESS UI always shows
       // balance cards even before HR runs the bulk initializer.
-      const activeTypes = await db.select().from(leaveTypesTable).where(eq(leaveTypesTable.isActive, true));
+      const activeTypes = await db.select().from(leaveTypesTable).where(and(eq(leaveTypesTable.isActive, true), eq(leaveTypesTable.tenantId, tenantId)));
       for (const lt of activeTypes) {
         if (lt.applicableEmploymentTypes && lt.applicableEmploymentTypes.length > 0 && emp.employmentType) {
           if (!lt.applicableEmploymentTypes.includes(emp.employmentType)) continue;
         }
-        await getOrCreateBalance(emp.id, lt.id, targetYear, lt.annualQuota);
+        await getOrCreateBalance(emp.id, lt.id, targetYear, tenantId, lt.annualQuota);
       }
       conds.push(eq(leaveBalancesTable.employeeId, emp.id));
-    } else if (req.hrmsUser.role === "hod") {
+    } else if (req.hrmsUser!.role === "hod") {
       // HOD may only see balances of employees in their department
-      const hodEmp = await getEmployeeForUser(req.hrmsUser.id);
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
       if (!hodEmp?.departmentId) { res.json([]); return; }
       const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(and(eq(employeesTable.departmentId, hodEmp.departmentId), isNull(employeesTable.deletedAt)));
+        .where(and(eq(employeesTable.departmentId, hodEmp.departmentId), eq(employeesTable.tenantId, tenantId), isNull(employeesTable.deletedAt)));
       if (deptEmps.length === 0) { res.json([]); return; }
       const deptEmpIds = deptEmps.map(e => e.id);
       if (employeeId) {
@@ -1244,20 +1269,22 @@ router.get("/leave/balances", requireHrmsUser, requireRole(...HR_READ_ROLES, "em
 router.post("/leave/balances/initialize", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const { year, employeeId } = req.body as { year: number; employeeId?: number };
+    const tenantId = req.hrmsUser!.tenantId;
     // Check lock for current month in the target year (initialization affects the year's allocations)
-    const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_leave_balance", year, new Date().getMonth() + 1);
+    const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_leave_balance", year, new Date().getMonth() + 1, req.hrmsUser!.email ?? undefined, req.hrmsUser!.tenantId);
     if (lockError) { res.status(422).json({ error: lockError }); return; }
-    const leaveTypes = await db.select().from(leaveTypesTable).where(eq(leaveTypesTable.isActive, true));
+    const leaveTypes = await db.select().from(leaveTypesTable).where(and(eq(leaveTypesTable.isActive, true), eq(leaveTypesTable.tenantId, tenantId)));
     const emps = await db.select({ id: employeesTable.id }).from(employeesTable)
-      .where(and(isNull(employeesTable.deletedAt), employeeId ? eq(employeesTable.id, employeeId) : undefined));
+      .where(and(isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, tenantId), employeeId ? eq(employeesTable.id, employeeId) : undefined));
 
     let count = 0;
     for (const emp of emps) {
       for (const lt of leaveTypes) {
         const existing = await db.select({ id: leaveBalancesTable.id }).from(leaveBalancesTable)
-          .where(and(eq(leaveBalancesTable.employeeId, emp.id), eq(leaveBalancesTable.leaveTypeId, lt.id), eq(leaveBalancesTable.year, year)));
+          .where(and(eq(leaveBalancesTable.employeeId, emp.id), eq(leaveBalancesTable.leaveTypeId, lt.id), eq(leaveBalancesTable.year, year), eq(leaveBalancesTable.tenantId, tenantId)));
         if (existing.length === 0) {
           await db.insert(leaveBalancesTable).values({
+            tenantId,
             employeeId: emp.id,
             leaveTypeId: lt.id,
             year,
@@ -1267,13 +1294,14 @@ router.post("/leave/balances/initialize", requireHrmsUser, requireRole(...HR_ROL
             carryForward: "0",
           });
           await db.insert(leaveAccrualHistoryTable).values({
+            tenantId,
             employeeId: emp.id,
             leaveTypeId: lt.id,
             year,
             accrualType: "Annual Allocation",
             days: lt.annualQuota,
             notes: `Annual allocation for ${year}`,
-            processedById: req.hrmsUser.id,
+            processedById: req.hrmsUser!.id,
           });
           count++;
         }
@@ -1292,9 +1320,9 @@ router.post("/leave/balances/carry-forward", requireHrmsUser, requireRole(...HR_
     }
 
     // Lock check on both source and target year (current month boundary)
-    const lockSrc = await checkPayrollLock(req.hrmsUser!.id, "edit_leave_balance", year, 12);
+    const lockSrc = await checkPayrollLock(req.hrmsUser!.id, "edit_leave_balance", year, 12, req.hrmsUser!.email ?? undefined, req.hrmsUser!.tenantId);
     if (lockSrc) { res.status(422).json({ error: lockSrc }); return; }
-    const lockDst = await checkPayrollLock(req.hrmsUser!.id, "edit_leave_balance", year + 1, 1);
+    const lockDst = await checkPayrollLock(req.hrmsUser!.id, "edit_leave_balance", year + 1, 1, req.hrmsUser!.email ?? undefined, req.hrmsUser!.tenantId);
     if (lockDst) { res.status(422).json({ error: lockDst }); return; }
 
     const summary = await runCarryForwardForYear(year, {
@@ -1337,20 +1365,21 @@ router.get("/leave/accrual-history", requireHrmsUser, requireRole(...ALL_ROLES),
     }
 
     // Authz scoping — produce a definitive employeeId filter (or 403).
+    const tenantId = req.hrmsUser!.tenantId;
     let scopedEmpId: number | undefined;
     let scopedDeptEmpIds: number[] | undefined;
     if (req.hrmsUser!.role === "employee") {
-      const emp = await getEmployeeForUser(req.hrmsUser!.id);
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
       if (!emp) { res.json([]); return; }
       if (requestedEmpId !== undefined && requestedEmpId !== emp.id) {
         res.status(403).json({ error: "Employees may only view their own accrual history" }); return;
       }
       scopedEmpId = emp.id;
     } else if (req.hrmsUser!.role === "hod") {
-      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id);
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
       if (!hodEmp?.departmentId) { res.json([]); return; }
       const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(and(eq(employeesTable.departmentId, hodEmp.departmentId), isNull(employeesTable.deletedAt)));
+        .where(and(eq(employeesTable.departmentId, hodEmp.departmentId), eq(employeesTable.tenantId, tenantId), isNull(employeesTable.deletedAt)));
       const deptEmpIds = deptEmps.map(e => e.id);
       if (deptEmpIds.length === 0) { res.json([]); return; }
       if (requestedEmpId !== undefined) {
@@ -1366,7 +1395,7 @@ router.get("/leave/accrual-history", requireHrmsUser, requireRole(...ALL_ROLES),
       if (requestedEmpId !== undefined) scopedEmpId = requestedEmpId;
     }
 
-    const conds = [] as ReturnType<typeof eq>[];
+    const conds = [eq(leaveAccrualHistoryTable.tenantId, tenantId)] as SQL[];
     if (scopedEmpId !== undefined) conds.push(eq(leaveAccrualHistoryTable.employeeId, scopedEmpId));
     else if (scopedDeptEmpIds) conds.push(inArray(leaveAccrualHistoryTable.employeeId, scopedDeptEmpIds));
     if (yearNum !== undefined) conds.push(eq(leaveAccrualHistoryTable.year, yearNum));
@@ -1409,14 +1438,14 @@ router.get("/leave/usage-trend", requireHrmsUser, requireRole(...ALL_ROLES), asy
     // Authz: same scoping as /leave/accrual-history.
     let scopedEmpId: number | undefined;
     if (req.hrmsUser!.role === "employee") {
-      const emp = await getEmployeeForUser(req.hrmsUser!.id);
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!emp) { res.json({ years: [], byLeaveType: [] }); return; }
       if (requestedEmpId !== undefined && requestedEmpId !== emp.id) {
         res.status(403).json({ error: "Employees may only view their own usage trend" }); return;
       }
       scopedEmpId = emp.id;
     } else if (req.hrmsUser!.role === "hod") {
-      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id);
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!hodEmp?.departmentId) { res.json({ years: [], byLeaveType: [] }); return; }
       if (requestedEmpId === undefined) {
         res.status(400).json({ error: "employeeId is required for HOD" }); return;
@@ -1483,7 +1512,7 @@ router.post("/leave/balances/accrue", requireHrmsUser, requireRole(...HR_ROLES),
   try {
     const { year, month, employeeId } = req.body as { year: number; month: number; employeeId?: number };
     // Check lock against the specific period being accrued
-    const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_leave_balance", year, month);
+    const lockError = await checkPayrollLock(req.hrmsUser!.id, "edit_leave_balance", year, month, req.hrmsUser!.email ?? undefined, req.hrmsUser!.tenantId);
     if (lockError) { res.status(422).json({ error: lockError }); return; }
 
     if (!year || !month || month < 1 || month > 12) {
@@ -1525,16 +1554,18 @@ router.post("/leave/balances/accrue", requireHrmsUser, requireRole(...HR_ROLES),
               .where(eq(leaveBalancesTable.id, bal.id));
           } else {
             await tx.insert(leaveBalancesTable).values({
+              tenantId: req.hrmsUser!.tenantId,
               employeeId: emp.id, leaveTypeId: lt.id, year,
               allocated: monthlyDays, used: "0", pending: "0", carryForward: "0",
             });
           }
           await tx.insert(leaveAccrualHistoryTable).values({
+            tenantId: req.hrmsUser!.tenantId,
             employeeId: emp.id, leaveTypeId: lt.id, year, month,
             accrualType: "Monthly Accrual",
             days: monthlyDays,
             notes: `Monthly accrual ${year}-${String(month).padStart(2, "0")} (${monthlyDays} of ${lt.annualQuota} annual)`,
-            processedById: req.hrmsUser.id,
+            processedById: req.hrmsUser!.id,
           });
         });
         accrued++;
@@ -1562,12 +1593,12 @@ router.get("/leave/calendar", requireHrmsUser, requireRole(...HR_READ_ROLES, "em
       conds.push(gte(leaveApplicationsTable.toDate, from));
     }
 
-    if (req.hrmsUser.role === "employee") {
-      const emp = await getEmployeeForUser(req.hrmsUser.id);
+    if (req.hrmsUser!.role === "employee") {
+      const emp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!emp) { res.json([]); return; }
       conds.push(eq(leaveApplicationsTable.employeeId, emp.id));
-    } else if (req.hrmsUser.role === "hod") {
-      const hodEmp = await getEmployeeForUser(req.hrmsUser.id);
+    } else if (req.hrmsUser!.role === "hod") {
+      const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, req.hrmsUser!.tenantId);
       if (!hodEmp?.departmentId) { res.json([]); return; }
       const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable)
         .where(and(eq(employeesTable.departmentId, hodEmp.departmentId), isNull(employeesTable.deletedAt)));
@@ -1628,7 +1659,8 @@ router.post("/leave/blackout-dates", requireHrmsUser, requireRole(...HR_ROLES), 
       name: string; fromDate: string; toDate: string; departmentId?: number; reason?: string;
     };
     const [created] = await db.insert(blackoutDatesTable).values({
-      name, fromDate, toDate, departmentId, reason, createdById: req.hrmsUser.id,
+      tenantId: req.hrmsUser!.tenantId,
+      name, fromDate, toDate, departmentId, reason, createdById: req.hrmsUser!.id,
     }).returning();
     await logAudit({ user: req.hrmsUser, action: "CREATE_BLACKOUT_DATE", module: "Leave", recordId: created.id, newValue: name, ipAddress: req.ip });
     res.status(201).json(created);

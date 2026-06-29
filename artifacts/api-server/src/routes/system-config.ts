@@ -35,7 +35,12 @@ router.get("/system-settings/:category", requireHrmsUser, requireRole(...HR_ROLE
       res.status(403).json({ error: "Only super admin may view credential settings" }); return;
     }
 
-    const rows = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.category, category));
+    const rows = await db.select().from(systemSettingsTable).where(
+      and(
+        eq(systemSettingsTable.category, category),
+        eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
     const result: Record<string, unknown> = {};
     const dbKeys = new Set<string>();
     for (const r of rows) {
@@ -78,13 +83,25 @@ router.put("/system-settings/:category", requireHrmsUser, requireRole(...SUPER_A
     for (const [key, value] of Object.entries(data)) {
       const jsonValue = value as (Record<string, unknown> | string | number | boolean | null);
       const existing = await db.select({ id: systemSettingsTable.id }).from(systemSettingsTable)
-        .where(and(eq(systemSettingsTable.category, category), eq(systemSettingsTable.key, key)));
+        .where(
+          and(
+            eq(systemSettingsTable.category, category),
+            eq(systemSettingsTable.key, key),
+            eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+          )
+        );
       if (existing.length) {
         await db.update(systemSettingsTable)
           .set({ value: jsonValue, updatedAt: new Date() })
-          .where(and(eq(systemSettingsTable.category, category), eq(systemSettingsTable.key, key)));
+          .where(
+            and(
+              eq(systemSettingsTable.category, category),
+              eq(systemSettingsTable.key, key),
+              eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+            )
+          );
       } else {
-        await db.insert(systemSettingsTable).values({ category, key, value: jsonValue });
+        await db.insert(systemSettingsTable).values({ tenantId: req.hrmsUser!.tenantId, category, key, value: jsonValue });
       }
     }
     res.json({ success: true });
@@ -95,11 +112,13 @@ router.put("/system-settings/:category", requireHrmsUser, requireRole(...SUPER_A
 
 // ─── Approval Chain Configs ───────────────────────────────────────────────────
 
-router.get("/approval-chains", requireHrmsUser, requireRole(...HR_ROLES), async (_req, res) => {
+router.get("/approval-chains", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
-    const chains = await db.select().from(approvalChainConfigsTable).orderBy(
-      approvalChainConfigsTable.transactionType, approvalChainConfigsTable.step
-    );
+    const chains = await db.select().from(approvalChainConfigsTable)
+      .where(eq(approvalChainConfigsTable.tenantId, req.hrmsUser!.tenantId))
+      .orderBy(
+        approvalChainConfigsTable.transactionType, approvalChainConfigsTable.step
+      );
     res.json(chains);
   } catch {
     res.status(500).json({ error: "Failed to list approval chains" });
@@ -130,6 +149,7 @@ router.post("/approval-chains", requireHrmsUser, requireRole(...SUPER_ADMIN), as
     const { transactionType, step, approverRole, approverLabel, isActive, escalationAfterHours, escalateTo, conditions } = req.body;
     if (!transactionType || !approverRole || !approverLabel) { res.status(400).json({ error: "transactionType, approverRole, and approverLabel are required" }); return; }
     const [created] = await db.insert(approvalChainConfigsTable).values({
+      tenantId: req.hrmsUser!.tenantId,
       transactionType, step: step ?? 1, approverRole, approverLabel,
       isActive: isActive ?? true, escalationAfterHours, escalateTo, conditions,
     }).returning();
@@ -147,7 +167,12 @@ router.put("/approval-chains/:id", requireHrmsUser, requireRole(...SUPER_ADMIN),
     const { step, approverRole, approverLabel, isActive, escalationAfterHours, escalateTo, conditions } = req.body;
     const [updated] = await db.update(approvalChainConfigsTable)
       .set({ step, approverRole, approverLabel, isActive, escalationAfterHours, escalateTo, conditions, updatedAt: new Date() })
-      .where(eq(approvalChainConfigsTable.id, id))
+      .where(
+        and(
+          eq(approvalChainConfigsTable.id, id),
+          eq(approvalChainConfigsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      )
       .returning();
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
     res.json(updated);
@@ -159,7 +184,12 @@ router.put("/approval-chains/:id", requireHrmsUser, requireRole(...SUPER_ADMIN),
 router.delete("/approval-chains/:id", requireHrmsUser, requireRole(...SUPER_ADMIN), async (req, res) => {
   try {
     const id = parseInt(req.params.id as string);
-    await db.delete(approvalChainConfigsTable).where(eq(approvalChainConfigsTable.id, id));
+    await db.delete(approvalChainConfigsTable).where(
+      and(
+        eq(approvalChainConfigsTable.id, id),
+        eq(approvalChainConfigsTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
     res.status(204).end();
   } catch {
     res.status(500).json({ error: "Failed to delete approval chain" });
@@ -183,10 +213,15 @@ const DEFAULT_PERMISSIONS: Record<string, Record<string, string[]>> = {
   system:      { manage: ["customer_admin"] },
 };
 
-router.get("/role-permissions", requireHrmsUser, requireRole(...HR_ROLES), async (_req, res) => {
+router.get("/role-permissions", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     // Load any overrides from system_settings
-    const rows = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.category, "role_permissions"));
+    const rows = await db.select().from(systemSettingsTable).where(
+      and(
+        eq(systemSettingsTable.category, "role_permissions"),
+        eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+      )
+    );
     const overrides: Record<string, Record<string, string[]>> = {};
     for (const r of rows) {
       const [module, action] = r.key.split(".");
@@ -237,13 +272,25 @@ router.put("/role-permissions", requireHrmsUser, requireRole(...SUPER_ADMIN), as
         const key = `${module}.${action}`;
         const jsonValue = roles as unknown as (Record<string, unknown> | string | number | boolean | null);
         const existing = await db.select({ id: systemSettingsTable.id }).from(systemSettingsTable)
-          .where(and(eq(systemSettingsTable.category, "role_permissions"), eq(systemSettingsTable.key, key)));
+          .where(
+            and(
+              eq(systemSettingsTable.category, "role_permissions"),
+              eq(systemSettingsTable.key, key),
+              eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+            )
+          );
         if (existing.length) {
           await db.update(systemSettingsTable)
             .set({ value: jsonValue, updatedAt: new Date() })
-            .where(and(eq(systemSettingsTable.category, "role_permissions"), eq(systemSettingsTable.key, key)));
+            .where(
+              and(
+                eq(systemSettingsTable.category, "role_permissions"),
+                eq(systemSettingsTable.key, key),
+                eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+              )
+            );
         } else {
-          await db.insert(systemSettingsTable).values({ category: "role_permissions", key, value: jsonValue });
+          await db.insert(systemSettingsTable).values({ tenantId: req.hrmsUser!.tenantId, category: "role_permissions", key, value: jsonValue });
         }
       }
     }
@@ -256,10 +303,15 @@ router.put("/role-permissions", requireHrmsUser, requireRole(...SUPER_ADMIN), as
 // ─── Custom Employee Fields ───────────────────────────────────────────────────
 // Stored in system_settings with category="custom_employee_fields", key=unique ID
 
-router.get("/custom-fields", requireHrmsUser, requireRole("customer_admin", "hr_manager"), async (_req, res) => {
+router.get("/custom-fields", requireHrmsUser, requireRole("customer_admin", "hr_manager"), async (req, res) => {
   try {
     const rows = await db.select().from(systemSettingsTable)
-      .where(eq(systemSettingsTable.category, "custom_employee_fields"))
+      .where(
+        and(
+          eq(systemSettingsTable.category, "custom_employee_fields"),
+          eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      )
       .orderBy(systemSettingsTable.key);
     const fields = rows.map(r => {
       const val = r.value && typeof r.value === "object" ? (r.value as Record<string, unknown>) : {};
@@ -276,6 +328,7 @@ router.post("/custom-fields", requireHrmsUser, requireRole("customer_admin"), as
     const id = `field_${Date.now()}`;
     const payload = { name, type, required: !!required, options: options ?? [], placeholder: placeholder ?? "" };
     await db.insert(systemSettingsTable).values({
+      tenantId: req.hrmsUser!.tenantId,
       category: "custom_employee_fields", key: id,
       value: payload,
     });
@@ -288,12 +341,24 @@ router.put("/custom-fields/:id", requireHrmsUser, requireRole("customer_admin"),
     const { name, type, required, options, placeholder } = req.body as { name: string; type: string; required?: boolean; options?: unknown[]; placeholder?: string };
     const key = req.params["id"] as string;
     const existing = await db.select({ id: systemSettingsTable.id }).from(systemSettingsTable)
-      .where(and(eq(systemSettingsTable.category, "custom_employee_fields"), eq(systemSettingsTable.key, key))).limit(1);
+      .where(
+        and(
+          eq(systemSettingsTable.category, "custom_employee_fields"),
+          eq(systemSettingsTable.key, key),
+          eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      ).limit(1);
     if (!existing.length) { res.status(404).json({ error: "Field not found" }); return; }
     const payload = { name, type, required: !!required, options: options ?? [], placeholder: placeholder ?? "" };
     await db.update(systemSettingsTable)
       .set({ value: payload })
-      .where(and(eq(systemSettingsTable.category, "custom_employee_fields"), eq(systemSettingsTable.key, key)));
+      .where(
+        and(
+          eq(systemSettingsTable.category, "custom_employee_fields"),
+          eq(systemSettingsTable.key, key),
+          eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      );
     res.json({ id: key, ...payload });
   } catch { res.status(500).json({ error: "Failed to update custom field" }); }
 });
@@ -302,7 +367,13 @@ router.delete("/custom-fields/:id", requireHrmsUser, requireRole("customer_admin
   try {
     const key = req.params["id"] as string;
     await db.delete(systemSettingsTable)
-      .where(and(eq(systemSettingsTable.category, "custom_employee_fields"), eq(systemSettingsTable.key, key)));
+      .where(
+        and(
+          eq(systemSettingsTable.category, "custom_employee_fields"),
+          eq(systemSettingsTable.key, key),
+          eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      );
     res.status(204).end();
   } catch { res.status(500).json({ error: "Failed to delete custom field" }); }
 });
@@ -310,10 +381,15 @@ router.delete("/custom-fields/:id", requireHrmsUser, requireRole("customer_admin
 // ─── Leave Blackout Dates ─────────────────────────────────────────────────────
 // Stored in system_settings with category="leave_blackout_dates", key=unique ID
 
-router.get("/leave-blackouts", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hod", "employee", "payroll_admin"), async (_req, res) => {
+router.get("/leave-blackouts", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hod", "employee", "payroll_admin"), async (req, res) => {
   try {
     const rows = await db.select().from(systemSettingsTable)
-      .where(eq(systemSettingsTable.category, "leave_blackout_dates"))
+      .where(
+        and(
+          eq(systemSettingsTable.category, "leave_blackout_dates"),
+          eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      )
       .orderBy(systemSettingsTable.key);
     const blackouts = rows.map(r => {
       const val = r.value && typeof r.value === "object" ? (r.value as Record<string, unknown>) : {};
@@ -330,6 +406,7 @@ router.post("/leave-blackouts", requireHrmsUser, requireRole("customer_admin", "
     const id = `blackout_${Date.now()}`;
     const payload = { name, startDate, endDate, reason: reason ?? "" };
     await db.insert(systemSettingsTable).values({
+      tenantId: req.hrmsUser!.tenantId,
       category: "leave_blackout_dates", key: id,
       value: payload,
     });
@@ -341,7 +418,13 @@ router.delete("/leave-blackouts/:id", requireHrmsUser, requireRole("customer_adm
   try {
     const key = req.params["id"] as string;
     await db.delete(systemSettingsTable)
-      .where(and(eq(systemSettingsTable.category, "leave_blackout_dates"), eq(systemSettingsTable.key, key)));
+      .where(
+        and(
+          eq(systemSettingsTable.category, "leave_blackout_dates"),
+          eq(systemSettingsTable.key, key),
+          eq(systemSettingsTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      );
     res.status(204).end();
   } catch { res.status(500).json({ error: "Failed to delete leave blackout" }); }
 });
@@ -353,7 +436,7 @@ router.delete("/leave-blackouts/:id", requireHrmsUser, requireRole("customer_adm
 
 router.get("/attendance-suspicion-config", requireHrmsUser, requireRole("customer_admin", "hr_manager", "hr_executive", "hod"), async (_req, res) => {
   try {
-    const cfg = await loadAttendanceSuspicionConfig();
+    const cfg = await loadAttendanceSuspicionConfig(_req.hrmsUser!.tenantId);
     res.json(cfg);
   } catch {
     res.status(500).json({ error: "Failed to load attendance suspicion config" });
@@ -367,7 +450,7 @@ router.put("/attendance-suspicion-config", requireHrmsUser, requireRole("custome
       maxAccuracyMeters: body.maxAccuracyMeters as number | undefined,
       maxRadiusMeters: body.maxRadiusMeters as number | undefined,
       offices: Array.isArray(body.offices) ? (body.offices as Array<{ name: string; latitude: number; longitude: number }>) : undefined,
-    });
+    }, req.hrmsUser!.tenantId);
     res.json(saved);
   } catch {
     res.status(500).json({ error: "Failed to save attendance suspicion config" });
@@ -380,6 +463,7 @@ router.get("/storage-cleanup/runs", requireHrmsUser, requireRole(...SUPER_ADMIN)
   try {
     const limit = Math.max(1, Math.min(100, parseInt(String(req.query["limit"] ?? "20"), 10) || 20));
     const rows = await db.select().from(storageCleanupRunsTable)
+      .where(eq(storageCleanupRunsTable.tenantId, req.hrmsUser!.tenantId))
       .orderBy(desc(storageCleanupRunsTable.startedAt))
       .limit(limit);
     res.json(rows);
@@ -395,6 +479,7 @@ router.post("/storage-cleanup/run", requireHrmsUser, requireRole(...SUPER_ADMIN)
     const result = await cleanupOrphanedAttachments({
       triggeredBy: `manual:${user.id}`,
       dryRun,
+      tenantId: user.tenantId,
     });
     res.json(result);
   } catch (err) {
@@ -403,11 +488,12 @@ router.post("/storage-cleanup/run", requireHrmsUser, requireRole(...SUPER_ADMIN)
 });
 
 // ─── Utility: Get all active users for broadcast notifications ────────────────
-export async function getUsersByRoles(roles: string[]): Promise<Array<{ id: number; email: string; name: string; employeeId: number | null }>> {
+export async function getUsersByRoles(roles: string[], tenantId: number): Promise<Array<{ id: number; email: string; name: string; employeeId: number | null }>> {
   const users = await db.select({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
     .from(hrmsUsersTable)
     .where(and(
       eq(hrmsUsersTable.isActive, true),
+      eq(hrmsUsersTable.tenantId, tenantId),
       sql`${hrmsUsersTable.role} = ANY(${roles})`,
     ));
   return users;

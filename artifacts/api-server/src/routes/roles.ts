@@ -2,15 +2,16 @@ import { Router } from "express";
 import { requireHrmsUser } from "../lib/auth";
 import { db } from "../lib/db";
 import { rolesTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const router = Router();
 
-router.get("/roles", requireHrmsUser, async (_req, res) => {
+router.get("/roles", requireHrmsUser, async (req, res) => {
   try {
     const rows = await db
       .select()
       .from(rolesTable)
+      .where(eq(rolesTable.tenantId, req.hrmsUser!.tenantId))
       .orderBy(rolesTable.level);
     res.json(rows);
   } catch (err) {
@@ -25,7 +26,12 @@ router.get("/roles/:id", requireHrmsUser, async (req, res) => {
     const [role] = await db
       .select()
       .from(rolesTable)
-      .where(eq(rolesTable.id, id))
+      .where(
+        and(
+          eq(rolesTable.id, id),
+          eq(rolesTable.tenantId, req.hrmsUser!.tenantId)
+        )
+      )
       .limit(1);
     if (!role) {
       res.status(404).json({ error: "Role not found" });
