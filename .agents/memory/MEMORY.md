@@ -1,4 +1,1 @@
-- [Billing price convention](billing-price-convention.md) — DB stores plan prices in rupees (not paise); billing API multiplies by 100 for Razorpay; never divide by 100 on frontend
-- [Billing architecture](billing-architecture.md) — Razorpay (primary/India) + Stripe (international); dual-gateway with graceful degradation if keys missing; all routes in billing.ts, webhooks in app.ts.
-- [TS noImplicitAny](ts-noimplicitany.md) — artifacts/mysticshr/tsconfig.json has noImplicitAny: false to suppress TS7006 cascade from uncompiled @workspace/api-client-react; api-server stays strict.
-- [Frontend BASE_URL pattern](base-url-pattern.md) — all frontend API calls use import.meta.env.BASE_URL.replace(/\/$/, "") prefix; never hardcode /api/ without this prefix.
+- [Employee status enum casing](employee-status-enum.md) — DB enum values are Title-case ("Active", "Pre-Joining", etc.); lowercase query params cause PostgreSQL to reject the comparison silently returning empty results.

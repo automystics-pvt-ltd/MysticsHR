@@ -104,7 +104,7 @@ router.get("/employees", requireHrmsUser, async (req, res) => {
 
     if (status) {
       conditions.push(
-        sql`${employeesTable.status} = ${status}`
+        sql`lower(${employeesTable.status}::text) = lower(${status})`
       );
     }
     if (departmentId) conditions.push(eq(employeesTable.departmentId, parseInt(departmentId, 10)));

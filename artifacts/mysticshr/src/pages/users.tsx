@@ -183,7 +183,7 @@ export default function UsersPage() {
 
   const { data: employeeList = [] } = useQuery<{ id: number; firstName: string; lastName: string; employeeId: string }[]>({
     queryKey: ["employees-for-user-link"],
-    queryFn: () => apiFetch("/employees?status=active&limit=500"),
+    queryFn: () => apiFetch("/employees?status=Active&limit=500"),
     select: (d: unknown) => (Array.isArray(d) ? d : (d as { data?: unknown[] })?.data ?? []) as { id: number; firstName: string; lastName: string; employeeId: string }[],
     staleTime: 1000 * 60 * 5,
   });
