@@ -64,6 +64,7 @@ export const documentRequestsTable = pgTable("document_requests", {
 // ─── DOCUMENT DOWNLOAD TOKENS ─────────────────────────────────────────────────
 export const documentDownloadTokensTable = pgTable("document_download_tokens", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   issuedDocumentId: integer("issued_document_id").notNull().references(() => issuedDocumentsTable.id),
   token: text("token").notNull().unique(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

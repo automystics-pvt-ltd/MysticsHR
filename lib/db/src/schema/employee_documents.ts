@@ -1,5 +1,6 @@
 import { pgTable, serial, text, integer, timestamp, date, pgEnum } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
+import { tenantsTable } from "./tenants";
 
 export const empDocStatusEnum = pgEnum("emp_doc_status", [
   "Active",
@@ -9,6 +10,7 @@ export const empDocStatusEnum = pgEnum("emp_doc_status", [
 
 export const employeeDocumentsTable = pgTable("employee_documents", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   documentType: text("document_type").notNull(),
   documentName: text("document_name").notNull(),

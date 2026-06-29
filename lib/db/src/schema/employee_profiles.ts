@@ -1,5 +1,6 @@
 import { pgTable, serial, text, integer, timestamp, date, pgEnum } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
+import { tenantsTable } from "./tenants";
 
 export const maritalStatusEnum = pgEnum("marital_status", [
   "Single",
@@ -21,6 +22,7 @@ export const bloodGroupEnum = pgEnum("blood_group", [
 
 export const employeeProfilesTable = pgTable("employee_profiles", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().unique().references(() => employeesTable.id),
   nationalId: text("national_id"),
   pan: text("pan"),

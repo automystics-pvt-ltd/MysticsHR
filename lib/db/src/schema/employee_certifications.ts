@@ -1,8 +1,10 @@
 import { pgTable, serial, text, integer, timestamp, date } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
+import { tenantsTable } from "./tenants";
 
 export const employeeCertificationsTable = pgTable("employee_certifications", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   name: text("name").notNull(),
   issuingOrganization: text("issuing_organization").notNull(),

@@ -206,6 +206,7 @@ export const payrollLocksTable = pgTable("payroll_locks", {
 // ─── PAYROLL LOCK EXCEPTIONS ──────────────────────────────────────────────────
 export const payrollLockExceptionsTable = pgTable("payroll_lock_exceptions", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   payrollLockId: integer("payroll_lock_id").notNull().references(() => payrollLocksTable.id),
   requestedById: integer("requested_by_id").references(() => hrmsUsersTable.id),
   reason: text("reason").notNull(),

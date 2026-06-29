@@ -47,6 +47,7 @@ export const preOnboardingRecordsTable = pgTable("pre_onboarding_records", {
 
 export const preOnboardingDocumentsTable = pgTable("pre_onboarding_documents", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   recordId: integer("record_id").notNull().references(() => preOnboardingRecordsTable.id),
   documentType: documentTypeEnum("document_type").notNull(),
   documentName: text("document_name").notNull(),

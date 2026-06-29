@@ -69,6 +69,7 @@ export const exitClearanceTasksTable = pgTable("exit_clearance_tasks", {
 
 export const fnfComputationsTable = pgTable("fnf_computations", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   exitRequestId: integer("exit_request_id").notNull().references(() => exitRequestsTable.id),
   pendingSalary: numeric("pending_salary", { precision: 14, scale: 2 }).notNull().default("0"),
   leaveEncashment: numeric("leave_encashment", { precision: 14, scale: 2 }).notNull().default("0"),
@@ -90,6 +91,7 @@ export const fnfComputationsTable = pgTable("fnf_computations", {
 
 export const exitInterviewsTable = pgTable("exit_interviews", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   exitRequestId: integer("exit_request_id").notNull().references(() => exitRequestsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   questions: jsonb("questions").notNull().default([]),

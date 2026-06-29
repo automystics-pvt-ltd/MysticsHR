@@ -98,6 +98,7 @@ export const leaveApplicationsTable = pgTable("leave_applications", {
 
 export const leaveAccrualHistoryTable = pgTable("leave_accrual_history", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   leaveTypeId: integer("leave_type_id").notNull().references(() => leaveTypesTable.id),
   year: integer("year").notNull(),

@@ -66,6 +66,7 @@ export const ticketAttachmentsTable = pgTable("ticket_attachments", {
 // ─── TICKET SLA LOGS ──────────────────────────────────────────────────────────
 export const ticketSlaLogsTable = pgTable("ticket_sla_logs", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   ticketId: integer("ticket_id").notNull().references(() => helpdeskTicketsTable.id),
   event: text("event").notNull(),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
@@ -74,6 +75,7 @@ export const ticketSlaLogsTable = pgTable("ticket_sla_logs", {
 // ─── TICKET ASSIGNMENTS ───────────────────────────────────────────────────────
 export const ticketAssignmentsTable = pgTable("ticket_assignments", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   ticketId: integer("ticket_id").notNull().references(() => helpdeskTicketsTable.id),
   assignedToUserId: integer("assigned_to_user_id").references(() => hrmsUsersTable.id),
   assignedByUserId: integer("assigned_by_user_id").references(() => hrmsUsersTable.id),
