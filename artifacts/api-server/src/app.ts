@@ -69,6 +69,50 @@ const authLimiter = rateLimit({
 });
 
 app.use(cookieParser());
+
+// ── Webhook raw-body routes BEFORE express.json() ──────────────────────────
+// Razorpay webhook — needs raw body for HMAC signature verification
+app.post("/api/webhooks/razorpay", express.raw({ type: "application/json" }), async (req, res) => {
+  try {
+    const { verifyRazorpayWebhookSignature } = await import("./lib/razorpay-client");
+    const sig = req.headers["x-razorpay-signature"] as string;
+    const raw = req.body as Buffer;
+    if (!verifyRazorpayWebhookSignature(raw, sig)) {
+      return res.status(400).json({ error: "Invalid webhook signature" });
+    }
+    const event = JSON.parse(raw.toString()) as { event: string; payload?: { payment?: { entity?: { order_id?: string; id?: string; status?: string } } } };
+    logger.info({ event: event.event }, "Razorpay webhook received");
+    // Payment capture is handled via verify-payment endpoint (client-side confirmation).
+    // Webhook is a secondary safeguard for async captures.
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "Razorpay webhook error");
+    res.status(500).json({ error: "Webhook processing failed" });
+  }
+});
+
+// Stripe webhook — needs raw body for signature verification
+app.post("/api/webhooks/stripe", express.raw({ type: "application/json" }), async (req, res) => {
+  try {
+    const { constructStripeWebhookEvent } = await import("./lib/stripe-client");
+    const sig = req.headers["stripe-signature"] as string;
+    const event = constructStripeWebhookEvent(req.body as Buffer, sig);
+    logger.info({ type: event.type }, "Stripe webhook received");
+    // Handle key events
+    if (event.type === "customer.subscription.deleted") {
+      logger.info({ subscriptionId: (event.data.object as { id: string }).id }, "Stripe subscription deleted");
+    }
+    if (event.type === "invoice.payment_succeeded") {
+      logger.info({ invoiceId: (event.data.object as { id: string }).id }, "Stripe invoice paid");
+    }
+    res.json({ received: true });
+  } catch (err) {
+    logger.error({ err }, "Stripe webhook error");
+    res.status(400).json({ error: "Webhook error" });
+  }
+});
+// ───────────────────────────────────────────────────────────────────────────
+
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 

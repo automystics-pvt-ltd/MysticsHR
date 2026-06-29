@@ -75,6 +75,7 @@ const CommunicationsPage = lazy(() => import("@/pages/communications/index"));
 const SystemConfigPage = lazy(() => import("@/pages/system-config/index"));
 const ApiKeysPage = lazy(() => import("@/pages/settings/api-keys"));
 const ApiDocsPage = lazy(() => import("@/pages/settings/api-docs"));
+const BillingPage = lazy(() => import("@/pages/billing/index"));
 
 const PayrollChartHarnessLazy = lazy(() => import("./pages/__test__/payroll-chart-harness"));
 const PayrollReportsHarnessLazy = lazy(() => import("./pages/__test__/payroll-reports-harness"));
@@ -621,6 +622,13 @@ function AppRoutes() {
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
               <ApiDocsPage />
+            </RoleProtectedRoute>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/billing">
+          <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={["customer_admin"]}>
+              <BillingPage />
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>

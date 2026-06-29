@@ -25,6 +25,12 @@ export const tenantsTable = pgTable("tenants", {
   customMaxApiCalls: integer("custom_max_api_calls"),
   enabledModules: jsonb("enabled_modules"),
   enabledFeatures: jsonb("enabled_features"),
+  razorpayCustomerId: text("razorpay_customer_id"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  gstNumber: text("gst_number"),
+  billingAddress: jsonb("billing_address"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

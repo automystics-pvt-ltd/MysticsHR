@@ -30,6 +30,7 @@ import apiKeysRouter from "./api-keys";
 import branchesRouter from "./branches";
 import rbacRouter from "./rbac";
 import selfServiceRouter from "./self-service";
+import billingRouter from "./billing";
 import v1Router from "./v1";
 import { openApiSpec } from "../openapi";
 
@@ -66,6 +67,7 @@ router.use(apiKeysRouter);
 router.use(branchesRouter);
 router.use(rbacRouter);
 router.use(selfServiceRouter);
+router.use(billingRouter);
 router.use("/v1", v1Router);
 
 router.get("/openapi.json", (_req, res) => res.json(openApiSpec));
