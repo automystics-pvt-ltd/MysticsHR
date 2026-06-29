@@ -198,10 +198,10 @@ function OverviewTab({ tenant, plans, onRefresh }: {
               </div>
               <div className="space-y-1.5">
                 <Label>Subscription Plan</Label>
-                <Select value={form.planId} onValueChange={(v) => setForm({ ...form, planId: v })}>
+                <Select value={form.planId || "none"} onValueChange={(v) => setForm({ ...form, planId: v === "none" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="No plan" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No plan</SelectItem>
+                    <SelectItem value="none">No plan</SelectItem>
                     {plans.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -381,10 +381,10 @@ function SubscriptionTab({ tenant, plans }: { tenant: TenantDetail; plans: Subsc
               </div>
               <div className="col-span-full space-y-1.5">
                 <Label className="text-xs">Change Plan</Label>
-                <Select value={form.planId} onValueChange={(v) => setForm({ ...form, planId: v })}>
+                <Select value={form.planId || "none"} onValueChange={(v) => setForm({ ...form, planId: v === "none" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="No plan" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No plan</SelectItem>
+                    <SelectItem value="none">No plan</SelectItem>
                     {plans.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name} ({p.type})</SelectItem>)}
                   </SelectContent>
                 </Select>
