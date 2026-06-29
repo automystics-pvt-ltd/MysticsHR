@@ -3,6 +3,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const exitTypeEnum = pgEnum("exit_type", [
   "Resignation",
@@ -31,6 +32,7 @@ export const clearanceStatusEnum = pgEnum("clearance_status", [
 
 export const exitRequestsTable = pgTable("exit_requests", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   exitType: exitTypeEnum("exit_type").notNull(),
   status: exitStatusEnum("status").notNull().default("Submitted"),
@@ -97,9 +99,10 @@ export const exitInterviewsTable = pgTable("exit_interviews", {
 
 export const reportSchedulesTable = pgTable("report_schedules", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   reportType: text("report_type").notNull(),
   name: text("name").notNull(),
-  frequency: text("frequency").notNull(), // daily, weekly, monthly
+  frequency: text("frequency").notNull(),
   recipients: text("recipients").array().notNull().default([]),
   filters: jsonb("filters").notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
@@ -111,6 +114,7 @@ export const reportSchedulesTable = pgTable("report_schedules", {
 
 export const savedReportTemplatesTable = pgTable("saved_report_templates", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   name: text("name").notNull(),
   reportType: text("report_type").notNull(),
   selectedFields: text("selected_fields").array().notNull().default([]),

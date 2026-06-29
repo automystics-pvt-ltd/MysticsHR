@@ -2,6 +2,7 @@ import { pgTable, serial, text, integer, timestamp, date, pgEnum } from "drizzle
 import { candidatesTable } from "./candidates";
 import { offerLettersTable } from "./offer_letters";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const preOnboardingStatusEnum = pgEnum("pre_onboarding_status", [
   "Pending",
@@ -33,6 +34,7 @@ export const documentTypeEnum = pgEnum("document_type", [
 
 export const preOnboardingRecordsTable = pgTable("pre_onboarding_records", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   candidateId: integer("candidate_id").notNull().references(() => candidatesTable.id),
   offerLetterId: integer("offer_letter_id").references(() => offerLettersTable.id),
   expectedJoiningDate: date("expected_joining_date").notNull(),

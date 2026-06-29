@@ -2,6 +2,7 @@ import { pgTable, serial, text, integer, timestamp, pgEnum, numeric } from "driz
 import { departmentsTable } from "./departments";
 import { designationsTable } from "./designations";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const requisitionStatusEnum = pgEnum("requisition_status", [
   "Draft",
@@ -22,7 +23,8 @@ export const employmentTypeRequisitionEnum = pgEnum("requisition_employment_type
 
 export const jobRequisitionsTable = pgTable("job_requisitions", {
   id: serial("id").primaryKey(),
-  requisitionCode: text("requisition_code").notNull().unique(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  requisitionCode: text("requisition_code").notNull(),
   title: text("title").notNull(),
   departmentId: integer("department_id").references(() => departmentsTable.id),
   designationId: integer("designation_id").references(() => designationsTable.id),

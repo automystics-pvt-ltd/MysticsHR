@@ -1,6 +1,7 @@
 import { pgTable, serial, integer, boolean, timestamp, date, numeric, pgEnum, text } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const attendanceStatusEnum = pgEnum("attendance_status", [
   "Present",
@@ -19,6 +20,7 @@ export const regularizationStatusEnum = pgEnum("regularization_status", [
 
 export const attendanceRecordsTable = pgTable("attendance_records", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   attendanceDate: date("attendance_date").notNull(),
   signInTime: timestamp("sign_in_time", { withTimezone: true }),
@@ -32,8 +34,6 @@ export const attendanceRecordsTable = pgTable("attendance_records", {
   overrideById: integer("override_by_id").references(() => hrmsUsersTable.id),
   overrideAt: timestamp("override_at", { withTimezone: true }),
   notes: text("notes"),
-  // Self-service clock-in/out telemetry (Task #36) — captured client-side
-  // for HR audit; never required (employee may decline geolocation).
   signInLatitude: numeric("sign_in_latitude", { precision: 9, scale: 6 }),
   signInLongitude: numeric("sign_in_longitude", { precision: 9, scale: 6 }),
   signInAccuracyMeters: integer("sign_in_accuracy_meters"),
@@ -42,10 +42,6 @@ export const attendanceRecordsTable = pgTable("attendance_records", {
   signOutLongitude: numeric("sign_out_longitude", { precision: 9, scale: 6 }),
   signOutAccuracyMeters: integer("sign_out_accuracy_meters"),
   signOutUserAgent: text("sign_out_user_agent"),
-  // IANA timezone the employee was in at the moment of each punch
-  // (e.g. "Asia/Kolkata"). Captured client-side so HR can disambiguate
-  // off-by-an-hour edits in the override dialog (Task #147). Optional
-  // because legacy rows pre-date this column.
   signInTimezone: text("sign_in_timezone"),
   signOutTimezone: text("sign_out_timezone"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -54,6 +50,7 @@ export const attendanceRecordsTable = pgTable("attendance_records", {
 
 export const attendanceRegularizationsTable = pgTable("attendance_regularizations", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   attendanceDate: date("attendance_date").notNull(),
   requestedSignIn: timestamp("requested_sign_in", { withTimezone: true }),

@@ -1,5 +1,6 @@
 import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 /**
  * API keys for machine-to-machine access to the public /api/v1 surface.
@@ -14,6 +15,7 @@ import { hrmsUsersTable } from "./hrms_users";
  */
 export const apiKeysTable = pgTable("api_keys", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   name: text("name").notNull(),
   prefix: text("prefix").notNull().unique(),
   hashedSecret: text("hashed_secret").notNull(),

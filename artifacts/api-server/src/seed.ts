@@ -1,5 +1,6 @@
 import { db } from "./lib/db";
 import {
+  tenantsTable,
   departmentsTable,
   designationsTable,
   employeesTable,
@@ -59,16 +60,25 @@ const tsOffset = (days: number, hours = 0, minutes = 0) => {
 async function seed() {
   console.log("Seeding database...");
 
+  // ── Default Tenant ──────────────────────────────────────────────────────
+  await db.insert(tenantsTable).values({
+    slug: "default", name: "Default Organization", isActive: true,
+  }).onConflictDoNothing();
+  const allTenants = await db.select().from(tenantsTable);
+  const defaultTenant = allTenants.find((t) => t.slug === "default");
+  const tenantId = defaultTenant?.id;
+  console.log("Default tenant seeded:", tenantId);
+
   // ── Roles ──────────────────────────────────────────────────────────────
   await db
     .insert(rolesTable)
     .values([
-      { slug: "super_admin", label: "Super Admin", description: "Full access to all HRMS modules and system configuration", level: 100 },
-      { slug: "hr_manager", label: "HR Manager", description: "Access to all HR operations including employee, payroll, and reporting", level: 80 },
-      { slug: "payroll_admin", label: "Payroll Admin", description: "Access to payroll processing and related reports", level: 70 },
-      { slug: "hr_executive", label: "HR Executive", description: "Day-to-day HR operations including employee management and attendance", level: 60 },
-      { slug: "hod", label: "Head of Department", description: "View and manage employees within own department", level: 50 },
-      { slug: "employee", label: "Employee", description: "Self-service portal access: own profile, leaves, payslips", level: 10 },
+      { slug: "customer_admin", label: "Customer Admin", description: "Full access to all HRMS modules and system configuration", level: 100, tenantId },
+      { slug: "hr_manager", label: "HR Manager", description: "Access to all HR operations including employee, payroll, and reporting", level: 80, tenantId },
+      { slug: "payroll_admin", label: "Payroll Admin", description: "Access to payroll processing and related reports", level: 70, tenantId },
+      { slug: "hr_executive", label: "HR Executive", description: "Day-to-day HR operations including employee management and attendance", level: 60, tenantId },
+      { slug: "hod", label: "Head of Department", description: "View and manage employees within own department", level: 50, tenantId },
+      { slug: "employee", label: "Employee", description: "Self-service portal access: own profile, leaves, payslips", level: 10, tenantId },
     ])
     .onConflictDoNothing();
   console.log("Roles seeded.");
@@ -77,11 +87,11 @@ async function seed() {
   await db
     .insert(departmentsTable)
     .values([
-      { name: "Engineering", code: "ENG", description: "Product engineering and development" },
-      { name: "Human Resources", code: "HR", description: "HR operations and talent management" },
-      { name: "Finance", code: "FIN", description: "Finance, accounting, and payroll" },
-      { name: "Technology", code: "TECH", description: "IT infrastructure and systems" },
-      { name: "Marketing", code: "MKT", description: "Marketing and brand communications" },
+      { tenantId, name: "Engineering", code: "ENG", description: "Product engineering and development" },
+      { tenantId, name: "Human Resources", code: "HR", description: "HR operations and talent management" },
+      { tenantId, name: "Finance", code: "FIN", description: "Finance, accounting, and payroll" },
+      { tenantId, name: "Technology", code: "TECH", description: "IT infrastructure and systems" },
+      { tenantId, name: "Marketing", code: "MKT", description: "Marketing and brand communications" },
     ])
     .onConflictDoNothing();
   const allDepts = await db.select().from(departmentsTable);
@@ -96,14 +106,14 @@ async function seed() {
   await db
     .insert(designationsTable)
     .values([
-      { title: "Software Engineer", code: "SWE", departmentId: engDept?.id, level: 2 },
-      { title: "Senior Software Engineer", code: "SSWE", departmentId: engDept?.id, level: 3 },
-      { title: "HR Executive", code: "HRE", departmentId: hrDept?.id, level: 2 },
-      { title: "HR Manager", code: "HRM", departmentId: hrDept?.id, level: 4 },
-      { title: "Payroll Administrator", code: "PAYROLL", departmentId: financeDept?.id, level: 3 },
-      { title: "Tech Lead", code: "TL", departmentId: techDept?.id, level: 4 },
-      { title: "Marketing Executive", code: "MKE", departmentId: marketingDept?.id, level: 2 },
-      { title: "Finance Analyst", code: "FA", departmentId: financeDept?.id, level: 2 },
+      { tenantId, title: "Software Engineer", code: "SWE", departmentId: engDept?.id, level: 2 },
+      { tenantId, title: "Senior Software Engineer", code: "SSWE", departmentId: engDept?.id, level: 3 },
+      { tenantId, title: "HR Executive", code: "HRE", departmentId: hrDept?.id, level: 2 },
+      { tenantId, title: "HR Manager", code: "HRM", departmentId: hrDept?.id, level: 4 },
+      { tenantId, title: "Payroll Administrator", code: "PAYROLL", departmentId: financeDept?.id, level: 3 },
+      { tenantId, title: "Tech Lead", code: "TL", departmentId: techDept?.id, level: 4 },
+      { tenantId, title: "Marketing Executive", code: "MKE", departmentId: marketingDept?.id, level: 2 },
+      { tenantId, title: "Finance Analyst", code: "FA", departmentId: financeDept?.id, level: 2 },
     ])
     .onConflictDoNothing();
   const allDesignations = await db.select().from(designationsTable);
@@ -121,19 +131,19 @@ async function seed() {
   await db
     .insert(employeesTable)
     .values([
-      { employeeId: "AMT-2024-001", firstName: "Arjun", lastName: "Sharma", email: "arjun.sharma@automystics.com", phone: "+91 98765 43210", gender: "Male", departmentId: engDept?.id, designationId: srSwDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-01-15", location: "Chennai", ctc: "1800000" },
-      { employeeId: "AMT-2024-002", firstName: "Priya", lastName: "Venkataraman", email: "priya.v@automystics.com", phone: "+91 87654 32109", gender: "Female", departmentId: hrDept?.id, designationId: hrMgrDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-02-01", location: "Chennai", ctc: "1500000" },
-      { employeeId: "AMT-2024-003", firstName: "Ravi", lastName: "Kumar", email: "ravi.kumar@automystics.com", phone: "+91 76543 21098", gender: "Male", departmentId: financeDept?.id, designationId: payDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-03-10", location: "Bangalore", ctc: "1200000" },
-      { employeeId: "AMT-2024-004", firstName: "Meena", lastName: "Rajesh", email: "meena.r@automystics.com", phone: "+91 65432 10987", gender: "Female", departmentId: hrDept?.id, designationId: hrExecDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-04-05", location: "Chennai", ctc: "750000" },
-      { employeeId: "AMT-2024-005", firstName: "Suresh", lastName: "Babu", email: "suresh.b@automystics.com", phone: "+91 54321 09876", gender: "Male", departmentId: techDept?.id, designationId: techLeadDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-05-20", location: "Hyderabad", ctc: "2200000" },
-      { employeeId: "AMT-2025-006", firstName: "Kavitha", lastName: "Nair", email: "kavitha.n@automystics.com", phone: "+91 43210 98765", gender: "Female", departmentId: engDept?.id, designationId: swDes?.id, employmentType: "Probation", status: "Active", dateOfJoining: "2025-01-08", location: "Chennai", ctc: "900000" },
-      { employeeId: "AMT-2025-007", firstName: "Dinesh", lastName: "Murugan", email: "dinesh.m@automystics.com", phone: "+91 32109 87654", gender: "Male", departmentId: marketingDept?.id, designationId: mktDes?.id, employmentType: "Contract", status: "Notice Period", dateOfJoining: "2025-02-15", location: "Chennai", ctc: "850000" },
-      { employeeId: "AMT-2026-008", firstName: "Lakshmi", lastName: "Iyer", email: "lakshmi.i@automystics.com", phone: "+91 21098 76543", gender: "Female", departmentId: financeDept?.id, designationId: finDes?.id, employmentType: "Intern", status: "Active", dateOfJoining: "2026-04-01", location: "Chennai", ctc: "350000" },
+      { tenantId, employeeId: "AMT-2024-001", firstName: "Arjun", lastName: "Sharma", email: "arjun.sharma@automystics.com", phone: "+91 98765 43210", gender: "Male", departmentId: engDept?.id, designationId: srSwDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-01-15", location: "Chennai", ctc: "1800000" },
+      { tenantId, employeeId: "AMT-2024-002", firstName: "Priya", lastName: "Venkataraman", email: "priya.v@automystics.com", phone: "+91 87654 32109", gender: "Female", departmentId: hrDept?.id, designationId: hrMgrDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-02-01", location: "Chennai", ctc: "1500000" },
+      { tenantId, employeeId: "AMT-2024-003", firstName: "Ravi", lastName: "Kumar", email: "ravi.kumar@automystics.com", phone: "+91 76543 21098", gender: "Male", departmentId: financeDept?.id, designationId: payDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-03-10", location: "Bangalore", ctc: "1200000" },
+      { tenantId, employeeId: "AMT-2024-004", firstName: "Meena", lastName: "Rajesh", email: "meena.r@automystics.com", phone: "+91 65432 10987", gender: "Female", departmentId: hrDept?.id, designationId: hrExecDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-04-05", location: "Chennai", ctc: "750000" },
+      { tenantId, employeeId: "AMT-2024-005", firstName: "Suresh", lastName: "Babu", email: "suresh.b@automystics.com", phone: "+91 54321 09876", gender: "Male", departmentId: techDept?.id, designationId: techLeadDes?.id, employmentType: "Permanent", status: "Active", dateOfJoining: "2024-05-20", location: "Hyderabad", ctc: "2200000" },
+      { tenantId, employeeId: "AMT-2025-006", firstName: "Kavitha", lastName: "Nair", email: "kavitha.n@automystics.com", phone: "+91 43210 98765", gender: "Female", departmentId: engDept?.id, designationId: swDes?.id, employmentType: "Probation", status: "Active", dateOfJoining: "2025-01-08", location: "Chennai", ctc: "900000" },
+      { tenantId, employeeId: "AMT-2025-007", firstName: "Dinesh", lastName: "Murugan", email: "dinesh.m@automystics.com", phone: "+91 32109 87654", gender: "Male", departmentId: marketingDept?.id, designationId: mktDes?.id, employmentType: "Contract", status: "Notice Period", dateOfJoining: "2025-02-15", location: "Chennai", ctc: "850000" },
+      { tenantId, employeeId: "AMT-2026-008", firstName: "Lakshmi", lastName: "Iyer", email: "lakshmi.i@automystics.com", phone: "+91 21098 76543", gender: "Female", departmentId: financeDept?.id, designationId: finDes?.id, employmentType: "Intern", status: "Active", dateOfJoining: "2026-04-01", location: "Chennai", ctc: "350000" },
     ])
     .onConflictDoNothing();
   const allEmps = await db.select().from(employeesTable);
   const byCode = (id: string) => allEmps.find((e) => e.employeeId === id);
-  const emp1 = byCode("AMT-2024-001"); // Arjun (super_admin, Eng SSE)
+  const emp1 = byCode("AMT-2024-001"); // Arjun (customer_admin, Eng SSE)
   const emp2 = byCode("AMT-2024-002"); // Priya (hr_manager)
   const emp3 = byCode("AMT-2024-003"); // Ravi (payroll_admin)
   const emp4 = byCode("AMT-2024-004"); // Meena (hr_executive)
@@ -161,17 +171,17 @@ async function seed() {
   await db
     .insert(hrmsUsersTable)
     .values([
-      { employeeId: emp1?.id, email: "arjun.sharma@automystics.com", name: "Arjun Sharma", role: "super_admin", isActive: true },
-      { employeeId: emp2?.id, email: "priya.v@automystics.com", name: "Priya Venkataraman", role: "hr_manager", isActive: true },
-      { employeeId: emp3?.id, email: "ravi.kumar@automystics.com", name: "Ravi Kumar", role: "payroll_admin", isActive: true },
-      { employeeId: emp4?.id, email: "meena.r@automystics.com", name: "Meena Rajesh", role: "hr_executive", isActive: true },
-      { employeeId: emp5?.id, email: "suresh.b@automystics.com", name: "Suresh Babu", role: "hod", isActive: true },
-      { employeeId: emp6?.id, email: "kavitha.n@automystics.com", name: "Kavitha Nair", role: "employee", isActive: true },
+      { tenantId, employeeId: emp1?.id, email: "arjun.sharma@automystics.com", name: "Arjun Sharma", role: "customer_admin", isActive: true },
+      { tenantId, employeeId: emp2?.id, email: "priya.v@automystics.com", name: "Priya Venkataraman", role: "hr_manager", isActive: true },
+      { tenantId, employeeId: emp3?.id, email: "ravi.kumar@automystics.com", name: "Ravi Kumar", role: "payroll_admin", isActive: true },
+      { tenantId, employeeId: emp4?.id, email: "meena.r@automystics.com", name: "Meena Rajesh", role: "hr_executive", isActive: true },
+      { tenantId, employeeId: emp5?.id, email: "suresh.b@automystics.com", name: "Suresh Babu", role: "hod", isActive: true },
+      { tenantId, employeeId: emp6?.id, email: "kavitha.n@automystics.com", name: "Kavitha Nair", role: "employee", isActive: true },
     ])
     .onConflictDoNothing();
   const allUsers = await db.select().from(hrmsUsersTable);
   const userBy = (role: string) => allUsers.find((u) => u.role === role);
-  const superUser = userBy("super_admin");
+  const superUser = userBy("customer_admin");
   const hrMgr = userBy("hr_manager");
   const hrExec = userBy("hr_executive");
   const hodUser = userBy("hod");
@@ -183,11 +193,11 @@ async function seed() {
   await db
     .insert(auditLogsTable)
     .values([
-      { action: "CREATE", module: "Employees", recordId: String(emp1?.id), userEmail: "system@automystics.com", newValue: "AMT-2024-001" },
-      { action: "CREATE", module: "Employees", recordId: String(emp2?.id), userEmail: "system@automystics.com", newValue: "AMT-2024-002" },
-      { action: "STATUS_CHANGE", module: "Employees", recordId: String(emp7?.id), userEmail: "priya.v@automystics.com", previousValue: "Active", newValue: "Notice Period" },
-      { action: "CREATE", module: "Departments", recordId: String(engDept?.id), userEmail: "system@automystics.com", newValue: "Engineering" },
-      { action: "CREATE", module: "Employees", recordId: String(emp8?.id), userEmail: "priya.v@automystics.com", newValue: "AMT-2026-008" },
+      { tenantId, action: "CREATE", module: "Employees", recordId: String(emp1?.id), userEmail: "system@automystics.com", newValue: "AMT-2024-001" },
+      { tenantId, action: "CREATE", module: "Employees", recordId: String(emp2?.id), userEmail: "system@automystics.com", newValue: "AMT-2024-002" },
+      { tenantId, action: "STATUS_CHANGE", module: "Employees", recordId: String(emp7?.id), userEmail: "priya.v@automystics.com", previousValue: "Active", newValue: "Notice Period" },
+      { tenantId, action: "CREATE", module: "Departments", recordId: String(engDept?.id), userEmail: "system@automystics.com", newValue: "Engineering" },
+      { tenantId, action: "CREATE", module: "Employees", recordId: String(emp8?.id), userEmail: "priya.v@automystics.com", newValue: "AMT-2026-008" },
     ])
     .onConflictDoNothing();
   console.log("Audit logs seeded.");

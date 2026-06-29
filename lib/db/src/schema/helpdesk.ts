@@ -3,6 +3,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const ticketCategoryEnum = pgEnum("ticket_category", [
   "IT", "HR", "Finance", "Payroll", "Admin", "Other",
@@ -19,6 +20,7 @@ export const ticketStatusEnum = pgEnum("ticket_status", [
 // ─── HELPDESK TICKETS ─────────────────────────────────────────────────────────
 export const helpdeskTicketsTable = pgTable("helpdesk_tickets", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   subject: text("subject").notNull(),
   description: text("description").notNull(),
   category: ticketCategoryEnum("category").notNull(),
@@ -47,12 +49,6 @@ export const ticketCommentsTable = pgTable("ticket_comments", {
 });
 
 // ─── TICKET ATTACHMENTS ───────────────────────────────────────────────────────
-// One row per file attached to a ticket. `commentId` is null for files attached
-// at ticket creation (or later directly to the ticket); set when the upload is
-// part of a comment. `objectPath` stores the normalized object-storage path
-// returned by the upload endpoint (e.g. "/objects/uploads/<uuid>"); `fileName`,
-// `fileSize`, and `contentType` are captured at upload time so the UI can render
-// without a HEAD round-trip.
 export const ticketAttachmentsTable = pgTable("ticket_attachments", {
   id: serial("id").primaryKey(),
   ticketId: integer("ticket_id").notNull().references(() => helpdeskTicketsTable.id),

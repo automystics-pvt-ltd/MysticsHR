@@ -1,11 +1,13 @@
 import { pgTable, serial, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { tenantsTable } from "./tenants";
 
 export const departmentsTable = pgTable("departments", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   name: text("name").notNull(),
-  code: text("code").notNull().unique(),
+  code: text("code").notNull(),
   description: text("description"),
   headId: integer("head_id"),
   isActive: boolean("is_active").notNull().default(true),

@@ -2,6 +2,7 @@ import { pgTable, serial, text, integer, boolean, timestamp, date, numeric, pgEn
 import { employeesTable } from "./employees";
 import { hrmsUsersTable } from "./hrms_users";
 import { departmentsTable } from "./departments";
+import { tenantsTable } from "./tenants";
 
 export const leaveStatusEnum = pgEnum("leave_status", [
   "Pending", "HOD Approved", "HR Approved", "Approved", "Rejected", "Cancelled", "Cancel Requested",
@@ -13,8 +14,9 @@ export const permissionStatusEnum = pgEnum("permission_status", [
 
 export const leaveTypesTable = pgTable("leave_types", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  code: text("code").notNull().unique(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  name: text("name").notNull(),
+  code: text("code").notNull(),
   description: text("description"),
   annualQuota: numeric("annual_quota", { precision: 5, scale: 1 }).notNull().default("0"),
   carryForwardEnabled: boolean("carry_forward_enabled").notNull().default(false),
@@ -33,10 +35,9 @@ export const leaveTypesTable = pgTable("leave_types", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// leave_policies: configurable behaviour layer per leave type (1:1 with leave_types).
-// Authoritative source for approval workflow, eligibility, accrual, and consecutive-day rules.
 export const leavePoliciesTable = pgTable("leave_policies", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   leaveTypeId: integer("leave_type_id").notNull().unique().references(() => leaveTypesTable.id),
   requiresHodApproval: boolean("requires_hod_approval").notNull().default(true),
   requiresHrApproval: boolean("requires_hr_approval").notNull().default(true),
@@ -55,6 +56,7 @@ export const leavePoliciesTable = pgTable("leave_policies", {
 
 export const leaveBalancesTable = pgTable("leave_balances", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   leaveTypeId: integer("leave_type_id").notNull().references(() => leaveTypesTable.id),
   year: integer("year").notNull(),
@@ -68,6 +70,7 @@ export const leaveBalancesTable = pgTable("leave_balances", {
 
 export const leaveApplicationsTable = pgTable("leave_applications", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   leaveTypeId: integer("leave_type_id").notNull().references(() => leaveTypesTable.id),
   fromDate: date("from_date").notNull(),
@@ -108,6 +111,7 @@ export const leaveAccrualHistoryTable = pgTable("leave_accrual_history", {
 
 export const blackoutDatesTable = pgTable("blackout_dates", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   name: text("name").notNull(),
   fromDate: date("from_date").notNull(),
   toDate: date("to_date").notNull(),
@@ -120,6 +124,7 @@ export const blackoutDatesTable = pgTable("blackout_dates", {
 
 export const permissionApplicationsTable = pgTable("permission_applications", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   permissionDate: date("permission_date").notNull(),
   startTime: text("start_time").notNull(),
@@ -138,6 +143,7 @@ export const permissionApplicationsTable = pgTable("permission_applications", {
 
 export const permissionRegistersTable = pgTable("permission_registers", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   year: integer("year").notNull(),
   month: integer("month").notNull(),

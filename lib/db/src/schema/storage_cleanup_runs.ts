@@ -1,7 +1,9 @@
 import { pgTable, serial, integer, boolean, timestamp, text } from "drizzle-orm/pg-core";
+import { tenantsTable } from "./tenants";
 
 export const storageCleanupRunsTable = pgTable("storage_cleanup_runs", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   scanned: integer("scanned").notNull().default(0),
@@ -12,7 +14,7 @@ export const storageCleanupRunsTable = pgTable("storage_cleanup_runs", {
   ageDays: integer("age_days").notNull().default(0),
   dryRun: boolean("dry_run").notNull().default(false),
   durationMs: integer("duration_ms"),
-  triggeredBy: text("triggered_by").notNull().default("cron"), // 'cron' | 'manual:<userId>'
+  triggeredBy: text("triggered_by").notNull().default("cron"),
   errorMessage: text("error_message"),
 });
 

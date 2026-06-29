@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, timestamp, numeric, date, pgEnum } from "drizzle-orm/pg-core";
 import { candidatesTable } from "./candidates";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const offerStatusEnum = pgEnum("offer_status", [
   "Draft",
@@ -13,7 +14,8 @@ export const offerStatusEnum = pgEnum("offer_status", [
 
 export const offerLettersTable = pgTable("offer_letters", {
   id: serial("id").primaryKey(),
-  offerCode: text("offer_code").notNull().unique(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  offerCode: text("offer_code").notNull(),
   candidateId: integer("candidate_id").notNull().references(() => candidatesTable.id),
   jobTitle: text("job_title").notNull(),
   ctc: numeric("ctc", { precision: 14, scale: 2 }).notNull(),

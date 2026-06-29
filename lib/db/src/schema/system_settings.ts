@@ -1,8 +1,10 @@
-import { pgTable, serial, text, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, jsonb, timestamp, integer } from "drizzle-orm/pg-core";
+import { tenantsTable } from "./tenants";
 
 export const systemSettingsTable = pgTable("system_settings", {
   id: serial("id").primaryKey(),
-  category: text("category").notNull(), // 'org_profile' | 'statutory' | 'payroll' | 'security' | 'email' | 'whatsapp' | 'financial_year' | 'approval_chains' | 'custom_fields' | 'leave_blackout'
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  category: text("category").notNull(),
   key: text("key").notNull(),
   value: jsonb("value"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

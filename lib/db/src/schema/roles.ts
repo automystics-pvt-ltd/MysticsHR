@@ -1,10 +1,12 @@
 import { pgTable, serial, varchar, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { tenantsTable } from "./tenants";
 
 export const rolesTable = pgTable("roles", {
   id: serial("id").primaryKey(),
-  slug: varchar("slug", { length: 50 }).notNull().unique(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  slug: varchar("slug", { length: 50 }).notNull(),
   label: varchar("label", { length: 100 }).notNull(),
   description: text("description"),
   level: integer("level").notNull(),

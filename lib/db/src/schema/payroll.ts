@@ -3,6 +3,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const salaryComponentTypeEnum = pgEnum("salary_component_type", [
   "Basic",
@@ -48,9 +49,9 @@ export const lockExceptionStatusEnum = pgEnum("lock_exception_status", [
 ]);
 
 // ─── SALARY STRUCTURES ────────────────────────────────────────────────────────
-// One "active" structure per employee at a given time (soft-versioned via effective dates)
 export const salaryStructuresTable = pgTable("salary_structures", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   name: text("name").notNull(),
   effectiveFrom: date("effective_from").notNull(),
@@ -65,7 +66,6 @@ export const salaryStructuresTable = pgTable("salary_structures", {
 });
 
 // ─── SALARY COMPONENTS ────────────────────────────────────────────────────────
-// Individual earning/deduction rows within a salary structure
 export const salaryComponentsTable = pgTable("salary_components", {
   id: serial("id").primaryKey(),
   salaryStructureId: integer("salary_structure_id").notNull().references(() => salaryStructuresTable.id),
@@ -81,9 +81,9 @@ export const salaryComponentsTable = pgTable("salary_components", {
 });
 
 // ─── PAYROLL RUNS ─────────────────────────────────────────────────────────────
-// A single monthly payroll processing cycle
 export const payrollRunsTable = pgTable("payroll_runs", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   periodYear: integer("period_year").notNull(),
   periodMonth: integer("period_month").notNull(),
   status: payrollRunStatusEnum("status").notNull().default("Draft"),
@@ -101,7 +101,6 @@ export const payrollRunsTable = pgTable("payroll_runs", {
 });
 
 // ─── PAYROLL RECORDS ──────────────────────────────────────────────────────────
-// Per-employee result within a payroll run
 export const payrollRecordsTable = pgTable("payroll_records", {
   id: serial("id").primaryKey(),
   payrollRunId: integer("payroll_run_id").notNull().references(() => payrollRunsTable.id),
@@ -142,7 +141,6 @@ export const payrollRecordsTable = pgTable("payroll_records", {
 });
 
 // ─── PAYSLIPS ─────────────────────────────────────────────────────────────────
-// Generated payslip (stored as structured JSON + HTML)
 export const payslipsTable = pgTable("payslips", {
   id: serial("id").primaryKey(),
   payrollRecordId: integer("payroll_record_id").notNull().references(() => payrollRecordsTable.id),
@@ -156,9 +154,9 @@ export const payslipsTable = pgTable("payslips", {
 });
 
 // ─── TAX REGIME DECLARATIONS ──────────────────────────────────────────────────
-// Employee's income tax regime declaration (Old or New) per FY
 export const taxRegimeDeclarationsTable = pgTable("tax_regime_declarations", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   financialYear: text("financial_year").notNull(),
   regime: taxRegimeEnum("regime").notNull().default("New"),
@@ -170,9 +168,9 @@ export const taxRegimeDeclarationsTable = pgTable("tax_regime_declarations", {
 });
 
 // ─── SALARY REVISIONS ─────────────────────────────────────────────────────────
-// Salary revision workflow: HR creates, Super Admin approves
 export const salaryRevisionsTable = pgTable("salary_revisions", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   oldStructureId: integer("old_structure_id").references(() => salaryStructuresTable.id),
   newStructureId: integer("new_structure_id").references(() => salaryStructuresTable.id),
@@ -188,9 +186,9 @@ export const salaryRevisionsTable = pgTable("salary_revisions", {
 });
 
 // ─── PAYROLL LOCKS ────────────────────────────────────────────────────────────
-// Locks a payroll period to prevent edits during computation
 export const payrollLocksTable = pgTable("payroll_locks", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   year: integer("year").notNull(),
   month: integer("month").notNull(),
   isLocked: boolean("is_locked").notNull().default(false),
@@ -203,7 +201,6 @@ export const payrollLocksTable = pgTable("payroll_locks", {
 });
 
 // ─── PAYROLL LOCK EXCEPTIONS ──────────────────────────────────────────────────
-// HR raises an exception request; Super Admin approves to allow editing during lock
 export const payrollLockExceptionsTable = pgTable("payroll_lock_exceptions", {
   id: serial("id").primaryKey(),
   payrollLockId: integer("payroll_lock_id").notNull().references(() => payrollLocksTable.id),
@@ -219,11 +216,10 @@ export const payrollLockExceptionsTable = pgTable("payroll_lock_exceptions", {
 });
 
 // ─── PAYROLL SETTINGS ─────────────────────────────────────────────────────────
-// Key-value configuration store for payroll module settings.
-// Used to store the annual tax declaration window (start/end date per FY).
 export const payrollSettingsTable = pgTable("payroll_settings", {
   id: serial("id").primaryKey(),
-  settingKey: text("setting_key").notNull().unique(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  settingKey: text("setting_key").notNull(),
   settingValue: text("setting_value").notNull(),
   description: text("description"),
   updatedById: integer("updated_by_id").references(() => hrmsUsersTable.id),
@@ -232,9 +228,9 @@ export const payrollSettingsTable = pgTable("payroll_settings", {
 });
 
 // ─── LOAN REPAYMENTS ──────────────────────────────────────────────────────────
-// Tracks active loan deductions per employee
 export const loanRepaymentsTable = pgTable("loan_repayments", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   loanType: text("loan_type").notNull(),
   principalAmount: numeric("principal_amount", { precision: 12, scale: 2 }).notNull(),

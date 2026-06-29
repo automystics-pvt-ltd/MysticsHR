@@ -1,1 +1,2 @@
-- [Custom Auth System](custom-auth.md) — MysticsHR uses custom JWT+bcrypt auth (no Clerk); cookie name `mysticshr_session`, 7-day HTTP-only, JWT_SECRET in shared env.
+- [Multi-tenant schema strategy](multi-tenant-schema.md) — tenantId nullable in Drizzle (push compat), enforced by JWT; super_admin kept in enum for compat but unused
+- [Platform admin credentials](platform-admin.md) — platform@mysticshr.io / Admin@1234; bcrypt cost 12; stored in platform_admins table (not hrms_users)

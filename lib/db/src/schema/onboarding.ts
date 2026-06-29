@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, timestamp, date, pgEnum } from "drizzle-orm/pg-core";
 import { employeesTable } from "./employees";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const onboardingStatusEnum = pgEnum("onboarding_status", [
   "Not Started",
@@ -17,6 +18,7 @@ export const onboardingTaskCategoryEnum = pgEnum("onboarding_task_category", [
 
 export const onboardingChecklistsTable = pgTable("onboarding_checklists", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().unique().references(() => employeesTable.id),
   status: onboardingStatusEnum("status").notNull().default("Not Started"),
   completionPercentage: integer("completion_percentage").notNull().default(0),
@@ -45,6 +47,7 @@ export const onboardingTasksTable = pgTable("onboarding_tasks", {
 
 export const inductionSessionsTable = pgTable("induction_sessions", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   sessionDate: date("session_date").notNull(),
   trainerName: text("trainer_name").notNull(),

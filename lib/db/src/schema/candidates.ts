@@ -1,5 +1,6 @@
 import { pgTable, serial, text, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { jobRequisitionsTable } from "./job_requisitions";
+import { tenantsTable } from "./tenants";
 
 export const candidateStageEnum = pgEnum("candidate_stage", [
   "Applied",
@@ -26,6 +27,7 @@ export const sourceOfHireEnum = pgEnum("source_of_hire", [
 
 export const candidatesTable = pgTable("candidates", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   requisitionId: integer("requisition_id").references(() => jobRequisitionsTable.id),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),

@@ -3,6 +3,7 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { departmentsTable } from "./departments";
 import { designationsTable } from "./designations";
+import { tenantsTable } from "./tenants";
 
 export const employmentTypeEnum = pgEnum("employment_type", [
   "Permanent",
@@ -25,10 +26,11 @@ export const genderEnum = pgEnum("gender", ["Male", "Female", "Other"]);
 
 export const employeesTable = pgTable("employees", {
   id: serial("id").primaryKey(),
-  employeeId: text("employee_id").notNull().unique(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  employeeId: text("employee_id").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
-  email: text("email").notNull().unique(),
+  email: text("email").notNull(),
   phone: text("phone"),
   dateOfBirth: date("date_of_birth"),
   gender: genderEnum("gender"),
