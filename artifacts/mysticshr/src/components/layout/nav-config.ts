@@ -26,6 +26,7 @@ import {
   Sparkles,
   KeyRound,
   BookOpen,
+  MapPin,
   type LucideIcon,
 } from "lucide-react";
 
@@ -115,6 +116,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Building2,
         roles: ["customer_admin", "hr_manager", "hr_executive"],
         keywords: ["division", "unit"],
+      },
+      {
+        name: "Branches",
+        href: "/branches",
+        icon: MapPin,
+        roles: ["customer_admin", "hr_manager", "hr_executive"],
+        keywords: ["office", "location", "site"],
       },
       {
         name: "Designations",

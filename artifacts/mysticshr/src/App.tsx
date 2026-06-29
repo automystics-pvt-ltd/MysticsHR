@@ -13,6 +13,7 @@ import NewEmployeePage from "@/pages/employees/new";
 import OrgChartPage from "@/pages/org-chart/index";
 import DepartmentsPage from "@/pages/departments";
 import DesignationsPage from "@/pages/designations";
+import BranchesPage from "@/pages/branches";
 import UsersPage from "@/pages/users";
 import AuditLogsPage from "@/pages/audit-logs";
 import RecruitmentPage from "@/pages/recruitment/index";
@@ -221,6 +222,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
             <DesignationsPage />
+          </RoleProtectedRoute>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/branches">
+        <ProtectedRoute>
+          <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive"]}>
+            <BranchesPage />
           </RoleProtectedRoute>
         </ProtectedRoute>
       </Route>

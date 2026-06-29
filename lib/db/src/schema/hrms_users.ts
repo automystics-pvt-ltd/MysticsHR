@@ -24,6 +24,14 @@ export const hrmsUsersTable = pgTable("hrms_users", {
   role: hrmsRoleEnum("role").notNull().default("employee"),
   passwordHash: text("password_hash"),
   isActive: boolean("is_active").notNull().default(true),
+  isLocked: boolean("is_locked").notNull().default(false),
+  lockedAt: timestamp("locked_at"),
+  lockedReason: text("locked_reason"),
+  failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+  lastLoginAt: timestamp("last_login_at"),
+  inviteToken: text("invite_token"),
+  inviteExpiry: timestamp("invite_expiry"),
+  invitedAt: timestamp("invited_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
@@ -33,12 +41,14 @@ export const hrmsUsersTable = pgTable("hrms_users", {
 export const insertHrmsUserSchema = createInsertSchema(hrmsUsersTable).omit({
   id: true,
   passwordHash: true,
+  inviteToken: true,
   createdAt: true,
   updatedAt: true,
 });
 
 export const selectHrmsUserSchema = createSelectSchema(hrmsUsersTable).omit({
   passwordHash: true,
+  inviteToken: true,
 });
 
 export type InsertHrmsUser = z.infer<typeof insertHrmsUserSchema>;

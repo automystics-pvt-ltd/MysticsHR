@@ -27,6 +27,7 @@ import notificationsRouter from "./notifications";
 import systemConfigRouter from "./system-config";
 import storageRouter from "./storage";
 import apiKeysRouter from "./api-keys";
+import branchesRouter from "./branches";
 import v1Router from "./v1";
 import { openApiSpec } from "../openapi";
 
@@ -60,6 +61,7 @@ router.use(systemConfigRouter);
 router.use(storageRouter);
 router.use(auditLogsRouter);
 router.use(apiKeysRouter);
+router.use(branchesRouter);
 router.use("/v1", v1Router);
 
 router.get("/openapi.json", (_req, res) => res.json(openApiSpec));

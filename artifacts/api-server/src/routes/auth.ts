@@ -6,10 +6,15 @@ import { and, eq, sql } from "drizzle-orm";
 import { signToken, setAuthCookie, clearAuthCookie, requireHrmsUser } from "../lib/auth";
 
 const router = Router();
+const MAX_FAILED_ATTEMPTS = 5;
 
 function safeUser(user: typeof hrmsUsersTable.$inferSelect) {
-  const { passwordHash: _, ...rest } = user;
-  return rest;
+  const { passwordHash: _, inviteToken: __, ...rest } = user;
+  return {
+    ...rest,
+    hasPassword: !!user.passwordHash,
+    hasPendingInvite: !!(user.inviteToken && user.inviteExpiry && user.inviteExpiry > new Date()),
+  };
 }
 
 router.post("/auth/login", async (req, res) => {
@@ -21,9 +26,6 @@ router.post("/auth/login", async (req, res) => {
     }
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Fetch all candidate accounts for this email.
-    // When a tenantSlug is provided, narrow to that tenant only (prevents iterating
-    // bcrypt rounds across every tenant — important when email reuse is allowed).
     let candidates: (typeof hrmsUsersTable.$inferSelect)[];
     if (tenantSlug) {
       const [tenant] = await db
@@ -40,8 +42,6 @@ router.post("/auth/login", async (req, res) => {
         .from(hrmsUsersTable)
         .where(and(eq(hrmsUsersTable.email, normalizedEmail), eq(hrmsUsersTable.tenantId, tenant.id)));
     } else {
-      // No tenant hint — fetch all accounts with this email across tenants.
-      // bcrypt.compare determines which one (if any) matches the supplied password.
       candidates = await db
         .select()
         .from(hrmsUsersTable)
@@ -53,7 +53,6 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
-    // Find the first candidate whose password hash matches.
     let matchedUser: typeof hrmsUsersTable.$inferSelect | null = null;
     for (const candidate of candidates) {
       if (candidate.passwordHash && await bcrypt.compare(password, candidate.passwordHash)) {
@@ -63,13 +62,42 @@ router.post("/auth/login", async (req, res) => {
     }
 
     if (!matchedUser) {
+      // Increment failed attempts for all candidates with a password hash found
+      for (const candidate of candidates) {
+        if (candidate.passwordHash) {
+          const newAttempts = (candidate.failedLoginAttempts ?? 0) + 1;
+          const shouldLock = newAttempts >= MAX_FAILED_ATTEMPTS;
+          await db
+            .update(hrmsUsersTable)
+            .set({
+              failedLoginAttempts: newAttempts,
+              ...(shouldLock ? { isLocked: true, lockedAt: new Date(), lockedReason: `Auto-locked after ${MAX_FAILED_ATTEMPTS} failed login attempts` } : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(hrmsUsersTable.id, candidate.id));
+        }
+      }
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
+
     if (!matchedUser.isActive) {
       res.status(403).json({ error: "Your account is deactivated. Contact your HR administrator." });
       return;
     }
+
+    if (matchedUser.isLocked) {
+      const reason = matchedUser.lockedReason ?? "Account locked";
+      res.status(403).json({ error: `Account is locked: ${reason}. Contact your HR administrator.` });
+      return;
+    }
+
+    // Successful login — reset failed attempts, update lastLoginAt
+    await db
+      .update(hrmsUsersTable)
+      .set({ failedLoginAttempts: 0, lastLoginAt: new Date(), updatedAt: new Date() })
+      .where(eq(hrmsUsersTable.id, matchedUser.id));
+
     const token = signToken({ userId: matchedUser.id, email: matchedUser.email, role: matchedUser.role, tenantId: matchedUser.tenantId });
     setAuthCookie(res, token);
     res.json({ user: safeUser(matchedUser) });
@@ -98,18 +126,48 @@ router.get("/auth/me", requireHrmsUser, async (req, res) => {
   }
 });
 
-// POST /auth/register — lets an existing HRMS user set their password for the first time.
-// Tenant provisioning is the platform admin's responsibility; this endpoint does NOT
-// bootstrap tenants or create the very-first user. If no tenants exist, it errors.
+// GET /auth/setup-check?token=xxx — validate an invite/reset token and return pre-fill data
+router.get("/auth/setup-check", async (req, res) => {
+  try {
+    const { token } = req.query as { token?: string };
+    if (!token) {
+      res.status(400).json({ error: "token is required" });
+      return;
+    }
+    const [user] = await db
+      .select()
+      .from(hrmsUsersTable)
+      .where(eq(hrmsUsersTable.inviteToken, token))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).json({ error: "Invalid or expired setup link" });
+      return;
+    }
+    if (!user.inviteExpiry || user.inviteExpiry < new Date()) {
+      res.status(410).json({ error: "This setup link has expired. Ask your administrator to generate a new one." });
+      return;
+    }
+    if (!user.isActive) {
+      res.status(403).json({ error: "Account is deactivated. Contact your HR administrator." });
+      return;
+    }
+    res.json({ email: user.email, name: user.name });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /auth/register — set password via invite token OR by email (first-time setup)
 router.post("/auth/register", async (req, res) => {
   try {
-    const { email, password, tenantSlug } = req.body as {
-      email?: string;
-      password?: string;
-      tenantSlug?: string;
+    const { email, password, tenantSlug, token } = req.body as {
+      email?: string; password?: string; tenantSlug?: string; token?: string;
     };
-    if (!email || !password) {
-      res.status(400).json({ error: "email and password are required" });
+
+    if (!password) {
+      res.status(400).json({ error: "password is required" });
       return;
     }
     if (password.length < 8) {
@@ -117,7 +175,46 @@ router.post("/auth/register", async (req, res) => {
       return;
     }
 
-    // Gate: at least one tenant must exist (created by platform admin).
+    // Token-based setup (invite link flow)
+    if (token) {
+      const [user] = await db
+        .select()
+        .from(hrmsUsersTable)
+        .where(eq(hrmsUsersTable.inviteToken, token))
+        .limit(1);
+
+      if (!user) {
+        res.status(404).json({ error: "Invalid or expired setup link" });
+        return;
+      }
+      if (!user.inviteExpiry || user.inviteExpiry < new Date()) {
+        res.status(410).json({ error: "This setup link has expired. Ask your administrator to generate a new one." });
+        return;
+      }
+      if (!user.isActive) {
+        res.status(403).json({ error: "Account is deactivated. Contact your HR administrator." });
+        return;
+      }
+
+      const passwordHash = await bcrypt.hash(password, 12);
+      const [updated] = await db
+        .update(hrmsUsersTable)
+        .set({ passwordHash, inviteToken: null, inviteExpiry: null, failedLoginAttempts: 0, updatedAt: new Date() })
+        .where(eq(hrmsUsersTable.id, user.id))
+        .returning();
+
+      const authToken = signToken({ userId: updated.id, email: updated.email, role: updated.role, tenantId: updated.tenantId });
+      setAuthCookie(res, authToken);
+      res.json({ user: safeUser(updated) });
+      return;
+    }
+
+    // Email-based setup (legacy / fallback flow)
+    if (!email) {
+      res.status(400).json({ error: "email and password are required" });
+      return;
+    }
+
     const [{ tenantCount }] = await db
       .select({ tenantCount: sql<number>`count(*)::int` })
       .from(tenantsTable);
@@ -129,8 +226,6 @@ router.post("/auth/register", async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-
-    // Resolve which tenant to scope the lookup to.
     let tenantId: number | undefined;
     if (tenantSlug) {
       const [tenant] = await db
@@ -156,9 +251,7 @@ router.post("/auth/register", async (req, res) => {
       .limit(1);
 
     if (!existing) {
-      res.status(404).json({
-        error: "No account found for this email. Contact your HR administrator.",
-      });
+      res.status(404).json({ error: "No account found for this email. Contact your HR administrator." });
       return;
     }
     if (existing.passwordHash) {
@@ -173,11 +266,12 @@ router.post("/auth/register", async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12);
     const [updated] = await db
       .update(hrmsUsersTable)
-      .set({ passwordHash, updatedAt: new Date() })
+      .set({ passwordHash, inviteToken: null, inviteExpiry: null, updatedAt: new Date() })
       .where(and(eq(hrmsUsersTable.id, existing.id), eq(hrmsUsersTable.tenantId, existing.tenantId)))
       .returning();
-    const token = signToken({ userId: updated.id, email: updated.email, role: updated.role, tenantId: updated.tenantId });
-    setAuthCookie(res, token);
+
+    const authToken = signToken({ userId: updated.id, email: updated.email, role: updated.role, tenantId: updated.tenantId });
+    setAuthCookie(res, authToken);
     res.json({ user: safeUser(updated) });
   } catch (err) {
     console.error(err);
@@ -187,10 +281,7 @@ router.post("/auth/register", async (req, res) => {
 
 router.post("/auth/change-password", requireHrmsUser, async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body as {
-      currentPassword?: string;
-      newPassword?: string;
-    };
+    const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
     if (!currentPassword || !newPassword) {
       res.status(400).json({ error: "currentPassword and newPassword are required" });
       return;
