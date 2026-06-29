@@ -266,7 +266,7 @@ router.post("/attendance", requireHrmsUser, requireRole(...HR_ROLES), async (req
     const computedStatus: AttendanceStatus = body.status ?? computeStatus(totalMins, minWorkingMins);
 
     const [existing] = await db.select({ id: attendanceRecordsTable.id }).from(attendanceRecordsTable)
-      .where(and(eq(attendanceRecordsTable.employeeId, body.employeeId), eq(attendanceRecordsTable.attendanceDate, body.attendanceDate)));
+      .where(and(eq(attendanceRecordsTable.employeeId, body.employeeId), eq(attendanceRecordsTable.attendanceDate, body.attendanceDate), eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)));
 
     let record: typeof attendanceRecordsTable.$inferSelect | undefined;
     if (existing) {
@@ -811,7 +811,7 @@ router.patch("/attendance/:id", requireHrmsUser, requireRole(...HR_ROLES), async
     const body = req.body;
     if (!body.overrideReason) { res.status(400).json({ error: "overrideReason is required for HR override" }); return; }
     const id = Number(req.params.id);
-    const [existing] = await db.select().from(attendanceRecordsTable).where(eq(attendanceRecordsTable.id, id));
+    const [existing] = await db.select().from(attendanceRecordsTable).where(and(eq(attendanceRecordsTable.id, id), eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
     // Check lock against the actual date of the attendance record being patched
@@ -850,7 +850,7 @@ router.patch("/attendance/:id", requireHrmsUser, requireRole(...HR_ROLES), async
         notes: body.notes ?? existing.notes,
         updatedAt: new Date(),
       })
-      .where(eq(attendanceRecordsTable.id, id))
+      .where(and(eq(attendanceRecordsTable.id, id), eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)))
       .returning();
     if (updated) {
       await upsertOvertimeRecord(updated.id, existing.employeeId, existing.attendanceDate, overtimeMins, template?.shiftRatePerHour, req.hrmsUser!.tenantId);
@@ -871,7 +871,7 @@ router.get("/employees/:id/attendance", requireHrmsUser, requireRole(...ALL_ROLE
       if (!userRow?.employeeId || userRow.employeeId !== empId) { res.status(403).json({ error: "Forbidden" }); return; }
     }
     const { month } = req.query;
-    const conditions: SQL<unknown>[] = [eq(attendanceRecordsTable.employeeId, empId)];
+    const conditions: SQL<unknown>[] = [eq(attendanceRecordsTable.employeeId, empId), eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)];
     if (month && typeof month === "string") {
       const [y, mo] = month.split("-").map(Number);
       const start = `${y}-${String(mo).padStart(2, "0")}-01`;
@@ -892,7 +892,7 @@ router.get("/employees/:id/overtime", requireHrmsUser, requireRole(...HR_READ_RO
   try {
     const empId = Number(req.params.id);
     const { month } = req.query;
-    const conditions: SQL<unknown>[] = [eq(overtimeRecordsTable.employeeId, empId)];
+    const conditions: SQL<unknown>[] = [eq(overtimeRecordsTable.employeeId, empId), eq(overtimeRecordsTable.tenantId, req.hrmsUser!.tenantId)];
     if (month && typeof month === "string") {
       const [y, mo] = month.split("-").map(Number);
       const start = `${y}-${String(mo).padStart(2, "0")}-01`;
