@@ -161,12 +161,12 @@ async function seed() {
   await db
     .insert(hrmsUsersTable)
     .values([
-      { clerkUserId: "demo_super_admin_001", employeeId: emp1?.id, email: "arjun.sharma@automystics.com", name: "Arjun Sharma", role: "super_admin", isActive: true },
-      { clerkUserId: "demo_hr_manager_002", employeeId: emp2?.id, email: "priya.v@automystics.com", name: "Priya Venkataraman", role: "hr_manager", isActive: true },
-      { clerkUserId: "demo_payroll_admin_003", employeeId: emp3?.id, email: "ravi.kumar@automystics.com", name: "Ravi Kumar", role: "payroll_admin", isActive: true },
-      { clerkUserId: "demo_hr_executive_004", employeeId: emp4?.id, email: "meena.r@automystics.com", name: "Meena Rajesh", role: "hr_executive", isActive: true },
-      { clerkUserId: "demo_hod_005", employeeId: emp5?.id, email: "suresh.b@automystics.com", name: "Suresh Babu", role: "hod", isActive: true },
-      { clerkUserId: "demo_employee_006", employeeId: emp6?.id, email: "kavitha.n@automystics.com", name: "Kavitha Nair", role: "employee", isActive: true },
+      { employeeId: emp1?.id, email: "arjun.sharma@automystics.com", name: "Arjun Sharma", role: "super_admin", isActive: true },
+      { employeeId: emp2?.id, email: "priya.v@automystics.com", name: "Priya Venkataraman", role: "hr_manager", isActive: true },
+      { employeeId: emp3?.id, email: "ravi.kumar@automystics.com", name: "Ravi Kumar", role: "payroll_admin", isActive: true },
+      { employeeId: emp4?.id, email: "meena.r@automystics.com", name: "Meena Rajesh", role: "hr_executive", isActive: true },
+      { employeeId: emp5?.id, email: "suresh.b@automystics.com", name: "Suresh Babu", role: "hod", isActive: true },
+      { employeeId: emp6?.id, email: "kavitha.n@automystics.com", name: "Kavitha Nair", role: "employee", isActive: true },
     ])
     .onConflictDoNothing();
   const allUsers = await db.select().from(hrmsUsersTable);

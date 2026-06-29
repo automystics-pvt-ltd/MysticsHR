@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
-import { useAuth } from "@clerk/react";
 import { ArrowLeft, AlertTriangle, CheckCircle, Clock, BarChart3, Download } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -50,7 +49,6 @@ function fmtDateInput(d: Date) {
  * Helpdesk page.
  */
 export function SlaReportContent() {
-  const { getToken } = useAuth();
   const [preset, setPreset] = useState<RangePreset>("all");
   const [customFrom, setCustomFrom] = useState<string>("");
   const [customTo, setCustomTo] = useState<string>("");
@@ -131,11 +129,7 @@ export function SlaReportContent() {
     setDownloading(true);
     try {
       const url = getGetHelpdeskSlaReportCsvUrl({ from: fromIso, to: toIso });
-      const token = await getToken();
-      const resp = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: "include",
-      });
+      const resp = await fetch(url, { credentials: "include" });
       if (!resp.ok) throw new Error(`Failed to download CSV (${resp.status})`);
       const blob = await resp.blob();
       const blobUrl = URL.createObjectURL(blob);

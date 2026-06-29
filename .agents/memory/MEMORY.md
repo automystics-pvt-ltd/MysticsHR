@@ -1,0 +1,1 @@
+- [Custom Auth System](custom-auth.md) — MysticsHR uses custom JWT+bcrypt auth (no Clerk); cookie name `mysticshr_session`, 7-day HTTP-only, JWT_SECRET in shared env.

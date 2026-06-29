@@ -13,7 +13,6 @@
     "test": "pnpm run test:unit && pnpm run test:e2e"
   },
   "devDependencies": {
-    "@clerk/testing": "^2.0.17",
     "@hookform/resolvers": "^3.10.0",
     "@playwright/test": "^1.59.1",
     "@radix-ui/react-accordion": "^1.2.4",
@@ -81,7 +80,6 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "@clerk/react": "^6.4.2",
     "html-to-image": "^1.11.13",
     "jszip": "3.10.1",
     "pdf-lib": "^1.17.1",

@@ -1,5 +1,4 @@
 import { Link, useLocation } from "wouter";
-import { useClerk, useUser } from "@clerk/react";
 import { Bell, LogOut, Search, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +18,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
+import { useAuth } from "@/lib/auth";
 import { resolveActiveItem } from "./nav-config";
 import { SidebarMenuButton } from "./Sidebar";
 
@@ -35,14 +35,12 @@ const isMac =
 
 export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
   const [location, setLocation] = useLocation();
-  const { signOut } = useClerk();
-  const { user } = useUser();
+  const { logout } = useAuth();
   const { hrmsUser, role: hrmsRole } = useCurrentHrmsUser();
 
   const role = hrmsRole ?? "employee";
   const active = resolveActiveItem(location);
 
-  // Build breadcrumb segments after the resolved module.
   const trailingSegments = (() => {
     if (!active) return [];
     const tail = location.slice(active.href.length).replace(/^\/+|\/+$/g, "");
@@ -54,8 +52,13 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
     }));
   })();
 
-  const displayName = hrmsUser?.name || user?.fullName || user?.primaryEmailAddress?.emailAddress || "User";
+  const displayName = hrmsUser?.name ?? "User";
   const initial = displayName.charAt(0).toUpperCase();
+
+  async function handleSignOut() {
+    await logout();
+    setLocation("/");
+  }
 
   return (
     <header
@@ -64,7 +67,6 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
     >
       <SidebarMenuButton onOpen={onMobileMenuOpen} />
 
-      {/* Breadcrumbs */}
       <div className="hidden md:flex items-center min-w-0 flex-1">
         <Breadcrumb>
           <BreadcrumbList>
@@ -105,12 +107,10 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
         </Breadcrumb>
       </div>
 
-      {/* Mobile title fallback */}
       <div className="flex-1 md:hidden font-semibold text-base truncate">
         {active?.name ?? "MysticsHR"}
       </div>
 
-      {/* Search trigger */}
       <Button
         variant="outline"
         size="sm"
@@ -137,7 +137,6 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
         <Search className="w-5 h-5" />
       </Button>
 
-      {/* Notifications (placeholder bell — links to communications) */}
       <Button
         variant="ghost"
         size="icon"
@@ -148,7 +147,6 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
         <Bell className="w-5 h-5" />
       </Button>
 
-      {/* User menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -157,12 +155,8 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
             data-testid="topbar-user-menu"
             aria-label="User menu"
           >
-            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center overflow-hidden">
-              {user?.imageUrl ? (
-                <img src={user.imageUrl} alt={displayName} className="w-full h-full object-cover" />
-              ) : (
-                initial
-              )}
+            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center">
+              {initial}
             </div>
             <div className="hidden lg:flex flex-col items-start min-w-0 max-w-[160px]">
               <span className="text-sm font-medium leading-tight truncate w-full text-left">
@@ -193,10 +187,7 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
             Notifications
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => signOut(() => setLocation("/"))}
-            data-testid="user-menu-signout"
-          >
+          <DropdownMenuItem onClick={handleSignOut} data-testid="user-menu-signout">
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out
           </DropdownMenuItem>
@@ -207,7 +198,6 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
 }
 
 function prettify(seg: string): string {
-  // UUIDs and numeric IDs get rendered as "Details", everything else is title-cased.
   if (/^[0-9a-f]{8}-/i.test(seg) || /^\d+$/.test(seg)) return "Details";
   return seg
     .replace(/[-_]+/g, " ")

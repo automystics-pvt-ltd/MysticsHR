@@ -35,7 +35,6 @@ import { Settings, Building2, Scale, Banknote, CalendarDays, ShieldCheck, Plus, 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { useAuth } from "@clerk/react";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
 import { listTimezones } from "@/lib/timezones";
 
@@ -950,7 +949,6 @@ interface StorageCleanupRunRow {
 }
 
 function StorageCleanupTab() {
-  const { getToken } = useAuth();
   const qc = useQueryClient();
   const [runs, setRuns] = useState<StorageCleanupRunRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -962,9 +960,8 @@ function StorageCleanupTab() {
   async function load() {
     setLoading(true);
     try {
-      const token = await getToken();
       const res = await fetch(`${BASE_URL}/api/storage-cleanup/runs?limit=20`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as StorageCleanupRunRow[];
@@ -982,13 +979,10 @@ function StorageCleanupTab() {
     if (running) return;
     setRunning(true);
     try {
-      const token = await getToken();
       const res = await fetch(`${BASE_URL}/api/storage-cleanup/run`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ dryRun }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

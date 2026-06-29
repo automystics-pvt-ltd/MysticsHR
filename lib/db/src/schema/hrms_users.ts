@@ -14,11 +14,11 @@ export const hrmsRoleEnum = pgEnum("hrms_role", [
 
 export const hrmsUsersTable = pgTable("hrms_users", {
   id: serial("id").primaryKey(),
-  clerkUserId: text("clerk_user_id").notNull().unique(),
   employeeId: integer("employee_id").references(() => employeesTable.id),
-  email: text("email").notNull(),
+  email: text("email").notNull().unique(),
   name: text("name").notNull(),
   role: hrmsRoleEnum("role").notNull().default("employee"),
+  passwordHash: text("password_hash"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -26,11 +26,14 @@ export const hrmsUsersTable = pgTable("hrms_users", {
 
 export const insertHrmsUserSchema = createInsertSchema(hrmsUsersTable).omit({
   id: true,
+  passwordHash: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const selectHrmsUserSchema = createSelectSchema(hrmsUsersTable);
+export const selectHrmsUserSchema = createSelectSchema(hrmsUsersTable).omit({
+  passwordHash: true,
+});
 
 export type InsertHrmsUser = z.infer<typeof insertHrmsUserSchema>;
 export type HrmsUser = typeof hrmsUsersTable.$inferSelect;

@@ -1,5 +1,5 @@
 import { useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
-import { useUser } from "@clerk/react";
+import { useAuth } from "./auth";
 
 export type HrmsRole = "super_admin" | "hr_manager" | "hr_executive" | "hod" | "payroll_admin" | "employee";
 
@@ -9,10 +9,10 @@ interface ApiError {
 }
 
 export function useCurrentHrmsUser() {
-  const { user } = useUser();
+  const { isSignedIn } = useAuth();
   const { data, error, isLoading } = useGetCurrentUser({
     query: {
-      enabled: !!user?.id,
+      enabled: isSignedIn,
       retry: false,
       staleTime: 1000 * 60 * 5,
       queryKey: getGetCurrentUserQueryKey(),
