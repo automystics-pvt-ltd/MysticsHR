@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { paging } from "../lib/paging";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { db } from "../lib/db";
@@ -69,6 +70,7 @@ const requisitionGroupBy = [
 router.get("/requisitions", requireHrmsUser, requireRole(...HR_WRITE_ROLES, ...APPROVE_ROLES), async (req, res) => {
   try {
     const { status, departmentId } = req.query as Record<string, string>;
+    const { limit, offset } = paging(req);
     const conditions = [
       isNull(jobRequisitionsTable.deletedAt),
       eq(jobRequisitionsTable.tenantId, req.hrmsUser!.tenantId),
@@ -87,7 +89,9 @@ router.get("/requisitions", requireHrmsUser, requireRole(...HR_WRITE_ROLES, ...A
       )
       .where(and(...conditions))
       .groupBy(...requisitionGroupBy)
-      .orderBy(desc(jobRequisitionsTable.createdAt));
+      .orderBy(desc(jobRequisitionsTable.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     res.json(rows);
   } catch (err) {
@@ -322,6 +326,7 @@ const candidateSelect = {
 router.get("/candidates", requireHrmsUser, requireRole(...HR_WRITE_ROLES, "hod"), async (req, res) => {
   try {
     const { requisitionId, stage } = req.query as Record<string, string>;
+    const { limit, offset } = paging(req);
     const conditions = [
       isNull(candidatesTable.deletedAt),
       eq(candidatesTable.tenantId, req.hrmsUser!.tenantId),
@@ -334,7 +339,9 @@ router.get("/candidates", requireHrmsUser, requireRole(...HR_WRITE_ROLES, "hod")
       .from(candidatesTable)
       .leftJoin(jobRequisitionsTable, eq(candidatesTable.requisitionId, jobRequisitionsTable.id))
       .where(and(...conditions))
-      .orderBy(desc(candidatesTable.createdAt));
+      .orderBy(desc(candidatesTable.createdAt))
+      .limit(limit)
+      .offset(offset);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -781,19 +788,20 @@ const offerSelect = {
 router.get("/offers", requireHrmsUser, requireRole(...HR_WRITE_ROLES), async (req, res) => {
   try {
     const { status, candidateId } = req.query as Record<string, string>;
+    const { limit, offset } = paging(req);
     const conditions = [eq(offerLettersTable.tenantId, req.hrmsUser!.tenantId)];
     if (status) conditions.push(sql`${offerLettersTable.status} = ${status}`);
     if (candidateId) conditions.push(eq(offerLettersTable.candidateId, parseInt(candidateId, 10)));
 
-    const query = db
+    const rows = await db
       .select(offerSelect)
       .from(offerLettersTable)
       .leftJoin(candidatesTable, eq(offerLettersTable.candidateId, candidatesTable.id))
-      .leftJoin(hrmsUsersTable, eq(offerLettersTable.issuedById, hrmsUsersTable.id));
-
-    const rows = conditions.length
-      ? await query.where(and(...conditions)).orderBy(desc(offerLettersTable.createdAt))
-      : await query.orderBy(desc(offerLettersTable.createdAt));
+      .leftJoin(hrmsUsersTable, eq(offerLettersTable.issuedById, hrmsUsersTable.id))
+      .where(and(...conditions))
+      .orderBy(desc(offerLettersTable.createdAt))
+      .limit(limit)
+      .offset(offset);
     res.json(rows);
   } catch (err) {
     console.error(err);

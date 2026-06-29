@@ -310,55 +310,43 @@ router.get("/attendance/summary", requireHrmsUser, requireRole(...HR_READ_ROLES)
     const lastDay = new Date(y, m, 0).getDate();
     const end = `${y}-${String(m).padStart(2, "0")}-${lastDay}`;
 
-    const records = await db
+    const deptCondition = departmentId
+      ? eq(employeesTable.departmentId, Number(departmentId))
+      : sql`TRUE`;
+
+    const rows = await db
       .select({
         employeeId: attendanceRecordsTable.employeeId,
-        empFirstName: employeesTable.firstName,
-        empLastName: employeesTable.lastName,
-        empCode: employeesTable.employeeId,
-        deptId: employeesTable.departmentId,
-        status: attendanceRecordsTable.status,
-        overtimeMinutes: attendanceRecordsTable.overtimeMinutes,
-        totalMinutesWorked: attendanceRecordsTable.totalMinutesWorked,
+        employeeName: sql<string>`concat(${employeesTable.firstName}, ' ', ${employeesTable.lastName})`,
+        employeeCode: employeesTable.employeeId,
+        totalPresent: sql<number>`count(*) FILTER (WHERE ${attendanceRecordsTable.status} = 'Present')::int`,
+        totalAbsent: sql<number>`count(*) FILTER (WHERE ${attendanceRecordsTable.status} = 'Absent')::int`,
+        totalHalfDay: sql<number>`count(*) FILTER (WHERE ${attendanceRecordsTable.status} = 'Half-Day')::int`,
+        totalOnLeave: sql<number>`count(*) FILTER (WHERE ${attendanceRecordsTable.status} IN ('On Leave','On Permission'))::int`,
+        totalWeekOff: sql<number>`count(*) FILTER (WHERE ${attendanceRecordsTable.status} = 'Week Off')::int`,
+        totalHoliday: sql<number>`count(*) FILTER (WHERE ${attendanceRecordsTable.status} = 'Holiday')::int`,
+        totalOvertimeMinutes: sql<number>`coalesce(sum(${attendanceRecordsTable.overtimeMinutes}),0)::int`,
+        totalMinutesWorked: sql<number>`coalesce(sum(${attendanceRecordsTable.totalMinutesWorked}),0)::int`,
       })
       .from(attendanceRecordsTable)
-      .leftJoin(employeesTable, eq(attendanceRecordsTable.employeeId, employeesTable.id))
+      .innerJoin(employeesTable, and(
+        eq(attendanceRecordsTable.employeeId, employeesTable.id),
+        eq(employeesTable.tenantId, req.hrmsUser!.tenantId),
+        deptCondition,
+      ))
       .where(and(
         gte(attendanceRecordsTable.attendanceDate, start),
         lte(attendanceRecordsTable.attendanceDate, end),
-        eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)
-      ));
+        eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId),
+      ))
+      .groupBy(
+        attendanceRecordsTable.employeeId,
+        employeesTable.firstName,
+        employeesTable.lastName,
+        employeesTable.employeeId,
+      );
 
-    const summaryMap = new Map<number, AttendanceSummaryRow>();
-    for (const r of records) {
-      if (departmentId && r.deptId !== Number(departmentId)) continue;
-      if (!summaryMap.has(r.employeeId)) {
-        summaryMap.set(r.employeeId, {
-          employeeId: r.employeeId,
-          employeeName: `${r.empFirstName ?? ""} ${r.empLastName ?? ""}`.trim(),
-          employeeCode: r.empCode ?? "",
-          month,
-          totalPresent: 0,
-          totalAbsent: 0,
-          totalHalfDay: 0,
-          totalOnLeave: 0,
-          totalWeekOff: 0,
-          totalHoliday: 0,
-          totalOvertimeMinutes: 0,
-          totalMinutesWorked: 0,
-        });
-      }
-      const s = summaryMap.get(r.employeeId)!;
-      if (r.status === "Present") s.totalPresent++;
-      else if (r.status === "Absent") s.totalAbsent++;
-      else if (r.status === "Half-Day") s.totalHalfDay++;
-      else if (r.status === "On Leave" || r.status === "On Permission") s.totalOnLeave++;
-      else if (r.status === "Week Off") s.totalWeekOff++;
-      else if (r.status === "Holiday") s.totalHoliday++;
-      s.totalOvertimeMinutes += r.overtimeMinutes ?? 0;
-      s.totalMinutesWorked += r.totalMinutesWorked ?? 0;
-    }
-    res.json(Array.from(summaryMap.values()));
+    res.json(rows.map(r => ({ ...r, month })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

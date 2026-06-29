@@ -4,18 +4,12 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-// PORT is only meaningful for the dev/preview server, not for `vite build`.
-// On a CI/VPS build host PORT may be unset; default to a harmless value
-// rather than throwing, so production builds don't require dev-only env vars.
 const rawPort = process.env.PORT ?? "5173";
 const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-// BASE_PATH IS used at build time (it sets the asset base URL), so we
-// require it for builds; default to "/" only for ad-hoc dev runs where
-// the operator hasn't set it yet.
 const basePath =
   process.env.BASE_PATH ?? (process.env.NODE_ENV === "production" ? undefined : "/");
 
@@ -56,6 +50,34 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("recharts") || id.includes("d3-") || id.includes("victory")) {
+              return "vendor-charts";
+            }
+            if (id.includes("lucide-react")) {
+              return "vendor-icons";
+            }
+            if (id.includes("@radix-ui") || id.includes("cmdk") || id.includes("vaul")) {
+              return "vendor-ui";
+            }
+            if (id.includes("date-fns") || id.includes("dayjs")) {
+              return "vendor-dates";
+            }
+            if (id.includes("@tanstack")) {
+              return "vendor-query";
+            }
+            if (id.includes("react") || id.includes("wouter")) {
+              return "vendor-react";
+            }
+            return "vendor";
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
   },
   server: {
     port,

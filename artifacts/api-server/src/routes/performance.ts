@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { paging } from "../lib/paging";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { db } from "../lib/db";
 import {
@@ -150,6 +151,7 @@ router.get("/performance/goals", requireHrmsUser, requireRole(...PERF_ROLES), as
     }
     // HR roles and super_admin: unrestricted
 
+    const { limit, offset } = paging(req);
     const goals = await db.select({
       id: performanceGoalsTable.id,
       cycleId: performanceGoalsTable.cycleId,
@@ -170,7 +172,9 @@ router.get("/performance/goals", requireHrmsUser, requireRole(...PERF_ROLES), as
         conds.length ? and(...conds) : sql`TRUE`,
         eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
       ))
-      .orderBy(desc(performanceGoalsTable.createdAt));
+      .orderBy(desc(performanceGoalsTable.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     // Enrich with latest progress
     const goalIds = goals.map(g => g.id);
@@ -883,6 +887,7 @@ router.get("/performance/outcomes", requireHrmsUser, requireRole(...PERF_ROLES),
       conds.push(inArray(appraisalOutcomesTable.employeeId, directReports.map(r => r.id)));
     }
 
+    const { limit, offset } = paging(req);
     const rows = await db.select({
       id: appraisalOutcomesTable.id,
       cycleId: appraisalOutcomesTable.cycleId,
@@ -899,7 +904,9 @@ router.get("/performance/outcomes", requireHrmsUser, requireRole(...PERF_ROLES),
         conds.length ? and(...conds) : sql`TRUE`,
         eq(employeesTable.tenantId, req.hrmsUser!.tenantId)
       ))
-      .orderBy(desc(appraisalOutcomesTable.calculatedAt));
+      .orderBy(desc(appraisalOutcomesTable.calculatedAt))
+      .limit(limit)
+      .offset(offset);
     res.json(rows);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { paging } from "../lib/paging";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { db } from "../lib/db";
@@ -156,6 +157,7 @@ router.get("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_READ
     const conds = [eq(salaryStructuresTable.tenantId, tenantId)];
     if (employeeId) conds.push(eq(salaryStructuresTable.employeeId, Number(employeeId)));
     if (isActive !== undefined) conds.push(eq(salaryStructuresTable.isActive, isActive === "true"));
+    const { limit, offset } = paging(req);
     const structures = await db
       .select({
         id: salaryStructuresTable.id,
@@ -174,7 +176,9 @@ router.get("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_READ
       .from(salaryStructuresTable)
       .leftJoin(employeesTable, and(eq(salaryStructuresTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, tenantId)))
       .where(and(...conds))
-      .orderBy(desc(salaryStructuresTable.createdAt));
+      .orderBy(desc(salaryStructuresTable.createdAt))
+      .limit(limit)
+      .offset(offset);
     res.json(structures);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -737,6 +741,7 @@ router.post("/payroll/salary-revisions/:id/action", requireHrmsUser, requireRole
 router.get("/payroll/runs", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
+    const { limit, offset } = paging(req);
     const runs = await db.select({
       id: payrollRunsTable.id,
       periodYear: payrollRunsTable.periodYear,
@@ -754,7 +759,9 @@ router.get("/payroll/runs", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES)
     }).from(payrollRunsTable)
       .leftJoin(sql`hrms_users u1`, sql`u1.id = ${payrollRunsTable.initiatedById}`)
       .where(eq(payrollRunsTable.tenantId, tenantId))
-      .orderBy(desc(payrollRunsTable.periodYear), desc(payrollRunsTable.periodMonth));
+      .orderBy(desc(payrollRunsTable.periodYear), desc(payrollRunsTable.periodMonth))
+      .limit(limit)
+      .offset(offset);
     res.json(runs);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -1173,6 +1180,7 @@ router.post("/payroll/runs/:id/finalize", requireHrmsUser, requireRole(...PAYROL
 router.get("/payroll/runs/:id/records", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const runId = Number(req.params.id);
+    const { limit, offset } = paging(req);
     const records = await db.select({
       id: payrollRecordsTable.id,
       payrollRunId: payrollRecordsTable.payrollRunId,
@@ -1198,7 +1206,9 @@ router.get("/payroll/runs/:id/records", requireHrmsUser, requireRole(...PAYROLL_
     }).from(payrollRecordsTable)
       .leftJoin(employeesTable, eq(payrollRecordsTable.employeeId, employeesTable.id))
       .where(eq(payrollRecordsTable.payrollRunId, runId))
-      .orderBy(asc(employeesTable.employeeId));
+      .orderBy(asc(employeesTable.employeeId))
+      .limit(limit)
+      .offset(offset);
     res.json(records);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -1223,6 +1233,7 @@ router.get("/payroll/payslips", requireHrmsUser, requireRole(...ALL_ROLES), asyn
     if (year) conds.push(eq(payslipsTable.periodYear, Number(year)));
     if (month) conds.push(eq(payslipsTable.periodMonth, Number(month)));
 
+    const { limit, offset } = paging(req);
     const payslips = await db.select({
       id: payslipsTable.id,
       payrollRecordId: payslipsTable.payrollRecordId,
@@ -1237,7 +1248,9 @@ router.get("/payroll/payslips", requireHrmsUser, requireRole(...ALL_ROLES), asyn
       .leftJoin(employeesTable, and(eq(payslipsTable.employeeId, employeesTable.id), eq(employeesTable.tenantId, u.tenantId)))
       .leftJoin(payrollRecordsTable, and(eq(payslipsTable.payrollRecordId, payrollRecordsTable.id), eq(payrollRecordsTable.tenantId, u.tenantId)))
       .where(and(...(conds.length ? conds : [eq(payslipsTable.tenantId, u.tenantId)])))
-      .orderBy(desc(payslipsTable.periodYear), desc(payslipsTable.periodMonth));
+      .orderBy(desc(payslipsTable.periodYear), desc(payslipsTable.periodMonth))
+      .limit(limit)
+      .offset(offset);
     res.json(payslips);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });

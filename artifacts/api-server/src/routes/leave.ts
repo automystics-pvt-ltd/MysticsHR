@@ -303,6 +303,16 @@ router.get("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), as
     const tenantId = req.hrmsUser!.tenantId;
     const conds: SQL[] = [eq(leaveApplicationsTable.tenantId, tenantId)];
 
+    // Department filter pushed into SQL before the main query
+    if (departmentId && req.hrmsUser!.role !== "hod") {
+      conds.push(sql`${leaveApplicationsTable.employeeId} IN (
+        SELECT id FROM employees
+        WHERE department_id = ${Number(departmentId)}
+          AND tenant_id = ${tenantId}
+          AND deleted_at IS NULL
+      )`);
+    }
+
     // Role-based scoping
     if (req.hrmsUser!.role === "employee") {
       const emp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
@@ -311,9 +321,12 @@ router.get("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), as
     } else if (req.hrmsUser!.role === "hod") {
       const hodEmp = await getEmployeeForUser(req.hrmsUser!.id, tenantId);
       if (!hodEmp?.departmentId) { res.json([]); return; }
-      const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(and(eq(employeesTable.departmentId, hodEmp.departmentId), eq(employeesTable.tenantId, tenantId), isNull(employeesTable.deletedAt)));
-      conds.push(sql`${leaveApplicationsTable.employeeId} = ANY(${sql`ARRAY[${sql.join(deptEmps.map(e => sql`${e.id}`), sql`, `)}]`})`);
+      conds.push(sql`${leaveApplicationsTable.employeeId} IN (
+        SELECT id FROM employees
+        WHERE department_id = ${hodEmp.departmentId}
+          AND tenant_id = ${tenantId}
+          AND deleted_at IS NULL
+      )`);
     } else if (employeeId) {
       conds.push(eq(leaveApplicationsTable.employeeId, Number(employeeId)));
     }
@@ -364,16 +377,7 @@ router.get("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), as
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(desc(leaveApplicationsTable.createdAt));
 
-    let filtered = apps;
-    if (departmentId) {
-      const deptId = Number(departmentId);
-      const deptEmps = await db.select({ id: employeesTable.id }).from(employeesTable)
-        .where(and(eq(employeesTable.departmentId, deptId), eq(employeesTable.tenantId, tenantId), isNull(employeesTable.deletedAt)));
-      const empIds = new Set(deptEmps.map(e => e.id));
-      filtered = apps.filter(a => empIds.has(a.employeeId));
-    }
-
-    res.json(filtered);
+    res.json(apps);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

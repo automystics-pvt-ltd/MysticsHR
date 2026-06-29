@@ -50,7 +50,7 @@ export async function getPermissionsForUser(tenantId: number, roleSlug: string):
 }
 
 export function canDo(map: PermissionMap, moduleKey: string, action: string): boolean {
-  return (map[moduleKey] ?? []).includes(action);
+  return (map[moduleKey] ?? []).includes(action as PermissionAction);
 }
 
 export function requirePermission(moduleKey: string, action: string) {
