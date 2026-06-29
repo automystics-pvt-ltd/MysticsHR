@@ -1,3 +1,4 @@
 - [Multi-tenant schema strategy](multi-tenant-schema.md) — tenantId: add nullable, backfill all rows, then notNull via push; super_admin removed from enum; platform admin in separate table
 - [Multi-tenant auth login design](multi-tenant-auth.md) — login accepts optional tenantSlug; falls back to bcrypt-comparing all email candidates across tenants
 - [Scheduler tenant isolation pattern](scheduler-tenant-pattern.md) — background jobs must group records by tenantId and fetch per-tenant config, never hardcode tenantId=1
+- [Platform Admin architecture](platform-admin-arch.md) — portal at /admin/, httpOnly cookie JWT separate from tenant auth; subscription_plans table seeded with 5 tiers; tenant status (active/trial/suspended/archived) auto-syncs isActive boolean

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -7,6 +7,22 @@ export const tenantsTable = pgTable("tenants", {
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  status: text("status").notNull().default("active"),
+  planId: integer("plan_id"),
+  contactEmail: text("contact_email"),
+  industry: text("industry"),
+  website: text("website"),
+  country: text("country"),
+  notes: text("notes"),
+  trialEndsAt: timestamp("trial_ends_at"),
+  subscriptionStartsAt: timestamp("subscription_starts_at"),
+  subscriptionEndsAt: timestamp("subscription_ends_at"),
+  customMaxUsers: integer("custom_max_users"),
+  customMaxEmployees: integer("custom_max_employees"),
+  customMaxBranches: integer("custom_max_branches"),
+  customMaxApiCalls: integer("custom_max_api_calls"),
+  enabledModules: jsonb("enabled_modules"),
+  enabledFeatures: jsonb("enabled_features"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

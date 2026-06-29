@@ -1,0 +1,57 @@
+Design and implement a complete enterprise-grade **Multi-Tenant SaaS Platform** with centralized Platform Admin, Tenant Admin, Subscription Management, Billing, and User Management.
+
+### Platform Admin Portal
+
+* Manage the complete SaaS platform from a single dashboard.
+* Create, edit, activate, suspend, enable/disable, archive, or delete tenants.
+* Configure subscription plans (Monthly, Yearly, Trial, Enterprise, Custom).
+* Define tenant limits including maximum users, storage, modules, API usage, branches, warehouses, and feature access.
+* Dynamically enable/disable modules and premium features per tenant.
+* View tenant health, login activity, storage usage, active users, license utilization, audit logs, and system analytics.
+* Monitor all tenants from a centralized dashboard with real-time insights.
+
+### Subscription & Billing
+
+* Complete SaaS subscription lifecycle management.
+* Monthly/Yearly billing, renewals, upgrades, downgrades, cancellations, trial conversion, and grace periods.
+* Automatic invoice and payment receipt generation.
+* Complete payment history, outstanding balances, due reminders, and billing reports.
+* Automatically remove payment warnings and restore full access immediately after successful payment.
+* Automatically enforce subscription rules when expired while protecting customer data.
+
+### Tenant Administration
+
+* Tenant Admin can create, edit, activate/deactivate, lock/unlock, and manage users directly within the application.
+* Allow admins to create users and send secure password setup invitations or allow users to create their own passwords.
+* Support password reset, account recovery, MFA, session management, and account locking.
+* Configure departments, branches, reporting hierarchy, approval hierarchy, and RBAC.
+* Prevent creating users beyond the tenant license limit and display meaningful validation messages.
+
+### Role-Based Access Control
+
+* Dynamic RBAC across all modules.
+* Permissions for View, Create, Edit, Delete, Approve, Export, Print, Reports, Settings, and Administration.
+* Newly created modules must automatically appear in Roles & Permissions without additional development.
+* Menu visibility, page access, APIs, workflows, dashboards, and reports must be enforced automatically.
+
+### Performance & Reliability
+
+* Ensure every module works correctly without functional or logical errors.
+* Optimize APIs, database queries, caching, lazy loading, and background processing.
+* Support high-volume tenants with excellent performance and scalability.
+* Ensure production-safe deployments without routing, build, or permission issues.
+
+### Security
+
+* Complete tenant isolation.
+* Secure authentication and authorization.
+* Encryption, audit trails, activity logs, backups, monitoring, and compliance-ready architecture.
+
+### User Experience
+
+* Premium enterprise-grade UI/UX.
+* Fast, responsive, intuitive workflows.
+* Mobile, tablet, desktop, and web compatibility.
+* Consistent design, search, filters, pagination, dashboards, notifications, and professional navigation.
+
+The entire SaaS platform must be production-ready, highly scalable, secure, configurable, high-performance, and capable of supporting future enhancements without architectural changes.

@@ -7,8 +7,9 @@ import {
   hrmsUsersTable,
   employeesTable,
   auditLogsTable,
+  subscriptionPlansTable,
 } from "@workspace/db/schema";
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, sql, desc, inArray, ne } from "drizzle-orm";
 import {
   signPlatformToken,
   setPlatformAuthCookie,
@@ -23,40 +24,22 @@ function safePlatformAdmin(admin: typeof platformAdminsTable.$inferSelect) {
   return rest;
 }
 
-// ─── Platform Auth ────────────────────────────────────────────────────────────
+// ─── Platform Auth ─────────────────────────────────────────────────────────────
 
 router.post("/platform/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body as { email?: string; password?: string };
-    if (!email || !password) {
-      res.status(400).json({ error: "email and password are required" });
-      return;
-    }
-    const [admin] = await db
-      .select()
-      .from(platformAdminsTable)
-      .where(eq(platformAdminsTable.email, email.toLowerCase().trim()))
-      .limit(1);
-    if (!admin) {
-      res.status(401).json({ error: "Invalid email or password" });
-      return;
-    }
+    if (!email || !password) { res.status(400).json({ error: "email and password are required" }); return; }
+    const [admin] = await db.select().from(platformAdminsTable)
+      .where(eq(platformAdminsTable.email, email.toLowerCase().trim())).limit(1);
+    if (!admin) { res.status(401).json({ error: "Invalid email or password" }); return; }
     const valid = await bcrypt.compare(password, admin.passwordHash);
-    if (!valid) {
-      res.status(401).json({ error: "Invalid email or password" });
-      return;
-    }
-    if (!admin.isActive) {
-      res.status(403).json({ error: "Platform admin account is deactivated" });
-      return;
-    }
+    if (!valid) { res.status(401).json({ error: "Invalid email or password" }); return; }
+    if (!admin.isActive) { res.status(403).json({ error: "Platform admin account is deactivated" }); return; }
     const token = signPlatformToken({ platformAdminId: admin.id, email: admin.email });
     setPlatformAuthCookie(res, token);
     res.json({ admin: safePlatformAdmin(admin) });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 router.post("/platform/auth/logout", (_req, res) => {
@@ -68,381 +51,524 @@ router.get("/platform/auth/me", requirePlatformAdmin, (req, res) => {
   res.json({ admin: safePlatformAdmin(req.platformAdmin!) });
 });
 
-// ─── All routes below require platform admin ──────────────────────────────────
+// All routes below require platform admin
 router.use("/platform", requirePlatformAdmin);
 
-// ─── Tenants ──────────────────────────────────────────────────────────────────
+// ─── Subscription Plans ────────────────────────────────────────────────────────
 
-router.get("/platform/tenants", async (_req, res) => {
+router.get("/platform/subscription-plans", async (_req, res) => {
   try {
-    const tenants = await db
-      .select({
-        id: tenantsTable.id,
-        slug: tenantsTable.slug,
-        name: tenantsTable.name,
-        isActive: tenantsTable.isActive,
-        createdAt: tenantsTable.createdAt,
-        updatedAt: tenantsTable.updatedAt,
-        userCount: sql<number>`(
-          SELECT count(*)::int FROM hrms_users WHERE hrms_users.tenant_id = ${tenantsTable.id}
-        )`,
-      })
-      .from(tenantsTable)
+    const plans = await db.select({
+      id: subscriptionPlansTable.id,
+      name: subscriptionPlansTable.name,
+      type: subscriptionPlansTable.type,
+      priceMonthly: subscriptionPlansTable.priceMonthly,
+      priceYearly: subscriptionPlansTable.priceYearly,
+      maxUsers: subscriptionPlansTable.maxUsers,
+      maxEmployees: subscriptionPlansTable.maxEmployees,
+      maxBranches: subscriptionPlansTable.maxBranches,
+      maxApiCalls: subscriptionPlansTable.maxApiCalls,
+      enabledModules: subscriptionPlansTable.enabledModules,
+      enabledFeatures: subscriptionPlansTable.enabledFeatures,
+      description: subscriptionPlansTable.description,
+      isActive: subscriptionPlansTable.isActive,
+      createdAt: subscriptionPlansTable.createdAt,
+      updatedAt: subscriptionPlansTable.updatedAt,
+      tenantCount: sql<number>`(SELECT count(*)::int FROM tenants WHERE tenants.plan_id = ${subscriptionPlansTable.id})`,
+    }).from(subscriptionPlansTable).orderBy(subscriptionPlansTable.priceMonthly);
+    res.json({ data: plans, total: plans.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/platform/subscription-plans", async (req, res) => {
+  try {
+    const {
+      name, type = "starter", priceMonthly = 0, priceYearly = 0,
+      maxUsers = 10, maxEmployees = 50, maxBranches = 1, maxApiCalls = 10000,
+      enabledModules = [], enabledFeatures = [], description,
+    } = req.body as {
+      name?: string; type?: string; priceMonthly?: number; priceYearly?: number;
+      maxUsers?: number; maxEmployees?: number; maxBranches?: number; maxApiCalls?: number;
+      enabledModules?: string[]; enabledFeatures?: string[]; description?: string;
+    };
+    if (!name) { res.status(400).json({ error: "name is required" }); return; }
+    const [plan] = await db.insert(subscriptionPlansTable).values({
+      name: name.trim(), type, priceMonthly, priceYearly, maxUsers, maxEmployees,
+      maxBranches, maxApiCalls, enabledModules, enabledFeatures, description,
+    }).returning();
+    res.status(201).json(plan);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.get("/platform/subscription-plans/:id", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [plan] = await db.select().from(subscriptionPlansTable)
+      .where(eq(subscriptionPlansTable.id, id)).limit(1);
+    if (!plan) { res.status(404).json({ error: "Plan not found" }); return; }
+    res.json(plan);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.patch("/platform/subscription-plans/:id", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const allowed = ["name","type","priceMonthly","priceYearly","maxUsers","maxEmployees","maxBranches","maxApiCalls","enabledModules","enabledFeatures","description","isActive"] as const;
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const body = req.body as Record<string, unknown>;
+    for (const key of allowed) if (key in body) updates[key] = body[key];
+    if (typeof updates.name === "string") updates.name = (updates.name as string).trim();
+    const [updated] = await db.update(subscriptionPlansTable).set(updates as never)
+      .where(eq(subscriptionPlansTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Plan not found" }); return; }
+    res.json(updated);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.delete("/platform/subscription-plans/:id", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [inUse] = await db.select({ id: tenantsTable.id }).from(tenantsTable)
+      .where(eq(tenantsTable.planId, id)).limit(1);
+    if (inUse) { res.status(409).json({ error: "Plan is assigned to one or more tenants. Reassign tenants before deleting." }); return; }
+    await db.delete(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenants ───────────────────────────────────────────────────────────────────
+
+router.get("/platform/tenants", async (req, res) => {
+  try {
+    const statusFilter = req.query.status as string | undefined;
+    const where = statusFilter && statusFilter !== "all"
+      ? eq(tenantsTable.status, statusFilter)
+      : undefined;
+
+    const tenants = await db.select({
+      id: tenantsTable.id,
+      slug: tenantsTable.slug,
+      name: tenantsTable.name,
+      isActive: tenantsTable.isActive,
+      status: tenantsTable.status,
+      planId: tenantsTable.planId,
+      planName: subscriptionPlansTable.name,
+      planType: subscriptionPlansTable.type,
+      contactEmail: tenantsTable.contactEmail,
+      industry: tenantsTable.industry,
+      country: tenantsTable.country,
+      website: tenantsTable.website,
+      trialEndsAt: tenantsTable.trialEndsAt,
+      subscriptionEndsAt: tenantsTable.subscriptionEndsAt,
+      createdAt: tenantsTable.createdAt,
+      updatedAt: tenantsTable.updatedAt,
+      userCount: sql<number>`(SELECT count(*)::int FROM hrms_users WHERE hrms_users.tenant_id = ${tenantsTable.id})`,
+      employeeCount: sql<number>`(SELECT count(*)::int FROM employees WHERE employees.tenant_id = ${tenantsTable.id})`,
+    }).from(tenantsTable)
+      .leftJoin(subscriptionPlansTable, eq(tenantsTable.planId, subscriptionPlansTable.id))
+      .where(where)
       .orderBy(desc(tenantsTable.createdAt));
+
     res.json({ data: tenants, total: tenants.length });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 router.post("/platform/tenants", async (req, res) => {
   try {
-    const { name, slug } = req.body as { name?: string; slug?: string };
-    if (!name || !slug) {
-      res.status(400).json({ error: "name and slug are required" });
-      return;
-    }
+    const {
+      name, slug, planId, status = "active",
+      contactEmail, industry, website, country, notes,
+      trialEndsAt, subscriptionStartsAt, subscriptionEndsAt,
+    } = req.body as {
+      name?: string; slug?: string; planId?: number; status?: string;
+      contactEmail?: string; industry?: string; website?: string; country?: string;
+      notes?: string; trialEndsAt?: string; subscriptionStartsAt?: string;
+      subscriptionEndsAt?: string;
+    };
+    if (!name || !slug) { res.status(400).json({ error: "name and slug are required" }); return; }
     const normalizedSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, "-");
-    const [existing] = await db
-      .select({ id: tenantsTable.id })
-      .from(tenantsTable)
-      .where(eq(tenantsTable.slug, normalizedSlug))
-      .limit(1);
-    if (existing) {
-      res.status(409).json({ error: "A tenant with this slug already exists" });
-      return;
-    }
-    const [tenant] = await db
-      .insert(tenantsTable)
-      .values({ name: name.trim(), slug: normalizedSlug, isActive: true })
-      .returning();
+    const [existing] = await db.select({ id: tenantsTable.id }).from(tenantsTable)
+      .where(eq(tenantsTable.slug, normalizedSlug)).limit(1);
+    if (existing) { res.status(409).json({ error: "A tenant with this slug already exists" }); return; }
+
+    const isActive = status === "active" || status === "trial";
+    const [tenant] = await db.insert(tenantsTable).values({
+      name: name.trim(), slug: normalizedSlug, isActive, status,
+      planId: planId ?? null, contactEmail: contactEmail ?? null,
+      industry: industry ?? null, website: website ?? null,
+      country: country ?? null, notes: notes ?? null,
+      trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : null,
+      subscriptionStartsAt: subscriptionStartsAt ? new Date(subscriptionStartsAt) : null,
+      subscriptionEndsAt: subscriptionEndsAt ? new Date(subscriptionEndsAt) : null,
+    }).returning();
     res.status(201).json(tenant);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 router.get("/platform/tenants/:id", async (req, res) => {
   try {
     const id = Number.parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-      res.status(400).json({ error: "Invalid id" });
-      return;
-    }
-    const [tenant] = await db
-      .select({
-        id: tenantsTable.id,
-        slug: tenantsTable.slug,
-        name: tenantsTable.name,
-        isActive: tenantsTable.isActive,
-        createdAt: tenantsTable.createdAt,
-        updatedAt: tenantsTable.updatedAt,
-        userCount: sql<number>`(
-          SELECT count(*)::int FROM hrms_users WHERE hrms_users.tenant_id = ${tenantsTable.id}
-        )`,
-        employeeCount: sql<number>`(
-          SELECT count(*)::int FROM employees WHERE employees.tenant_id = ${tenantsTable.id}
-        )`,
-      })
-      .from(tenantsTable)
-      .where(eq(tenantsTable.id, id))
-      .limit(1);
-    if (!tenant) {
-      res.status(404).json({ error: "Tenant not found" });
-      return;
-    }
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [tenant] = await db.select({
+      id: tenantsTable.id,
+      slug: tenantsTable.slug,
+      name: tenantsTable.name,
+      isActive: tenantsTable.isActive,
+      status: tenantsTable.status,
+      planId: tenantsTable.planId,
+      planName: subscriptionPlansTable.name,
+      planType: subscriptionPlansTable.type,
+      planMaxUsers: subscriptionPlansTable.maxUsers,
+      planMaxEmployees: subscriptionPlansTable.maxEmployees,
+      planMaxBranches: subscriptionPlansTable.maxBranches,
+      planMaxApiCalls: subscriptionPlansTable.maxApiCalls,
+      planEnabledModules: subscriptionPlansTable.enabledModules,
+      planEnabledFeatures: subscriptionPlansTable.enabledFeatures,
+      contactEmail: tenantsTable.contactEmail,
+      industry: tenantsTable.industry,
+      website: tenantsTable.website,
+      country: tenantsTable.country,
+      notes: tenantsTable.notes,
+      trialEndsAt: tenantsTable.trialEndsAt,
+      subscriptionStartsAt: tenantsTable.subscriptionStartsAt,
+      subscriptionEndsAt: tenantsTable.subscriptionEndsAt,
+      customMaxUsers: tenantsTable.customMaxUsers,
+      customMaxEmployees: tenantsTable.customMaxEmployees,
+      customMaxBranches: tenantsTable.customMaxBranches,
+      customMaxApiCalls: tenantsTable.customMaxApiCalls,
+      enabledModules: tenantsTable.enabledModules,
+      enabledFeatures: tenantsTable.enabledFeatures,
+      createdAt: tenantsTable.createdAt,
+      updatedAt: tenantsTable.updatedAt,
+      userCount: sql<number>`(SELECT count(*)::int FROM hrms_users WHERE hrms_users.tenant_id = ${tenantsTable.id})`,
+      employeeCount: sql<number>`(SELECT count(*)::int FROM employees WHERE employees.tenant_id = ${tenantsTable.id})`,
+      activeUserCount: sql<number>`(SELECT count(*)::int FROM hrms_users WHERE hrms_users.tenant_id = ${tenantsTable.id} AND hrms_users.is_active = true)`,
+    }).from(tenantsTable)
+      .leftJoin(subscriptionPlansTable, eq(tenantsTable.planId, subscriptionPlansTable.id))
+      .where(eq(tenantsTable.id, id)).limit(1);
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
     res.json(tenant);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 router.patch("/platform/tenants/:id", async (req, res) => {
   try {
     const id = Number.parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-      res.status(400).json({ error: "Invalid id" });
-      return;
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const body = req.body as Record<string, unknown>;
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const strFields = ["name","status","contactEmail","industry","website","country","notes"] as const;
+    const numFields = ["planId","customMaxUsers","customMaxEmployees","customMaxBranches","customMaxApiCalls"] as const;
+    const tsFields = ["trialEndsAt","subscriptionStartsAt","subscriptionEndsAt"] as const;
+    for (const f of strFields) if (f in body) updates[f] = body[f] === null ? null : String(body[f]).trim();
+    for (const f of numFields) if (f in body) updates[f] = body[f] === null ? null : Number(body[f]);
+    for (const f of tsFields) if (f in body) updates[f] = body[f] === null ? null : new Date(String(body[f]));
+    if ("enabledModules" in body) updates.enabledModules = body.enabledModules;
+    if ("enabledFeatures" in body) updates.enabledFeatures = body.enabledFeatures;
+    // Sync isActive from status
+    if ("status" in updates) {
+      const s = updates.status as string;
+      updates.isActive = s === "active" || s === "trial";
     }
-    const { name, isActive } = req.body as { name?: string; isActive?: boolean };
-    const updates: Partial<{ name: string; isActive: boolean; updatedAt: Date }> = { updatedAt: new Date() };
-    if (name !== undefined) updates.name = name.trim();
-    if (isActive !== undefined) updates.isActive = Boolean(isActive);
-    const [updated] = await db
-      .update(tenantsTable)
-      .set(updates)
-      .where(eq(tenantsTable.id, id))
-      .returning();
-    if (!updated) {
-      res.status(404).json({ error: "Tenant not found" });
-      return;
-    }
+    if ("isActive" in body && !("status" in updates)) updates.isActive = Boolean(body.isActive);
+    const [updated] = await db.update(tenantsTable).set(updates as never)
+      .where(eq(tenantsTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
     res.json(updated);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 router.delete("/platform/tenants/:id", async (req, res) => {
   try {
     const id = Number.parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-      res.status(400).json({ error: "Invalid id" });
-      return;
-    }
-    const [updated] = await db
-      .update(tenantsTable)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(tenantsTable.id, id))
-      .returning({ id: tenantsTable.id });
-    if (!updated) {
-      res.status(404).json({ error: "Tenant not found" });
-      return;
-    }
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [updated] = await db.update(tenantsTable)
+      .set({ status: "archived", isActive: false, updatedAt: new Date() })
+      .where(eq(tenantsTable.id, id)).returning({ id: tenantsTable.id });
+    if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
     res.json({ ok: true, id: updated.id });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-// ─── Tenant Users ─────────────────────────────────────────────────────────────
+// ─── Tenant Config (modules, features, limits) ─────────────────────────────────
+
+router.get("/platform/tenants/:id/config", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [row] = await db.select({
+      enabledModules: tenantsTable.enabledModules,
+      enabledFeatures: tenantsTable.enabledFeatures,
+      customMaxUsers: tenantsTable.customMaxUsers,
+      customMaxEmployees: tenantsTable.customMaxEmployees,
+      customMaxBranches: tenantsTable.customMaxBranches,
+      customMaxApiCalls: tenantsTable.customMaxApiCalls,
+      planEnabledModules: subscriptionPlansTable.enabledModules,
+      planEnabledFeatures: subscriptionPlansTable.enabledFeatures,
+      planMaxUsers: subscriptionPlansTable.maxUsers,
+      planMaxEmployees: subscriptionPlansTable.maxEmployees,
+      planMaxBranches: subscriptionPlansTable.maxBranches,
+      planMaxApiCalls: subscriptionPlansTable.maxApiCalls,
+    }).from(tenantsTable)
+      .leftJoin(subscriptionPlansTable, eq(tenantsTable.planId, subscriptionPlansTable.id))
+      .where(eq(tenantsTable.id, id)).limit(1);
+    if (!row) { res.status(404).json({ error: "Tenant not found" }); return; }
+    res.json(row);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.patch("/platform/tenants/:id/config", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const body = req.body as Record<string, unknown>;
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if ("enabledModules" in body) updates.enabledModules = body.enabledModules;
+    if ("enabledFeatures" in body) updates.enabledFeatures = body.enabledFeatures;
+    if ("customMaxUsers" in body) updates.customMaxUsers = body.customMaxUsers === null ? null : Number(body.customMaxUsers);
+    if ("customMaxEmployees" in body) updates.customMaxEmployees = body.customMaxEmployees === null ? null : Number(body.customMaxEmployees);
+    if ("customMaxBranches" in body) updates.customMaxBranches = body.customMaxBranches === null ? null : Number(body.customMaxBranches);
+    if ("customMaxApiCalls" in body) updates.customMaxApiCalls = body.customMaxApiCalls === null ? null : Number(body.customMaxApiCalls);
+    const [updated] = await db.update(tenantsTable).set(updates as never)
+      .where(eq(tenantsTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    res.json(updated);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenant Health ─────────────────────────────────────────────────────────────
+
+router.get("/platform/tenants/:id/health", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [userStats] = await db.select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`sum(case when is_active then 1 else 0 end)::int`,
+    }).from(hrmsUsersTable).where(eq(hrmsUsersTable.tenantId, id));
+
+    const [empStats] = await db.select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`sum(case when status = 'Active' then 1 else 0 end)::int`,
+    }).from(employeesTable).where(eq(employeesTable.tenantId, id));
+
+    const recentAuditLogs = await db.select({
+      id: auditLogsTable.id,
+      action: auditLogsTable.action,
+      module: auditLogsTable.module,
+      userEmail: auditLogsTable.userEmail,
+      createdAt: auditLogsTable.createdAt,
+    }).from(auditLogsTable)
+      .where(eq(auditLogsTable.tenantId, id))
+      .orderBy(desc(auditLogsTable.createdAt))
+      .limit(10);
+
+    const roleBreakdown = await db.select({
+      role: hrmsUsersTable.role,
+      count: sql<number>`count(*)::int`,
+    }).from(hrmsUsersTable)
+      .where(eq(hrmsUsersTable.tenantId, id))
+      .groupBy(hrmsUsersTable.role);
+
+    res.json({
+      users: { total: userStats?.total ?? 0, active: userStats?.active ?? 0 },
+      employees: { total: empStats?.total ?? 0, active: empStats?.active ?? 0 },
+      roleBreakdown,
+      recentActivity: recentAuditLogs,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenant Users ──────────────────────────────────────────────────────────────
 
 router.get("/platform/tenants/:id/users", async (req, res) => {
   try {
     const tenantId = Number.parseInt(req.params.id, 10);
-    if (!Number.isFinite(tenantId)) {
-      res.status(400).json({ error: "Invalid tenant id" });
-      return;
-    }
-    const users = await db
-      .select({
-        id: hrmsUsersTable.id,
-        email: hrmsUsersTable.email,
-        name: hrmsUsersTable.name,
-        role: hrmsUsersTable.role,
-        isActive: hrmsUsersTable.isActive,
-        createdAt: hrmsUsersTable.createdAt,
-      })
-      .from(hrmsUsersTable)
+    if (!Number.isFinite(tenantId)) { res.status(400).json({ error: "Invalid tenant id" }); return; }
+    const users = await db.select({
+      id: hrmsUsersTable.id,
+      email: hrmsUsersTable.email,
+      name: hrmsUsersTable.name,
+      role: hrmsUsersTable.role,
+      isActive: hrmsUsersTable.isActive,
+      createdAt: hrmsUsersTable.createdAt,
+    }).from(hrmsUsersTable)
       .where(eq(hrmsUsersTable.tenantId, tenantId))
       .orderBy(desc(hrmsUsersTable.createdAt));
     res.json({ data: users, total: users.length });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 router.post("/platform/tenants/:id/users", async (req, res) => {
   try {
     const tenantId = Number.parseInt(req.params.id, 10);
-    if (!Number.isFinite(tenantId)) {
-      res.status(400).json({ error: "Invalid tenant id" });
-      return;
-    }
-    const [tenant] = await db
-      .select({ id: tenantsTable.id })
-      .from(tenantsTable)
-      .where(and(eq(tenantsTable.id, tenantId), eq(tenantsTable.isActive, true)))
-      .limit(1);
-    if (!tenant) {
-      res.status(404).json({ error: "Tenant not found or inactive" });
-      return;
-    }
+    if (!Number.isFinite(tenantId)) { res.status(400).json({ error: "Invalid tenant id" }); return; }
+    const [tenant] = await db.select({ id: tenantsTable.id }).from(tenantsTable)
+      .where(and(eq(tenantsTable.id, tenantId), eq(tenantsTable.isActive, true))).limit(1);
+    if (!tenant) { res.status(404).json({ error: "Tenant not found or inactive" }); return; }
     const { email, name, password, role = "customer_admin" } = req.body as {
-      email?: string;
-      name?: string;
-      password?: string;
-      role?: string;
+      email?: string; name?: string; password?: string; role?: string;
     };
-    if (!email || !name || !password) {
-      res.status(400).json({ error: "email, name, and password are required" });
-      return;
-    }
-    if (password.length < 8) {
-      res.status(400).json({ error: "Password must be at least 8 characters" });
-      return;
-    }
+    if (!email || !name || !password) { res.status(400).json({ error: "email, name, and password are required" }); return; }
+    if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
     const normalizedEmail = email.toLowerCase().trim();
-    const [existing] = await db
-      .select({ id: hrmsUsersTable.id })
-      .from(hrmsUsersTable)
-      .where(and(eq(hrmsUsersTable.email, normalizedEmail), eq(hrmsUsersTable.tenantId, tenantId)))
-      .limit(1);
-    if (existing) {
-      res.status(409).json({ error: "A user with this email already exists in this tenant" });
-      return;
-    }
+    const [existing] = await db.select({ id: hrmsUsersTable.id }).from(hrmsUsersTable)
+      .where(and(eq(hrmsUsersTable.email, normalizedEmail), eq(hrmsUsersTable.tenantId, tenantId))).limit(1);
+    if (existing) { res.status(409).json({ error: "A user with this email already exists in this tenant" }); return; }
     const passwordHash = await bcrypt.hash(password, 12);
-    const [created] = await db
-      .insert(hrmsUsersTable)
-      .values({
-        tenantId,
-        email: normalizedEmail,
-        name: name.trim(),
-        role: role as typeof hrmsUsersTable.$inferInsert["role"],
-        passwordHash,
-        isActive: true,
-      })
-      .returning();
+    const [created] = await db.insert(hrmsUsersTable).values({
+      tenantId, email: normalizedEmail, name: name.trim(),
+      role: role as typeof hrmsUsersTable.$inferInsert["role"],
+      passwordHash, isActive: true,
+    }).returning();
     const { passwordHash: _, ...safeUser } = created;
     res.status(201).json(safeUser);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-// ─── Platform Admins ──────────────────────────────────────────────────────────
+router.patch("/platform/tenants/:tenantId/users/:userId", async (req, res) => {
+  try {
+    const tenantId = Number.parseInt(req.params.tenantId, 10);
+    const userId = Number.parseInt(req.params.userId, 10);
+    if (!Number.isFinite(tenantId) || !Number.isFinite(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const { isActive, role } = req.body as { isActive?: boolean; role?: string };
+    const updates: Record<string, unknown> = {};
+    if (isActive !== undefined) updates.isActive = Boolean(isActive);
+    if (role !== undefined) updates.role = role;
+    const [updated] = await db.update(hrmsUsersTable).set(updates as never)
+      .where(and(eq(hrmsUsersTable.id, userId), eq(hrmsUsersTable.tenantId, tenantId))).returning();
+    if (!updated) { res.status(404).json({ error: "User not found" }); return; }
+    const { passwordHash: _, ...safeUser } = updated;
+    res.json(safeUser);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Platform Admins ───────────────────────────────────────────────────────────
 
 router.get("/platform/admins", async (_req, res) => {
   try {
-    const admins = await db
-      .select({
-        id: platformAdminsTable.id,
-        email: platformAdminsTable.email,
-        name: platformAdminsTable.name,
-        isActive: platformAdminsTable.isActive,
-        createdAt: platformAdminsTable.createdAt,
-        updatedAt: platformAdminsTable.updatedAt,
-      })
-      .from(platformAdminsTable)
-      .orderBy(desc(platformAdminsTable.createdAt));
+    const admins = await db.select({
+      id: platformAdminsTable.id, email: platformAdminsTable.email,
+      name: platformAdminsTable.name, isActive: platformAdminsTable.isActive,
+      createdAt: platformAdminsTable.createdAt, updatedAt: platformAdminsTable.updatedAt,
+    }).from(platformAdminsTable).orderBy(desc(platformAdminsTable.createdAt));
     res.json({ data: admins, total: admins.length });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 router.post("/platform/admins", async (req, res) => {
   try {
     const { email, name, password } = req.body as { email?: string; name?: string; password?: string };
-    if (!email || !name || !password) {
-      res.status(400).json({ error: "email, name, and password are required" });
-      return;
-    }
-    if (password.length < 8) {
-      res.status(400).json({ error: "Password must be at least 8 characters" });
-      return;
-    }
-    const [existing] = await db
-      .select({ id: platformAdminsTable.id })
-      .from(platformAdminsTable)
-      .where(eq(platformAdminsTable.email, email.toLowerCase().trim()))
-      .limit(1);
-    if (existing) {
-      res.status(409).json({ error: "A platform admin with this email already exists" });
-      return;
-    }
+    if (!email || !name || !password) { res.status(400).json({ error: "email, name, and password are required" }); return; }
+    if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
+    const [existing] = await db.select({ id: platformAdminsTable.id }).from(platformAdminsTable)
+      .where(eq(platformAdminsTable.email, email.toLowerCase().trim())).limit(1);
+    if (existing) { res.status(409).json({ error: "A platform admin with this email already exists" }); return; }
     const passwordHash = await bcrypt.hash(password, 12);
-    const [created] = await db
-      .insert(platformAdminsTable)
-      .values({ email: email.toLowerCase().trim(), name: name.trim(), passwordHash, isActive: true })
-      .returning();
+    const [created] = await db.insert(platformAdminsTable)
+      .values({ email: email.toLowerCase().trim(), name: name.trim(), passwordHash, isActive: true }).returning();
     res.status(201).json(safePlatformAdmin(created));
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 router.patch("/platform/admins/:id", async (req, res) => {
   try {
     const id = Number.parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-      res.status(400).json({ error: "Invalid id" });
-      return;
-    }
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { name, isActive, password } = req.body as { name?: string; isActive?: boolean; password?: string };
     const updates: Partial<{ name: string; isActive: boolean; passwordHash: string; updatedAt: Date }> = { updatedAt: new Date() };
     if (name !== undefined) updates.name = name.trim();
     if (isActive !== undefined) updates.isActive = Boolean(isActive);
     if (password) {
-      if (password.length < 8) {
-        res.status(400).json({ error: "Password must be at least 8 characters" });
-        return;
-      }
+      if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
       updates.passwordHash = await bcrypt.hash(password, 12);
     }
-    const [updated] = await db
-      .update(platformAdminsTable)
-      .set(updates)
-      .where(eq(platformAdminsTable.id, id))
-      .returning();
-    if (!updated) {
-      res.status(404).json({ error: "Platform admin not found" });
-      return;
-    }
+    const [updated] = await db.update(platformAdminsTable).set(updates)
+      .where(eq(platformAdminsTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Platform admin not found" }); return; }
     res.json(safePlatformAdmin(updated));
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-// ─── Analytics ────────────────────────────────────────────────────────────────
+// ─── Analytics ─────────────────────────────────────────────────────────────────
 
 router.get("/platform/analytics", async (_req, res) => {
   try {
-    const [tenantStats] = await db
-      .select({ total: sql<number>`count(*)::int`, active: sql<number>`sum(case when is_active then 1 else 0 end)::int` })
-      .from(tenantsTable);
-    const [userStats] = await db
-      .select({ total: sql<number>`count(*)::int`, active: sql<number>`sum(case when is_active then 1 else 0 end)::int` })
-      .from(hrmsUsersTable);
-    const [employeeStats] = await db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(employeesTable);
-    const [platformAdminStats] = await db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(platformAdminsTable);
+    const [tenantStats] = await db.select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`sum(case when status = 'active' then 1 else 0 end)::int`,
+      trial: sql<number>`sum(case when status = 'trial' then 1 else 0 end)::int`,
+      suspended: sql<number>`sum(case when status = 'suspended' then 1 else 0 end)::int`,
+      archived: sql<number>`sum(case when status = 'archived' then 1 else 0 end)::int`,
+    }).from(tenantsTable);
+
+    const [userStats] = await db.select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`sum(case when is_active then 1 else 0 end)::int`,
+    }).from(hrmsUsersTable);
+
+    const [employeeStats] = await db.select({ total: sql<number>`count(*)::int` }).from(employeesTable);
+    const [platformAdminStats] = await db.select({ total: sql<number>`count(*)::int` }).from(platformAdminsTable);
+
+    const planDist = await db.select({
+      planName: subscriptionPlansTable.name,
+      planType: subscriptionPlansTable.type,
+      count: sql<number>`count(tenants.id)::int`,
+    }).from(subscriptionPlansTable)
+      .leftJoin(tenantsTable, and(eq(tenantsTable.planId, subscriptionPlansTable.id), ne(tenantsTable.status, "archived")))
+      .groupBy(subscriptionPlansTable.id, subscriptionPlansTable.name, subscriptionPlansTable.type)
+      .orderBy(subscriptionPlansTable.priceMonthly);
+
+    const noPlanCount = await db.select({ count: sql<number>`count(*)::int` }).from(tenantsTable)
+      .where(and(sql`plan_id IS NULL`, ne(tenantsTable.status, "archived")));
+
+    const recentTenants = await db.select({
+      id: tenantsTable.id,
+      name: tenantsTable.name,
+      status: tenantsTable.status,
+      planName: subscriptionPlansTable.name,
+      createdAt: tenantsTable.createdAt,
+    }).from(tenantsTable)
+      .leftJoin(subscriptionPlansTable, eq(tenantsTable.planId, subscriptionPlansTable.id))
+      .orderBy(desc(tenantsTable.createdAt)).limit(5);
 
     res.json({
-      tenants: { total: tenantStats?.total ?? 0, active: tenantStats?.active ?? 0 },
+      tenants: {
+        total: tenantStats?.total ?? 0,
+        active: tenantStats?.active ?? 0,
+        trial: tenantStats?.trial ?? 0,
+        suspended: tenantStats?.suspended ?? 0,
+        archived: tenantStats?.archived ?? 0,
+      },
       hrmsUsers: { total: userStats?.total ?? 0, active: userStats?.active ?? 0 },
       employees: { total: employeeStats?.total ?? 0 },
       platformAdmins: { total: platformAdminStats?.total ?? 0 },
+      planDistribution: [
+        ...planDist,
+        { planName: "No Plan", planType: "none", count: noPlanCount[0]?.count ?? 0 },
+      ].filter((p) => (p.count ?? 0) > 0),
+      recentTenants,
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-// ─── Audit Logs (cross-tenant) ────────────────────────────────────────────────
+// ─── Audit Logs (cross-tenant) ─────────────────────────────────────────────────
 
 router.get("/platform/audit-logs", async (req, res) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
     const tenantId = req.query.tenantId ? Number(req.query.tenantId) : undefined;
-
     const where = tenantId ? eq(auditLogsTable.tenantId, tenantId) : undefined;
-
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(auditLogsTable)
-      .where(where);
-
-    const logs = await db
-      .select()
-      .from(auditLogsTable)
-      .where(where)
-      .orderBy(desc(auditLogsTable.createdAt))
-      .limit(limit)
-      .offset(offset);
-
+    const [{ count }] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(auditLogsTable).where(where);
+    const logs = await db.select().from(auditLogsTable).where(where)
+      .orderBy(desc(auditLogsTable.createdAt)).limit(limit).offset(offset);
     res.json({ data: logs, total: count ?? 0, limit, offset });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 export default router;

@@ -1,4 +1,5 @@
 export * from "./tenants";
+export * from "./subscription_plans";
 export * from "./platform_admins";
 export * from "./departments";
 export * from "./designations";

@@ -1,30 +1,66 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, TenantDetail, SubscriptionPlan } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Card, CardContent } from "@/components/ui/card";
-import { ChevronLeft, Plus, Users, BarChart2 } from "lucide-react";
+  ChevronLeft, Plus, Users, BarChart2, Settings, CreditCard,
+  Activity, Building2, Globe, Mail, Briefcase, FileText,
+  CheckCircle2, XCircle, Clock, Zap, GitBranch,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+const ALL_MODULES = [
+  { id: "core", label: "Core HR", desc: "Employees, departments, designations", required: true },
+  { id: "recruitment", label: "Recruitment", desc: "Job requisitions, candidates, interviews" },
+  { id: "onboarding", label: "Onboarding", desc: "Pre-boarding & onboarding checklists" },
+  { id: "attendance", label: "Attendance", desc: "Shifts, time tracking, regularization" },
+  { id: "leave", label: "Leave Management", desc: "Leave types, policies, approvals" },
+  { id: "payroll", label: "Payroll", desc: "Salary structures, runs, payslips" },
+  { id: "performance", label: "Performance", desc: "Goals, appraisals, calibration" },
+  { id: "helpdesk", label: "Help Desk", desc: "Tickets, SLA management" },
+  { id: "documents", label: "Documents", desc: "Document management" },
+  { id: "analytics", label: "Analytics", desc: "Reports and dashboards" },
+  { id: "exit", label: "Exit Management", desc: "Offboarding, clearance, FnF" },
+];
+
+const ALL_FEATURES = [
+  { id: "api_access", label: "API Access", desc: "External REST API with key management" },
+  { id: "sso", label: "Single Sign-On", desc: "SAML/OIDC enterprise SSO" },
+  { id: "custom_branding", label: "Custom Branding", desc: "White-label with own logo" },
+  { id: "advanced_analytics", label: "Advanced Analytics", desc: "Custom dashboards and exports" },
+  { id: "bulk_import", label: "Bulk Import/Export", desc: "CSV import and data export" },
+  { id: "webhooks", label: "Webhooks", desc: "Real-time event notifications" },
+  { id: "custom_workflows", label: "Custom Workflows", desc: "Configurable approval chains" },
+  { id: "ai_insights", label: "AI Insights", desc: "AI-powered HR recommendations" },
+];
+
+const STATUS_STYLES: Record<string, string> = {
+  active: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  trial: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  suspended: "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  archived: "bg-muted text-muted-foreground border-border",
+};
+
+const PLAN_STYLES: Record<string, string> = {
+  trial: "bg-slate-500/10 text-slate-400",
+  starter: "bg-green-500/10 text-green-400",
+  professional: "bg-blue-500/10 text-blue-400",
+  enterprise: "bg-purple-500/10 text-purple-400",
+  custom: "bg-orange-500/10 text-orange-400",
+};
 
 const ROLE_COLORS: Record<string, string> = {
   customer_admin: "bg-blue-500/15 text-blue-400 border-blue-500/20",
@@ -33,47 +69,736 @@ const ROLE_COLORS: Record<string, string> = {
   payroll_admin: "bg-amber-500/15 text-amber-400 border-amber-500/20",
 };
 
-function fmtDate(iso: string) {
+const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Manufacturing","Retail","Services","Government","Non-profit","Other"];
+const COUNTRIES = ["India","United States","United Kingdom","Singapore","UAE","Australia","Canada","Germany","France","Other"];
+const STATUSES = ["active","trial","suspended","archived"];
+
+function fmtDate(iso?: string | null) {
+  if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
+function fmtDateTime(iso: string) {
+  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+function fmtLimit(v?: number | null) { return v === -1 ? "Unlimited" : v?.toLocaleString() ?? "—"; }
 
+// ─── Overview Tab ─────────────────────────────────────────────────────────────
+function OverviewTab({ tenant, plans, onRefresh }: {
+  tenant: TenantDetail;
+  plans: SubscriptionPlan[];
+  onRefresh: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    name: tenant.name,
+    status: tenant.status,
+    contactEmail: tenant.contactEmail ?? "",
+    industry: tenant.industry ?? "",
+    country: tenant.country ?? "",
+    website: tenant.website ?? "",
+    notes: tenant.notes ?? "",
+    planId: tenant.planId ? String(tenant.planId) : "",
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: () => api.updateTenant(tenant.id, {
+      name: form.name,
+      status: form.status,
+      contactEmail: form.contactEmail || null,
+      industry: form.industry || null,
+      country: form.country || null,
+      website: form.website || null,
+      notes: form.notes || null,
+      planId: form.planId ? Number(form.planId) : null,
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["platform-tenant", tenant.id] });
+      void qc.invalidateQueries({ queryKey: ["platform-tenants"] });
+      toast({ title: "Tenant updated successfully" });
+      setEditing(false);
+      onRefresh();
+    },
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-5">
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold">Organisation Info</CardTitle>
+            {!editing ? (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(true)}>Edit</Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
+                <Button size="sm" className="h-7 text-xs"
+                  onClick={() => updateMutation.mutate()}
+                  disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="p-5">
+          {!editing ? (
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              {[
+                { icon: Building2, label: "Name", value: tenant.name },
+                { icon: FileText, label: "Slug", value: <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{tenant.slug}</code> },
+                { icon: CheckCircle2, label: "Status", value: (
+                  <Badge variant="outline" className={`text-xs capitalize ${STATUS_STYLES[tenant.status] ?? ""}`}>{tenant.status}</Badge>
+                )},
+                { icon: CreditCard, label: "Plan", value: tenant.planName ? (
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PLAN_STYLES[tenant.planType ?? ""] ?? "bg-muted text-muted-foreground"}`}>
+                    {tenant.planName}
+                  </span>
+                ) : <span className="text-xs text-muted-foreground">No plan assigned</span>},
+                { icon: Mail, label: "Contact Email", value: tenant.contactEmail ?? "—" },
+                { icon: Briefcase, label: "Industry", value: tenant.industry ?? "—" },
+                { icon: Globe, label: "Country", value: tenant.country ?? "—" },
+                { icon: Globe, label: "Website", value: tenant.website ? (
+                  <a href={tenant.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs">{tenant.website}</a>
+                ) : "—"},
+              ].map(({ icon: Icon, label, value }) => (
+                <div key={label} className="flex items-start gap-3">
+                  <Icon className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <div className="text-sm text-foreground mt-0.5">{value}</div>
+                  </div>
+                </div>
+              ))}
+              {tenant.notes && (
+                <div className="col-span-2 flex items-start gap-3">
+                  <FileText className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Notes</p>
+                    <p className="text-sm text-foreground mt-0.5 whitespace-pre-wrap">{tenant.notes}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Name</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subscription Plan</Label>
+                <Select value={form.planId} onValueChange={(v) => setForm({ ...form, planId: v })}>
+                  <SelectTrigger><SelectValue placeholder="No plan" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No plan</SelectItem>
+                    {plans.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Contact Email</Label>
+                <Input type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Industry</Label>
+                <Select value={form.industry} onValueChange={(v) => setForm({ ...form, industry: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectContent>{INDUSTRIES.map((i) => <SelectItem key={i} value={i}>{i}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Country</Label>
+                <Select value={form.country} onValueChange={(v) => setForm({ ...form, country: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Website</Label>
+                <Input placeholder="https://…" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Notes</Label>
+                <Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: "Users", value: tenant.userCount ?? 0, sub: `${tenant.activeUserCount ?? 0} active` },
+          { label: "Employees", value: tenant.employeeCount ?? 0 },
+          { label: "Created", value: fmtDate(tenant.createdAt), isStr: true },
+          { label: "Last Updated", value: fmtDate(tenant.updatedAt), isStr: true },
+        ].map(({ label, value, sub, isStr }) => (
+          <Card key={label} className="bg-card border-card-border">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{label}</p>
+              <p className={`font-bold text-foreground mt-1 ${isStr ? "text-sm" : "text-2xl"}`}>
+                {typeof value === "number" ? value.toLocaleString() : value}
+              </p>
+              {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Subscription Tab ──────────────────────────────────────────────────────────
+function SubscriptionTab({ tenant, plans }: { tenant: TenantDetail; plans: SubscriptionPlan[] }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    planId: tenant.planId ? String(tenant.planId) : "",
+    trialEndsAt: tenant.trialEndsAt ? tenant.trialEndsAt.slice(0, 10) : "",
+    subscriptionStartsAt: tenant.subscriptionStartsAt ? (tenant.subscriptionStartsAt as string).slice(0, 10) : "",
+    subscriptionEndsAt: tenant.subscriptionEndsAt ? tenant.subscriptionEndsAt.slice(0, 10) : "",
+  });
+
+  const currentPlan = plans.find((p) => p.id === tenant.planId);
+
+  const updateMutation = useMutation({
+    mutationFn: () => api.updateTenant(tenant.id, {
+      planId: form.planId ? Number(form.planId) : null,
+      trialEndsAt: form.trialEndsAt || null,
+      subscriptionStartsAt: form.subscriptionStartsAt || null,
+      subscriptionEndsAt: form.subscriptionEndsAt || null,
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["platform-tenant", tenant.id] });
+      toast({ title: "Subscription updated" });
+      setEditing(false);
+    },
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-5">
+      {/* Current Plan Card */}
+      {currentPlan ? (
+        <Card className="bg-card border-card-border">
+          <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Current Plan</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <h3 className="text-base font-semibold text-foreground">{currentPlan.name}</h3>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${PLAN_STYLES[currentPlan.type] ?? ""}`}>
+                      {currentPlan.type}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {!editing ? (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(true)}>Change Plan</Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
+                  <Button size="sm" className="h-7 text-xs" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
+                    {updateMutation.isPending ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { label: "Monthly", value: currentPlan.priceMonthly === 0 ? "Free" : `$${(currentPlan.priceMonthly / 100).toFixed(0)}` },
+                { label: "Yearly", value: currentPlan.priceYearly === 0 ? "—" : `$${(currentPlan.priceYearly / 100).toFixed(0)}` },
+                { label: "Max Users", value: fmtLimit(currentPlan.maxUsers) },
+                { label: "Max Employees", value: fmtLimit(currentPlan.maxEmployees) },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-sm font-semibold text-foreground mt-0.5">{value}</p>
+                </div>
+              ))}
+            </div>
+            {currentPlan.description && (
+              <p className="text-xs text-muted-foreground mt-4 pt-4 border-t border-border">{currentPlan.description}</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="bg-muted/30 border border-border rounded-xl p-6 text-center space-y-3">
+          <CreditCard className="w-8 h-8 text-muted-foreground mx-auto" />
+          <p className="text-sm text-muted-foreground">No subscription plan assigned to this tenant</p>
+          <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Assign Plan</Button>
+        </div>
+      )}
+
+      {/* Billing Dates */}
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <CardTitle className="text-sm font-semibold">Billing & Trial Dates</CardTitle>
+        </CardHeader>
+        <CardContent className="p-5">
+          {!editing ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {[
+                { label: "Trial Ends", value: fmtDate(tenant.trialEndsAt) },
+                { label: "Subscription Start", value: fmtDate(tenant.subscriptionStartsAt) },
+                { label: "Subscription End", value: fmtDate(tenant.subscriptionEndsAt) },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-sm font-medium text-foreground mt-0.5">{value}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Trial Ends</Label>
+                <Input type="date" value={form.trialEndsAt} onChange={(e) => setForm({ ...form, trialEndsAt: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Subscription Start</Label>
+                <Input type="date" value={form.subscriptionStartsAt} onChange={(e) => setForm({ ...form, subscriptionStartsAt: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Subscription End</Label>
+                <Input type="date" value={form.subscriptionEndsAt} onChange={(e) => setForm({ ...form, subscriptionEndsAt: e.target.value })} />
+              </div>
+              <div className="col-span-full space-y-1.5">
+                <Label className="text-xs">Change Plan</Label>
+                <Select value={form.planId} onValueChange={(v) => setForm({ ...form, planId: v })}>
+                  <SelectTrigger><SelectValue placeholder="No plan" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No plan</SelectItem>
+                    {plans.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name} ({p.type})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Modules & Features Tab ────────────────────────────────────────────────────
+function ModulesTab({ tenant }: { tenant: TenantDetail }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: config } = useQuery({
+    queryKey: ["platform-tenant-config", tenant.id],
+    queryFn: () => api.getTenantConfig(tenant.id),
+  });
+
+  const effectiveModules: string[] = config?.enabledModules ?? config?.planEnabledModules ?? [];
+  const effectiveFeatures: string[] = config?.enabledFeatures ?? config?.planEnabledFeatures ?? [];
+  const [localModules, setLocalModules] = useState<string[] | null>(null);
+  const [localFeatures, setLocalFeatures] = useState<string[] | null>(null);
+  const [limits, setLimits] = useState({
+    customMaxUsers: String(tenant.customMaxUsers ?? ""),
+    customMaxEmployees: String(tenant.customMaxEmployees ?? ""),
+    customMaxBranches: String(tenant.customMaxBranches ?? ""),
+    customMaxApiCalls: String(tenant.customMaxApiCalls ?? ""),
+  });
+  const [dirty, setDirty] = useState(false);
+
+  const modules = localModules ?? effectiveModules;
+  const features = localFeatures ?? effectiveFeatures;
+
+  function toggleModule(id: string) {
+    if (id === "core") return;
+    const next = modules.includes(id) ? modules.filter((m) => m !== id) : [...modules, id];
+    setLocalModules(next);
+    setDirty(true);
+  }
+  function toggleFeature(id: string) {
+    const next = features.includes(id) ? features.filter((f) => f !== id) : [...features, id];
+    setLocalFeatures(next);
+    setDirty(true);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.updateTenantConfig(tenant.id, {
+      enabledModules: localModules ?? effectiveModules,
+      enabledFeatures: localFeatures ?? effectiveFeatures,
+      customMaxUsers: limits.customMaxUsers ? Number(limits.customMaxUsers) : null,
+      customMaxEmployees: limits.customMaxEmployees ? Number(limits.customMaxEmployees) : null,
+      customMaxBranches: limits.customMaxBranches ? Number(limits.customMaxBranches) : null,
+      customMaxApiCalls: limits.customMaxApiCalls ? Number(limits.customMaxApiCalls) : null,
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["platform-tenant-config", tenant.id] });
+      void qc.invalidateQueries({ queryKey: ["platform-tenant", tenant.id] });
+      toast({ title: "Configuration saved" });
+      setDirty(false);
+    },
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          {config?.enabledModules == null && config?.planEnabledModules
+            ? "Inheriting from plan — toggle to customise"
+            : "Custom configuration for this tenant"}
+        </p>
+        <Button size="sm" className="h-8" onClick={() => saveMutation.mutate()} disabled={!dirty || saveMutation.isPending}>
+          {saveMutation.isPending ? "Saving…" : dirty ? "Save Changes" : "Saved"}
+        </Button>
+      </div>
+
+      {/* Modules */}
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <CardTitle className="text-sm font-semibold">Modules ({modules.length}/{ALL_MODULES.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {ALL_MODULES.map((mod) => {
+            const enabled = modules.includes(mod.id);
+            return (
+              <div key={mod.id} className={`flex items-start justify-between p-3 rounded-lg border transition-colors ${
+                enabled ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"
+              }`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-foreground">{mod.label}</p>
+                    {mod.required && <span className="text-[10px] text-muted-foreground">(required)</span>}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{mod.desc}</p>
+                </div>
+                <Switch checked={enabled} onCheckedChange={() => toggleModule(mod.id)}
+                  disabled={mod.required} className="ml-3 flex-shrink-0" />
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Premium Features */}
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <CardTitle className="text-sm font-semibold">Premium Features ({features.length}/{ALL_FEATURES.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {ALL_FEATURES.map((feat) => {
+            const enabled = features.includes(feat.id);
+            return (
+              <div key={feat.id} className={`flex items-start justify-between p-3 rounded-lg border transition-colors ${
+                enabled ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"
+              }`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{feat.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{feat.desc}</p>
+                </div>
+                <Switch checked={enabled} onCheckedChange={() => toggleFeature(feat.id)} className="ml-3 flex-shrink-0" />
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Custom Limits */}
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <CardTitle className="text-sm font-semibold">Custom Limits <span className="text-muted-foreground font-normal text-xs ml-1">(leave blank to inherit from plan; use -1 for unlimited)</span></CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { key: "customMaxUsers" as const, icon: Users, label: "Max Users", planVal: config?.planMaxUsers },
+            { key: "customMaxEmployees" as const, icon: Building2, label: "Max Employees", planVal: config?.planMaxEmployees },
+            { key: "customMaxBranches" as const, icon: GitBranch, label: "Max Branches", planVal: config?.planMaxBranches },
+            { key: "customMaxApiCalls" as const, icon: Zap, label: "API Calls/Month", planVal: config?.planMaxApiCalls },
+          ].map(({ key, icon: Icon, label, planVal }) => (
+            <div key={key} className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Icon className="w-3 h-3 text-muted-foreground" />
+                <Label className="text-xs">{label}</Label>
+              </div>
+              <Input type="number" min={-1} placeholder={planVal != null ? `Plan: ${fmtLimit(planVal)}` : "Unlimited"}
+                value={limits[key]}
+                onChange={(e) => { setLimits({ ...limits, [key]: e.target.value }); setDirty(true); }} />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Users Tab ────────────────────────────────────────────────────────────────
+function UsersTab({ tenantId }: { tenantId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [userForm, setUserForm] = useState({ email: "", name: "", password: "", role: "customer_admin" });
+  const [userError, setUserError] = useState<string | null>(null);
+
+  const { data: users, isLoading } = useQuery({
+    queryKey: ["platform-tenant-users", tenantId],
+    queryFn: () => api.listTenantUsers(tenantId),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => api.createTenantUser(tenantId, userForm),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["platform-tenant-users", tenantId] });
+      void qc.invalidateQueries({ queryKey: ["platform-tenant", tenantId] });
+      toast({ title: "User created successfully" });
+      setCreateOpen(false);
+      setUserForm({ email: "", name: "", password: "", role: "customer_admin" });
+      setUserError(null);
+    },
+    onError: (e: Error) => setUserError(e.message),
+  });
+
+  const toggleUserMutation = useMutation({
+    mutationFn: ({ userId, isActive }: { userId: number; isActive: boolean }) =>
+      api.updateTenantUser(tenantId, userId, { isActive }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["platform-tenant-users", tenantId] }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{users ? `${users.total} user${users.total !== 1 ? "s" : ""}` : ""}</p>
+        <Button size="sm" className="gap-2" onClick={() => { setCreateOpen(true); setUserError(null); }}>
+          <Plus className="w-4 h-4" />Add User
+        </Button>
+      </div>
+
+      <div className="bg-card border border-card-border rounded-xl overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-border hover:bg-transparent">
+              {["Name", "Email", "Role", "Status", "Joined", ""].map((h) => (
+                <TableHead key={h} className="text-muted-foreground text-xs uppercase tracking-wider font-medium">{h}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? Array.from({ length: 3 }).map((_, i) => (
+              <TableRow key={i} className="border-border">
+                <TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell>
+              </TableRow>
+            )) : users?.data.map((u) => (
+              <TableRow key={u.id} className="border-border hover:bg-accent/20 transition-colors">
+                <TableCell className="font-medium text-foreground">{u.name}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={`text-xs ${ROLE_COLORS[u.role] ?? "bg-muted text-muted-foreground"}`}>
+                    {u.role.replace(/_/g, " ")}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={u.isActive ? "default" : "secondary"}
+                    className={u.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" : ""}>
+                    {u.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{fmtDate(u.createdAt)}</TableCell>
+                <TableCell>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => toggleUserMutation.mutate({ userId: u.id, isActive: !u.isActive })}>
+                    {u.isActive ? "Deactivate" : "Activate"}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {!isLoading && users?.data.length === 0 && (
+          <div className="py-10 text-center text-sm text-muted-foreground">No users yet. Add the first admin.</div>
+        )}
+      </div>
+
+      <Dialog open={createOpen} onOpenChange={(o) => { if (!o) setCreateOpen(false); }}>
+        <DialogContent className="bg-card border-card-border sm:max-w-md">
+          <DialogHeader><DialogTitle>Add User</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Full Name</Label>
+              <Input placeholder="Jane Smith" value={userForm.name}
+                onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email Address</Label>
+              <Input type="email" placeholder="jane@company.com" value={userForm.email}
+                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["customer_admin","hr_manager","payroll_admin","employee"].map((r) => (
+                    <SelectItem key={r} value={r}>{r.replace(/_/g, " ")}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Temporary Password</Label>
+              <Input type="password" placeholder="Min 8 characters" value={userForm.password}
+                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
+            </div>
+            {userError && <p className="text-sm text-destructive">{userError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button onClick={() => createMutation.mutate()}
+              disabled={!userForm.email || !userForm.name || userForm.password.length < 8 || createMutation.isPending}>
+              {createMutation.isPending ? "Creating…" : "Create User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Health Tab ────────────────────────────────────────────────────────────────
+function HealthTab({ tenantId }: { tenantId: number }) {
+  const { data: health, isLoading } = useQuery({
+    queryKey: ["platform-tenant-health", tenantId],
+    queryFn: () => api.getTenantHealth(tenantId),
+    refetchInterval: 30_000,
+  });
+
+  if (isLoading) {
+    return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* User & Employee Health */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: "Total Users", value: health?.users.total ?? 0, icon: Users },
+          { label: "Active Users", value: health?.users.active ?? 0, icon: CheckCircle2 },
+          { label: "Total Employees", value: health?.employees.total ?? 0, icon: Building2 },
+          { label: "Active Employees", value: health?.employees.active ?? 0, icon: CheckCircle2 },
+        ].map(({ label, value, icon: Icon }) => (
+          <Card key={label} className="bg-card border-card-border">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Icon className="w-4 h-4 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{label}</p>
+              </div>
+              <p className="text-2xl font-bold text-foreground">{value.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* User Utilisation */}
+      {(health?.users.total ?? 0) > 0 && (
+        <Card className="bg-card border-card-border">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium text-foreground">User Utilisation</p>
+              <span className="text-sm font-bold text-foreground">
+                {Math.round(((health?.users.active ?? 0) / (health?.users.total || 1)) * 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div className="h-2 rounded-full bg-emerald-500 transition-all"
+                style={{ width: `${Math.round(((health?.users.active ?? 0) / (health?.users.total || 1)) * 100)}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">{health?.users.active} of {health?.users.total} users are active</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Role Breakdown */}
+      {health?.roleBreakdown && health.roleBreakdown.length > 0 && (
+        <Card className="bg-card border-card-border">
+          <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+            <CardTitle className="text-sm font-semibold">Users by Role</CardTitle>
+          </CardHeader>
+          <CardContent className="p-5 space-y-3">
+            {health.roleBreakdown.map((r) => (
+              <div key={r.role} className="flex items-center justify-between">
+                <Badge variant="outline" className={`text-xs ${ROLE_COLORS[r.role] ?? "bg-muted text-muted-foreground"}`}>
+                  {r.role.replace(/_/g, " ")}
+                </Badge>
+                <span className="text-sm font-semibold text-foreground">{r.count}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recent Activity */}
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {!health?.recentActivity?.length ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No activity recorded yet</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {health.recentActivity.map((log) => (
+                <li key={log.id} className="flex items-center justify-between px-5 py-3 hover:bg-accent/30 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-muted text-muted-foreground flex-shrink-0">
+                      {log.action}
+                    </span>
+                    {log.module && <span className="text-xs text-muted-foreground">{log.module}</span>}
+                    {log.userEmail && <span className="text-xs text-muted-foreground truncate hidden sm:block">{log.userEmail}</span>}
+                  </div>
+                  <time className="text-xs text-muted-foreground flex-shrink-0 ml-3">{fmtDateTime(log.createdAt)}</time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const tenantId = Number(id);
   const qc = useQueryClient();
 
-  const [createUserOpen, setCreateUserOpen] = useState(false);
-  const [userForm, setUserForm] = useState({ email: "", name: "", password: "" });
-  const [userError, setUserError] = useState<string | null>(null);
-
-  const { data: tenant, isLoading: tenantLoading } = useQuery({
+  const { data: tenant, isLoading, refetch } = useQuery({
     queryKey: ["platform-tenant", tenantId],
     queryFn: () => api.getTenant(tenantId),
     enabled: !!tenantId,
   });
 
-  const { data: users, isLoading: usersLoading } = useQuery({
-    queryKey: ["platform-tenant-users", tenantId],
-    queryFn: () => api.listTenantUsers(tenantId),
-    enabled: !!tenantId,
+  const { data: plansData } = useQuery({
+    queryKey: ["platform-plans"],
+    queryFn: () => api.listPlans(),
   });
 
-  const createUserMutation = useMutation({
-    mutationFn: (d: { email: string; name: string; password: string }) =>
-      api.createTenantUser(tenantId, d),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["platform-tenant-users", tenantId] });
-      void qc.invalidateQueries({ queryKey: ["platform-tenant", tenantId] });
-      setCreateUserOpen(false);
-      setUserForm({ email: "", name: "", password: "" });
-      setUserError(null);
-    },
-    onError: (err: Error) => setUserError(err.message),
-  });
-
-  if (tenantLoading) {
+  if (isLoading) {
     return (
-      <div className="p-6 max-w-4xl mx-auto space-y-4">
+      <div className="p-6 max-w-5xl mx-auto space-y-4">
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-64 w-full" />
@@ -90,41 +815,46 @@ export function TenantDetailPage() {
     );
   }
 
+  const plans = plansData?.data ?? [];
+
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-5">
+    <div className="p-6 max-w-5xl mx-auto space-y-5">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm">
         <Link href="/tenants">
           <a className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronLeft className="w-4 h-4" />
-            Tenants
+            <ChevronLeft className="w-4 h-4" />Tenants
           </a>
         </Link>
         <span className="text-border">/</span>
         <span className="text-foreground font-medium">{tenant.name}</span>
       </div>
 
-      {/* Tenant info */}
+      {/* Header Card */}
       <div className="bg-card border border-card-border rounded-xl p-5">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-lg font-semibold text-foreground">{tenant.name}</h1>
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
               <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{tenant.slug}</code>
-              <Badge
-                variant={tenant.isActive ? "default" : "secondary"}
-                className={tenant.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" : ""}
-              >
-                {tenant.isActive ? "Active" : "Inactive"}
+              <Badge variant="outline" className={`text-xs capitalize ${STATUS_STYLES[tenant.status] ?? ""}`}>
+                {tenant.status}
               </Badge>
+              {tenant.planName && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PLAN_STYLES[tenant.planType ?? ""] ?? "bg-muted text-muted-foreground"}`}>
+                  {tenant.planName}
+                </span>
+              )}
+              {tenant.industry && <span className="text-xs text-muted-foreground">{tenant.industry}</span>}
+              {tenant.country && <span className="text-xs text-muted-foreground">{tenant.country}</span>}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 text-right">
-            <div>
+          <div className="flex items-center gap-6">
+            <div className="text-right">
               <p className="text-2xl font-bold text-foreground">{tenant.userCount ?? 0}</p>
               <p className="text-xs text-muted-foreground">Users</p>
             </div>
-            <div>
+            <div className="text-right">
               <p className="text-2xl font-bold text-foreground">{tenant.employeeCount ?? 0}</p>
               <p className="text-xs text-muted-foreground">Employees</p>
             </div>
@@ -133,158 +863,41 @@ export function TenantDetailPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="users">
+      <Tabs defaultValue="overview">
         <TabsList className="bg-muted border border-border">
-          <TabsTrigger value="users" className="gap-2">
-            <Users className="w-3.5 h-3.5" />
-            Users
+          <TabsTrigger value="overview" className="gap-1.5 text-xs">
+            <Building2 className="w-3.5 h-3.5" />Overview
           </TabsTrigger>
-          <TabsTrigger value="stats" className="gap-2">
-            <BarChart2 className="w-3.5 h-3.5" />
-            Stats
+          <TabsTrigger value="subscription" className="gap-1.5 text-xs">
+            <CreditCard className="w-3.5 h-3.5" />Subscription
+          </TabsTrigger>
+          <TabsTrigger value="modules" className="gap-1.5 text-xs">
+            <Settings className="w-3.5 h-3.5" />Modules & Features
+          </TabsTrigger>
+          <TabsTrigger value="users" className="gap-1.5 text-xs">
+            <Users className="w-3.5 h-3.5" />Users
+          </TabsTrigger>
+          <TabsTrigger value="health" className="gap-1.5 text-xs">
+            <Activity className="w-3.5 h-3.5" />Health
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="users" className="mt-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-muted-foreground">
-              {users ? `${users.total} user${users.total !== 1 ? "s" : ""}` : ""}
-            </p>
-            <Button
-              size="sm"
-              className="gap-2"
-              onClick={() => { setCreateUserOpen(true); setUserError(null); setUserForm({ email: "", name: "", password: "" }); }}
-            >
-              <Plus className="w-4 h-4" />
-              Add Admin User
-            </Button>
-          </div>
-
-          <div className="bg-card border border-card-border rounded-xl overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Name</TableHead>
-                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Email</TableHead>
-                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Role</TableHead>
-                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Status</TableHead>
-                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Joined</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {usersLoading
-                  ? Array.from({ length: 3 }).map((_, i) => (
-                      <TableRow key={i} className="border-border">
-                        <TableCell colSpan={5}><Skeleton className="h-5 w-full" /></TableCell>
-                      </TableRow>
-                    ))
-                  : users?.data.map((u) => (
-                      <TableRow key={u.id} className="border-border hover:bg-accent/20 transition-colors">
-                        <TableCell className="font-medium text-foreground">{u.name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`text-xs ${ROLE_COLORS[u.role] ?? "bg-muted text-muted-foreground"}`}>
-                            {u.role.replace(/_/g, " ")}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={u.isActive ? "default" : "secondary"} className={u.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" : ""}>
-                            {u.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{fmtDate(u.createdAt)}</TableCell>
-                      </TableRow>
-                    ))}
-              </TableBody>
-            </Table>
-            {!usersLoading && users?.data.length === 0 && (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                No users yet. Add the first customer admin.
-              </div>
-            )}
-          </div>
+        <TabsContent value="overview" className="mt-5">
+          <OverviewTab tenant={tenant} plans={plans} onRefresh={() => void refetch()} />
         </TabsContent>
-
-        <TabsContent value="stats" className="mt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-card border-card-border">
-              <CardContent className="p-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Employees</p>
-                <p className="text-3xl font-bold text-foreground mt-1.5">{tenant.employeeCount ?? 0}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-card-border">
-              <CardContent className="p-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Users</p>
-                <p className="text-3xl font-bold text-foreground mt-1.5">{users?.total ?? 0}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {users?.data.filter((u) => u.isActive).length ?? 0} active
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-card-border">
-              <CardContent className="p-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Last Activity</p>
-                <p className="text-sm font-semibold text-foreground mt-1.5">{fmtDate(tenant.updatedAt)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Record last updated</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-card-border">
-              <CardContent className="p-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Created</p>
-                <p className="text-sm font-semibold text-foreground mt-1.5">{fmtDate(tenant.createdAt)}</p>
-              </CardContent>
-            </Card>
-          </div>
+        <TabsContent value="subscription" className="mt-5">
+          <SubscriptionTab tenant={tenant} plans={plans} />
+        </TabsContent>
+        <TabsContent value="modules" className="mt-5">
+          <ModulesTab tenant={tenant} />
+        </TabsContent>
+        <TabsContent value="users" className="mt-5">
+          <UsersTab tenantId={tenantId} />
+        </TabsContent>
+        <TabsContent value="health" className="mt-5">
+          <HealthTab tenantId={tenantId} />
         </TabsContent>
       </Tabs>
-
-      {/* Create User Dialog */}
-      <Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
-        <DialogContent className="bg-card border-card-border sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Customer Admin</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Full Name</Label>
-              <Input
-                placeholder="Jane Smith"
-                value={userForm.name}
-                onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email Address</Label>
-              <Input
-                type="email"
-                placeholder="jane@company.com"
-                value={userForm.email}
-                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Temporary Password</Label>
-              <Input
-                type="password"
-                placeholder="Min 8 characters"
-                value={userForm.password}
-                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-              />
-            </div>
-            {userError && <p className="text-sm text-destructive">{userError}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateUserOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => createUserMutation.mutate(userForm)}
-              disabled={!userForm.email || !userForm.name || userForm.password.length < 8 || createUserMutation.isPending}
-            >
-              {createUserMutation.isPending ? "Creating..." : "Create User"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

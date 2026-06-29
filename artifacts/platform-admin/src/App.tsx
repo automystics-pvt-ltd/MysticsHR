@@ -10,6 +10,8 @@ import { TenantsPage } from "@/pages/TenantsPage";
 import { TenantDetailPage } from "@/pages/TenantDetailPage";
 import { AdminsPage } from "@/pages/AdminsPage";
 import { AuditLogsPage } from "@/pages/AuditLogsPage";
+import { SubscriptionPlansPage } from "@/pages/SubscriptionPlansPage";
+import { AnalyticsPage } from "@/pages/AnalyticsPage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -18,8 +20,7 @@ const queryClient = new QueryClient({
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isSignedIn, isLoading } = usePlatformAuth();
-  const [location] = useLocation();
-
+  void useLocation();
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -27,36 +28,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-
-  if (!isSignedIn) {
-    return <Redirect to="/login" />;
-  }
-
-  void location;
+  if (!isSignedIn) return <Redirect to="/login" />;
   return <AdminLayout>{children}</AdminLayout>;
 }
 
 function Router() {
   const { isSignedIn, isLoading } = usePlatformAuth();
-
   return (
     <Switch>
       <Route path="/login" component={LoginPage} />
-      <Route path="/dashboard">
-        <ProtectedRoute><DashboardPage /></ProtectedRoute>
-      </Route>
-      <Route path="/tenants/:id">
-        <ProtectedRoute><TenantDetailPage /></ProtectedRoute>
-      </Route>
-      <Route path="/tenants">
-        <ProtectedRoute><TenantsPage /></ProtectedRoute>
-      </Route>
-      <Route path="/admins">
-        <ProtectedRoute><AdminsPage /></ProtectedRoute>
-      </Route>
-      <Route path="/audit-logs">
-        <ProtectedRoute><AuditLogsPage /></ProtectedRoute>
-      </Route>
+      <Route path="/dashboard"><ProtectedRoute><DashboardPage /></ProtectedRoute></Route>
+      <Route path="/tenants/:id"><ProtectedRoute><TenantDetailPage /></ProtectedRoute></Route>
+      <Route path="/tenants"><ProtectedRoute><TenantsPage /></ProtectedRoute></Route>
+      <Route path="/subscription-plans"><ProtectedRoute><SubscriptionPlansPage /></ProtectedRoute></Route>
+      <Route path="/admins"><ProtectedRoute><AdminsPage /></ProtectedRoute></Route>
+      <Route path="/analytics"><ProtectedRoute><AnalyticsPage /></ProtectedRoute></Route>
+      <Route path="/audit-logs"><ProtectedRoute><AuditLogsPage /></ProtectedRoute></Route>
       <Route path="/">
         {isLoading ? null : isSignedIn ? <Redirect to="/dashboard" /> : <Redirect to="/login" />}
       </Route>
