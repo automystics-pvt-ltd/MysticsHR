@@ -318,7 +318,7 @@ router.put("/payroll/salary-structures/:id", requireHrmsUser, requireRole(...HR_
       }
     }
 
-    await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Payroll", recordId: id, newValue: JSON.stringify(body), ipAddress: req.ip });
+    await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Payroll", recordId: id, newValue: `Salary structure updated: grossCtc=${body.grossCtc ?? "unchanged"}, name=${body.name ?? "unchanged"}`, ipAddress: req.ip });
     res.json(updated);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -2355,7 +2355,8 @@ async function generateForm16Pdf(data: Form16Data): Promise<Uint8Array> {
 // PDF download endpoint
 router.get("/payroll/payslips/:id/pdf", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
-    const [payslip] = await db.select().from(payslipsTable).where(eq(payslipsTable.id, Number(req.params.id)));
+    const tenantId = req.hrmsUser!.tenantId;
+    const [payslip] = await db.select().from(payslipsTable).where(and(eq(payslipsTable.id, Number(req.params.id)), eq(payslipsTable.tenantId, tenantId)));
     if (!payslip) { res.status(404).json({ error: "Not found" }); return; }
 
     const u = req.hrmsUser!;

@@ -4,9 +4,19 @@ import { db } from "../lib/db";
 import { hrmsUsersTable, tenantsTable } from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { signToken, setAuthCookie, clearAuthCookie, requireHrmsUser } from "../lib/auth";
+import { logAudit } from "../lib/audit";
 
 const router = Router();
 const MAX_FAILED_ATTEMPTS = 5;
+
+function validatePasswordStrength(password: string): string | null {
+  if (password.length < 8) return "Password must be at least 8 characters";
+  if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+  if (!/[a-z]/.test(password)) return "Password must contain at least one lowercase letter";
+  if (!/\d/.test(password)) return "Password must contain at least one number";
+  if (!/[@$!%*?&_#^()\-+=[\]{}|;:,.<>]/.test(password)) return "Password must contain at least one special character";
+  return null;
+}
 
 function safeUser(user: typeof hrmsUsersTable.$inferSelect) {
   const { passwordHash: _, inviteToken: __, ...rest } = user;
@@ -75,6 +85,14 @@ router.post("/auth/login", async (req, res) => {
               updatedAt: new Date(),
             })
             .where(eq(hrmsUsersTable.id, candidate.id));
+          void logAudit({
+            tenantId: candidate.tenantId,
+            action: shouldLock ? "LOGIN_FAILED_ACCOUNT_LOCKED" : "LOGIN_FAILED",
+            module: "Auth",
+            recordId: candidate.id,
+            newValue: `Failed attempt ${newAttempts}/${MAX_FAILED_ATTEMPTS} for ${candidate.email}`,
+            ipAddress: req.ip,
+          });
         }
       }
       res.status(401).json({ error: "Invalid email or password" });
@@ -100,6 +118,14 @@ router.post("/auth/login", async (req, res) => {
 
     const token = signToken({ userId: matchedUser.id, email: matchedUser.email, role: matchedUser.role, tenantId: matchedUser.tenantId });
     setAuthCookie(res, token);
+    void logAudit({
+      tenantId: matchedUser.tenantId,
+      action: "LOGIN_SUCCESS",
+      module: "Auth",
+      recordId: matchedUser.id,
+      newValue: matchedUser.email,
+      ipAddress: req.ip,
+    });
     res.json({ user: safeUser(matchedUser) });
   } catch (err) {
     console.error(err);
@@ -170,8 +196,9 @@ router.post("/auth/register", async (req, res) => {
       res.status(400).json({ error: "password is required" });
       return;
     }
-    if (password.length < 8) {
-      res.status(400).json({ error: "Password must be at least 8 characters" });
+    const registerPwdError = validatePasswordStrength(password);
+    if (registerPwdError) {
+      res.status(400).json({ error: registerPwdError });
       return;
     }
 
@@ -286,8 +313,9 @@ router.post("/auth/change-password", requireHrmsUser, async (req, res) => {
       res.status(400).json({ error: "currentPassword and newPassword are required" });
       return;
     }
-    if (newPassword.length < 8) {
-      res.status(400).json({ error: "New password must be at least 8 characters" });
+    const pwdError = validatePasswordStrength(newPassword);
+    if (pwdError) {
+      res.status(400).json({ error: pwdError });
       return;
     }
     const [user] = await db
@@ -309,6 +337,14 @@ router.post("/auth/change-password", requireHrmsUser, async (req, res) => {
       .update(hrmsUsersTable)
       .set({ passwordHash, updatedAt: new Date() })
       .where(and(eq(hrmsUsersTable.id, user.id), eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)));
+    void logAudit({
+      user: req.hrmsUser,
+      action: "PASSWORD_CHANGE",
+      module: "Auth",
+      recordId: user.id,
+      newValue: user.email,
+      ipAddress: req.ip,
+    });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);

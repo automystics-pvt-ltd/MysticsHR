@@ -1,0 +1,65 @@
+Design and implement a complete enterprise-grade **Multi-Tenant SaaS Platform** with centralised Platform Admin, Tenant Admin, Subscription Management, Billing, User Management, and Self-Service Customer Onboarding.
+
+### Customer Self-Service Portal
+
+* Allow customers to Sign Up directly from the application login page.
+* Support email/OTP verification and secure account activation.
+* Automatically create a new tenant after successful registration.
+* Guide customers through subscription selection, payment, and tenant setup.
+* Allow customers to log in immediately after successful activation.
+* Support Forgot Password, Reset Password, Change Password, and MFA.
+
+### Subscription & Payment
+
+* Complete SaaS subscription lifecycle management.
+* Monthly, Yearly, Trial, Enterprise, and Custom plans.
+* Support plan upgrades, downgrades, renewals, renew-before-expiry, cancellations, and grace periods.
+* Integrate secure payment gateways supporting Credit/Debit Cards, UPI, Net Banking, QR Code payments, and Wallets.
+* Automatically generate invoices, payment receipts, GST invoices, and payment confirmations.
+* Immediately activate or upgrade tenant subscriptions after successful payment.
+* Automatically remove payment warnings and unlock subscribed modules after payment.
+* Maintain complete payment history, transaction logs, receipts, subscription history, and billing reports.
+* Provide dedicated Subscription Management and Plan Upgrade screens for customers.
+
+### Platform Admin Portal
+
+* Manage the complete SaaS platform from a centralized dashboard.
+* Automatically receive every newly registered tenant.
+* View tenant profile, subscription plan, payment status, invoices, receipts, user count, storage usage, module usage, renewal status, and login activity.
+* Create, edit, activate, suspend, archive, enable/disable, or delete tenants.
+* Configure user limits, storage, branches, warehouses, API usage, feature access, and modules per tenant.
+* Monitor tenant health, license utilization, analytics, audit logs, and platform performance.
+
+### Tenant Administration
+
+* Tenant Admin can create, edit, activate/deactivate, and manage users directly from the application.
+* Allow admins to invite users or create accounts and let users securely create their own passwords.
+* Support password reset, account recovery, MFA, session management, departments, approval hierarchy, and RBAC.
+* Prevent user creation beyond licensed limits with meaningful validation.
+
+### Role-Based Access Control
+
+* Dynamic RBAC across all modules.
+* Automatically register new modules in Roles & Permissions.
+* Control menus, pages, dashboards, APIs, reports, actions, approvals, and data visibility based on assigned roles.
+
+### Security
+
+* Highly secured Platform Admin Portal accessible only to authorized Platform Administrators.
+* Strong authentication, MFA, session timeout, IP restrictions (optional), audit logging, encryption, secure APIs, tenant isolation, and complete activity tracking.
+* Prevent unauthorized access to Platform Admin features and tenant data.
+
+### Performance & Reliability
+
+* Ensure all modules work without functional, logical, or deployment issues.
+* Optimize APIs, database queries, caching, lazy loading, background processing, and large data handling.
+* Production-safe deployments with no routing, build, permission, or 404 issues.
+
+### User Experience
+
+* Premium enterprise-grade UI/UX.
+* Fast, responsive, intuitive workflows.
+* Mobile, tablet, desktop, and web compatibility.
+* Consistent dashboards, search, filters, pagination, notifications, and seamless navigation.
+
+The entire SaaS platform must be production-ready, secure, scalable, configurable, high-performance, and capable of supporting future growth without architectural changes, while providing a seamless self-service onboarding and subscription experience for customers and complete operational control for Platform Administrators.

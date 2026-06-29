@@ -106,6 +106,10 @@ export async function requireHrmsUser(req: Request, res: Response, next: NextFun
     res.status(403).json({ error: "HRMS account is deactivated. Contact your HR administrator." });
     return;
   }
+  if (user.isLocked) {
+    res.status(403).json({ error: "Account is locked. Contact your HR administrator." });
+    return;
+  }
   req.hrmsUser = user;
   req.tenantId = user.tenantId;
   next();

@@ -1677,7 +1677,8 @@ router.post("/leave/blackout-dates", requireHrmsUser, requireRole(...HR_ROLES), 
 
 router.delete("/leave/blackout-dates/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
-    const [deleted] = await db.delete(blackoutDatesTable).where(eq(blackoutDatesTable.id, Number(req.params.id))).returning();
+    const tenantId = req.hrmsUser!.tenantId;
+    const [deleted] = await db.delete(blackoutDatesTable).where(and(eq(blackoutDatesTable.id, Number(req.params.id)), eq(blackoutDatesTable.tenantId, tenantId))).returning();
     if (!deleted) { res.status(404).json({ error: "Not found" }); return; }
     await logAudit({ user: req.hrmsUser, action: "DELETE_BLACKOUT_DATE", module: "Leave", recordId: deleted.id, newValue: deleted.name, ipAddress: req.ip });
     res.json(deleted);

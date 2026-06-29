@@ -50,11 +50,15 @@ router.get("/me", (req, res) => {
 // ─── EMPLOYEES ────────────────────────────────────────────────────────────────
 router.get("/employees", requireScope("employees:read"), async (req, res) => {
   try {
+    const tenantId = req.apiKey!.tenantId;
     const { limit, offset } = paging(req);
     const status = (req.query.status as string | undefined)?.trim();
     const departmentId = req.query.departmentId ? Number(req.query.departmentId) : undefined;
 
-    const conditions = [isNull(employeesTable.deletedAt)];
+    const conditions = [
+      isNull(employeesTable.deletedAt),
+      eq(employeesTable.tenantId, tenantId),
+    ];
     if (status) conditions.push(sql`${employeesTable.status} = ${status}`);
     if (departmentId) conditions.push(eq(employeesTable.departmentId, departmentId));
     const where = and(...conditions);
@@ -80,8 +84,8 @@ router.get("/employees", requireScope("employees:read"), async (req, res) => {
         location: employeesTable.location,
       })
       .from(employeesTable)
-      .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
-      .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
+      .leftJoin(departmentsTable, and(eq(employeesTable.departmentId, departmentsTable.id), eq(departmentsTable.tenantId, tenantId)))
+      .leftJoin(designationsTable, and(eq(employeesTable.designationId, designationsTable.id), eq(designationsTable.tenantId, tenantId)))
       .where(where)
       .orderBy(desc(employeesTable.createdAt))
       .limit(limit)
@@ -96,6 +100,7 @@ router.get("/employees", requireScope("employees:read"), async (req, res) => {
 
 router.get("/employees/:id", requireScope("employees:read"), async (req, res) => {
   try {
+    const tenantId = req.apiKey!.tenantId;
     const id = Number.parseInt(req.params.id, 10);
     if (!Number.isFinite(id) || id <= 0) {
       res.status(400).json({ error: "Invalid id" });
@@ -114,17 +119,14 @@ router.get("/employees/:id", requireScope("employees:read"), async (req, res) =>
         status: employeesTable.status,
         employmentType: employeesTable.employmentType,
         dateOfJoining: employeesTable.dateOfJoining,
-        // NOTE: `ctc` is intentionally omitted — it's compensation data and
-        // belongs behind a future `payroll:read` (or similar) scope, not
-        // generic employee directory access.
         department: departmentsTable.name,
         designation: designationsTable.title,
         location: employeesTable.location,
       })
       .from(employeesTable)
-      .leftJoin(departmentsTable, eq(employeesTable.departmentId, departmentsTable.id))
-      .leftJoin(designationsTable, eq(employeesTable.designationId, designationsTable.id))
-      .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt)))
+      .leftJoin(departmentsTable, and(eq(employeesTable.departmentId, departmentsTable.id), eq(departmentsTable.tenantId, tenantId)))
+      .leftJoin(designationsTable, and(eq(employeesTable.designationId, designationsTable.id), eq(designationsTable.tenantId, tenantId)))
+      .where(and(eq(employeesTable.id, id), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, tenantId)))
       .limit(1);
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);
@@ -135,8 +137,9 @@ router.get("/employees/:id", requireScope("employees:read"), async (req, res) =>
 });
 
 // ─── DEPARTMENTS ──────────────────────────────────────────────────────────────
-router.get("/departments", requireScope("departments:read"), async (_req, res) => {
+router.get("/departments", requireScope("departments:read"), async (req, res) => {
   try {
+    const tenantId = req.apiKey!.tenantId;
     const rows = await db
       .select({
         id: departmentsTable.id,
@@ -146,7 +149,7 @@ router.get("/departments", requireScope("departments:read"), async (_req, res) =
         isActive: departmentsTable.isActive,
       })
       .from(departmentsTable)
-      .where(isNull(departmentsTable.deletedAt))
+      .where(and(isNull(departmentsTable.deletedAt), eq(departmentsTable.tenantId, tenantId)))
       .orderBy(departmentsTable.name);
     res.json({ data: rows, total: rows.length });
   } catch (err) {
@@ -158,21 +161,22 @@ router.get("/departments", requireScope("departments:read"), async (_req, res) =
 // ─── ATTENDANCE ───────────────────────────────────────────────────────────────
 router.get("/attendance", requireScope("attendance:read"), async (req, res) => {
   try {
+    const tenantId = req.apiKey!.tenantId;
     const { limit, offset } = paging(req);
     const employeeId = req.query.employeeId ? Number(req.query.employeeId) : undefined;
     const fromDate = (req.query.fromDate as string | undefined)?.trim();
     const toDate = (req.query.toDate as string | undefined)?.trim();
 
-    const conditions: any[] = [];
+    const conditions = [eq(attendanceRecordsTable.tenantId, tenantId)];
     if (employeeId) conditions.push(eq(attendanceRecordsTable.employeeId, employeeId));
     if (fromDate) conditions.push(gte(attendanceRecordsTable.attendanceDate, fromDate));
     if (toDate) conditions.push(lte(attendanceRecordsTable.attendanceDate, toDate));
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const where = and(...conditions);
 
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(attendanceRecordsTable)
-      .where(where as any);
+      .where(where);
 
     const rows = await db
       .select({
@@ -186,7 +190,7 @@ router.get("/attendance", requireScope("attendance:read"), async (req, res) => {
         status: attendanceRecordsTable.status,
       })
       .from(attendanceRecordsTable)
-      .where(where as any)
+      .where(where)
       .orderBy(desc(attendanceRecordsTable.attendanceDate))
       .limit(limit)
       .offset(offset);
@@ -201,21 +205,22 @@ router.get("/attendance", requireScope("attendance:read"), async (req, res) => {
 // ─── PAYSLIPS ─────────────────────────────────────────────────────────────────
 router.get("/payslips", requireScope("payslips:read"), async (req, res) => {
   try {
+    const tenantId = req.apiKey!.tenantId;
     const { limit, offset } = paging(req);
     const employeeId = req.query.employeeId ? Number(req.query.employeeId) : undefined;
     const year = req.query.year ? Number(req.query.year) : undefined;
     const month = req.query.month ? Number(req.query.month) : undefined;
 
-    const conditions: any[] = [];
+    const conditions = [eq(payslipsTable.tenantId, tenantId)];
     if (employeeId) conditions.push(eq(payslipsTable.employeeId, employeeId));
     if (year) conditions.push(eq(payslipsTable.periodYear, year));
     if (month) conditions.push(eq(payslipsTable.periodMonth, month));
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const where = and(...conditions);
 
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(payslipsTable)
-      .where(where as any);
+      .where(where);
 
     const rows = await db
       .select({
@@ -227,7 +232,7 @@ router.get("/payslips", requireScope("payslips:read"), async (req, res) => {
         payslipData: payslipsTable.payslipData,
       })
       .from(payslipsTable)
-      .where(where as any)
+      .where(where)
       .orderBy(desc(payslipsTable.periodYear), desc(payslipsTable.periodMonth))
       .limit(limit)
       .offset(offset);
@@ -242,11 +247,15 @@ router.get("/payslips", requireScope("payslips:read"), async (req, res) => {
 // ─── LEAVE BALANCES ───────────────────────────────────────────────────────────
 router.get("/leave-balances", requireScope("leave:read"), async (req, res) => {
   try {
+    const tenantId = req.apiKey!.tenantId;
     const { limit, offset } = paging(req);
     const employeeId = req.query.employeeId ? Number(req.query.employeeId) : undefined;
     const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
 
-    const conditions: any[] = [eq(leaveBalancesTable.year, year)];
+    const conditions = [
+      eq(leaveBalancesTable.year, year),
+      eq(leaveBalancesTable.tenantId, tenantId),
+    ];
     if (employeeId) conditions.push(eq(leaveBalancesTable.employeeId, employeeId));
     const where = and(...conditions);
 
@@ -269,7 +278,7 @@ router.get("/leave-balances", requireScope("leave:read"), async (req, res) => {
         carryForward: leaveBalancesTable.carryForward,
       })
       .from(leaveBalancesTable)
-      .leftJoin(leaveTypesTable, eq(leaveBalancesTable.leaveTypeId, leaveTypesTable.id))
+      .leftJoin(leaveTypesTable, and(eq(leaveBalancesTable.leaveTypeId, leaveTypesTable.id), eq(leaveTypesTable.tenantId, tenantId)))
       .where(where)
       .limit(limit)
       .offset(offset);
