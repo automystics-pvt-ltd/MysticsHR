@@ -155,7 +155,8 @@ router.post(
             recipientEmployeeDbId: employeeId,
             variables: { recipientName: empUser.name ?? "" },
             entityType: "onboarding_checklist", entityId: checklist.id,
-          }).catch(() => {});
+          
+          tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
         }).catch(() => {});
       }
       res.json({ welcomeEmailSentAt: updated.welcomeEmailSentAt, message: "Welcome email trigger recorded" });
@@ -629,7 +630,8 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
           recipientEmployeeDbId: emp.id,
           variables: { recipientName: empName, employeeId: String(emp.employeeId ?? "") },
           entityType: "onboarding_checklist", entityId: checklist.id,
-        }).catch(() => {});
+        
+        tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
       }).catch(() => {});
     }
 

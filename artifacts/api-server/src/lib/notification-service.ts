@@ -160,8 +160,8 @@ function asConfigString(v: unknown): string | undefined {
  * back to its corresponding SMTP_* environment variable when the DB value is
  * missing or empty, so on a fresh install env-driven credentials still work.
  */
-async function getSmtpSettings() {
-  const rows = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.category, "email"));
+async function getSmtpSettings(tenantId: number) {
+  const rows = await db.select().from(systemSettingsTable).where(and(eq(systemSettingsTable.category, "email"), eq(systemSettingsTable.tenantId, tenantId)));
   const db_: Record<string, string | undefined> = {};
   for (const r of rows) db_[r.key] = asConfigString(r.value);
 
@@ -179,8 +179,8 @@ async function getSmtpSettings() {
  * Read WhatsApp Cloud API credentials. Same DB-first / env-fallback pattern as
  * `getSmtpSettings()`.
  */
-async function getWhatsAppSettings() {
-  const rows = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.category, "whatsapp"));
+async function getWhatsAppSettings(tenantId: number) {
+  const rows = await db.select().from(systemSettingsTable).where(and(eq(systemSettingsTable.category, "whatsapp"), eq(systemSettingsTable.tenantId, tenantId)));
   const db_: Record<string, string | undefined> = {};
   for (const r of rows) db_[r.key] = asConfigString(r.value);
 
@@ -229,7 +229,7 @@ async function logNotification(params: {
 }
 
 export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
-  const smtp = await getSmtpSettings();
+  const smtp = await getSmtpSettings(opts.tenantId!);
   if (!smtp.host || !smtp.from) {
     await logNotification({
       channel: "email",
@@ -301,7 +301,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
 }
 
 export async function sendWhatsApp(opts: SendWhatsAppOptions): Promise<boolean> {
-  const wa = await getWhatsAppSettings();
+  const wa = await getWhatsAppSettings(opts.tenantId!);
   if (!wa.phone_number_id || !wa.access_token) {
     await logNotification({
       channel: "whatsapp",
@@ -437,7 +437,11 @@ export async function dispatchNotification(params: {
 }): Promise<void> {
   try {
     const templates = await db.select().from(notificationTemplatesTable).where(
-      and(eq(notificationTemplatesTable.eventType, params.eventType), eq(notificationTemplatesTable.isActive, true))
+      and(
+        eq(notificationTemplatesTable.eventType, params.eventType),
+        eq(notificationTemplatesTable.isActive, true),
+        params.tenantId !== undefined ? eq(notificationTemplatesTable.tenantId, params.tenantId) : undefined,
+      )
     );
     const tpl = templates[0];
     const vars = params.variables ?? {};

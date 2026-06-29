@@ -152,6 +152,7 @@ async function escalateSlaBreach(ticket: typeof helpdeskTicketsTable.$inferSelec
           recipientName: r.name ?? "Team Member",
         },
         entityType: "helpdesk_ticket", entityId: ticket.id,
+        tenantId: ticket.tenantId,
       }).catch(() => {});
     }
   }
@@ -357,7 +358,8 @@ router.post("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asy
           recipientName: u.name ?? "Team Member",
         },
         entityType: "helpdesk_ticket", entityId: ticket.id,
-      }).catch(() => {});
+      
+      tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
     }
 
     // Notify assignee about new ticket
@@ -374,7 +376,8 @@ router.post("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asy
             recipientName: assignee.name ?? "Team Member",
           },
           entityType: "helpdesk_ticket", entityId: ticket.id,
-        }).catch(() => {});
+        
+        tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
       }
     }
 
@@ -394,7 +397,8 @@ router.post("/helpdesk/tickets", requireHrmsUser, requireRole(...ALL_ROLES), asy
             raisedBy: raiserName, recipientName: hr.name ?? "HR",
           },
           entityType: "helpdesk_ticket", entityId: ticket.id,
-        }).catch(() => {});
+        
+        tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
       }
     } catch (e) { console.error("[helpdesk] failed to broadcast ticket created to HR", e); }
 
@@ -508,7 +512,8 @@ router.put("/helpdesk/tickets/:id", requireHrmsUser, requireRole(...MANAGER_ROLE
               recipientName: raiser.name ?? "Team Member",
             },
             entityType: "helpdesk_ticket", entityId: id,
-          }).catch(() => {});
+          
+          tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
         }
       } catch (e) { console.error("[helpdesk] failed to notify raiser of status change", e); }
     }
@@ -529,7 +534,8 @@ router.put("/helpdesk/tickets/:id", requireHrmsUser, requireRole(...MANAGER_ROLE
               recipientName: newAssignee.name ?? "Team Member",
             },
             entityType: "helpdesk_ticket", entityId: id,
-          }).catch(() => {});
+          
+          tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
         }
       } catch (e) { console.error("[helpdesk] failed to notify new assignee", e); }
     }
@@ -645,7 +651,8 @@ router.post("/helpdesk/tickets/:id/comments", requireHrmsUser, requireRole(...AL
               commentPreview, recipientName: t.name ?? "Team Member",
             },
             entityType: "helpdesk_ticket", entityId: ticketId,
-          }).catch(() => {});
+          
+          tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
         }
       } catch (e) { console.error("[helpdesk] failed to notify on comment", e); }
     }

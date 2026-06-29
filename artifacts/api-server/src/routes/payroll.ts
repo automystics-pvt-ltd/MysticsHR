@@ -563,7 +563,8 @@ router.post("/payroll/locks/:year/:month/lock", requireHrmsUser, requireRole(...
           recipientEmail: u.email, recipientName: u.name,
           variables: { period: periodLabel, recipientName: u.name },
           entityType: "payroll_lock", entityId: lock.id,
-        })
+        
+        tenantId: req.hrmsUser!.tenantId,})
       ));
     }).catch(() => {});
     res.json(lock);
@@ -1047,7 +1048,8 @@ router.post("/payroll/runs/:id/compute", requireHrmsUser, requireRole(...PAYROLL
             runUrl: runUrlComputed,
           },
           entityType: "payroll_run", entityId: runId,
-        });
+        
+        tenantId: req.hrmsUser!.tenantId,});
       }));
     }).catch(() => {});
 
@@ -1131,7 +1133,8 @@ router.post("/payroll/runs/:id/approve", requireHrmsUser, requireRole(...PAYROLL
           recipientEmployeeDbId: record.employeeId,
           variables: { period, recipientName: empUser.name ?? "", payslipUrl },
           entityType: "payroll_run", entityId: runId,
-        });
+        
+        tenantId: req.hrmsUser!.tenantId,});
       }));
     }).catch(() => {});
     res.json({ message: "Payroll approved and payslips generated." });

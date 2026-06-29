@@ -162,6 +162,7 @@ async function autoGenerateClearanceTasks(exitRequestId: number, actualLwd: stri
           },
           entityType: "exit_request",
           entityId: exitRequestId,
+          tenantId: tenantId,
         }).catch(() => {});
       }
     }
@@ -325,7 +326,8 @@ router.post("/exit/requests", requireHrmsUser, requireRole(...ALL_ROLES), async 
             reason: String(reason ?? ""),
           },
           entityType: "exit_request", entityId: exitReq.id,
-        })
+        
+        tenantId: req.hrmsUser!.tenantId,})
       ));
     })().catch(() => {});
 
@@ -471,7 +473,8 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
                 reason: hrRemarks ?? existing.hrRemarks ?? "",
               },
               entityType: "exit_request", entityId: id,
-            });
+            
+            tenantId: req.hrmsUser!.tenantId,});
           }
         } catch (e) { console.error("[exit] rejection notification failed:", e); }
       })();
@@ -492,7 +495,8 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
           recipientEmployeeDbId: existing.employeeId,
           variables: { status, recipientName: empUser.name },
           entityType: "exit_request", entityId: id,
-        }).catch(() => {});
+        
+        tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
       }
       // On completion, also notify HR + Finance to initiate FnF
       if (isCompletion) {
@@ -506,7 +510,8 @@ router.put("/exit/requests/:id", requireHrmsUser, requireRole(...HR_ROLES), asyn
               recipientEmployeeDbId: hr.employeeId,
               variables: { employeeName: empName, employeeId: String(existing.employeeId), recipientName: hr.name },
               entityType: "exit_request", entityId: id,
-            })
+            
+            tenantId: req.hrmsUser!.tenantId,})
           ));
         })().catch(() => {});
       }
@@ -613,7 +618,8 @@ router.put("/exit/clearance-tasks/:taskId", requireHrmsUser, requireRole(...ALL_
             recipientEmployeeDbId: exitReq.employeeId,
             variables: { status: "FnF Pending", recipientName: empUser.name },
             entityType: "exit_request", entityId: exitReq.id,
-          }).catch(() => {});
+          
+          tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
         }
         (async () => {
           const hrUsers = await getUsersByRoles(["customer_admin", "hr_manager", "payroll_admin"], req.hrmsUser!.tenantId);
@@ -625,7 +631,8 @@ router.put("/exit/clearance-tasks/:taskId", requireHrmsUser, requireRole(...ALL_
               recipientEmployeeDbId: hr.employeeId,
               variables: { employeeName: empName, employeeId: String(exitReq.employeeId), recipientName: hr.name },
               entityType: "exit_request", entityId: exitReq.id,
-            })
+            
+            tenantId: req.hrmsUser!.tenantId,})
           ));
         })().catch(() => {});
       }
@@ -844,7 +851,8 @@ router.post("/exit/requests/:id/fnf", requireHrmsUser, requireRole(...HR_ROLES, 
             computedBy: u.name ?? "the payroll team",
           },
           entityType: "exit_request", entityId: exitRequestId,
-        })
+        
+        tenantId: req.hrmsUser!.tenantId,})
       ));
     })().catch(() => {});
 
@@ -1006,7 +1014,8 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
                 documentsIssued: documentsIssuedCount > 0 ? "true" : "",
               },
               entityType: "exit_request", entityId: exitRequestId,
-            });
+            
+            tenantId: req.hrmsUser!.tenantId,});
 
             // Send one email per issued document with its tokenised direct
             // download link. Sent as separate emails (rather than one combined
@@ -1031,7 +1040,8 @@ router.post("/exit/requests/:id/fnf/approve", requireHrmsUser, requireRole(...HR
                     expiresAt: link.expiresAt.toLocaleDateString("en-IN"),
                   },
                   entityType: "exit_request", entityId: exitRequestId,
-                });
+                
+                tenantId: req.hrmsUser!.tenantId,});
               } catch (e) { console.error("[exit] relieving_doc_link dispatch failed:", e); }
             }
           }

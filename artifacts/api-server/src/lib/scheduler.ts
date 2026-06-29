@@ -444,7 +444,7 @@ async function remindPendingLeaveApprovals() {
 
     if (pending.length === 0) return;
 
-    const hodUsers = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
+    const hodUsers = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId, tenantId: hrmsUsersTable.tenantId })
       .from(hrmsUsersTable)
       .where(and(eq(hrmsUsersTable.isActive, true), eq(hrmsUsersTable.role, "hod")));
 
@@ -459,6 +459,7 @@ async function remindPendingLeaveApprovals() {
           days: String(pending.length), leaveType: "various",
           recipientName: user.name,
         },
+        tenantId: user.tenantId ?? undefined,
       }).catch(() => {});
     }
   } catch (e) {
@@ -517,6 +518,7 @@ async function escalateSlaBreaches() {
             recipientEmployeeDbId: assignee.employeeId,
             variables: { ...vars, recipientName: assignee.name },
             entityType: "helpdesk_ticket", entityId: ticket.id,
+            tenantId: ticket.tenantId,
           }).catch(() => {});
         }
         // 2. Notify the assignee's HOD/manager
@@ -539,6 +541,7 @@ async function escalateSlaBreaches() {
                   recipientEmail: hod.email, recipientName: hod.name,
                   variables: { ...vars, recipientName: hod.name },
                   entityType: "helpdesk_ticket", entityId: ticket.id,
+                  tenantId: ticket.tenantId,
                 }).catch(() => {});
               }
             }
@@ -552,6 +555,7 @@ async function escalateSlaBreaches() {
           recipientEmail: hr.email, recipientName: hr.name,
           variables: { ...vars, recipientName: hr.name },
           entityType: "helpdesk_ticket", entityId: ticket.id,
+          tenantId: ticket.tenantId,
         }).catch(() => {});
       }
     }
@@ -607,6 +611,7 @@ async function processConfiguredEscalations() {
               fromDate: "", toDate: "", days: String(pending.length),
               leaveType: "various", recipientName: user.name,
             },
+            tenantId: config.tenantId,
           }).catch(() => {});
         }
       }
@@ -633,6 +638,7 @@ async function processConfiguredEscalations() {
               slaDeadline: threshold.toISOString(), recipientName: user.name,
             },
             entityType: "helpdesk_ticket", entityId: overdue[0]?.id,
+            tenantId: config.tenantId,
           }).catch(() => {});
         }
       }
@@ -657,6 +663,7 @@ async function processConfiguredEscalations() {
               status: `${stalled.length} exit(s) pending >SLA (${hours}h)`,
               recipientName: user.name,
             },
+            tenantId: config.tenantId,
           }).catch(() => {});
         }
       }
@@ -684,6 +691,7 @@ async function processConfiguredEscalations() {
               year: String(pendingRuns[0]?.periodYear ?? ""),
               recipientName: user.name,
             },
+            tenantId: config.tenantId,
           }).catch(() => {});
         }
       }
@@ -746,6 +754,7 @@ async function alertShiftAwareNoSignIn() {
       email: hrmsUsersTable.email,
       name: hrmsUsersTable.name,
       startTime: shiftTemplatesTable.startTime,
+      tenantId: employeesTable.tenantId,
     }).from(employeesTable)
       .innerJoin(shiftAssignmentsTable, and(
         eq(shiftAssignmentsTable.employeeId, employeesTable.id),
@@ -782,6 +791,7 @@ async function alertShiftAwareNoSignIn() {
           recipientName: emp.name ?? "",
           shiftStart: emp.startTime,
         },
+        tenantId: emp.tenantId ?? undefined,
       }).catch(() => {});
     }
   } catch (e) {
@@ -809,6 +819,7 @@ async function alertShiftAwareNoSignOut() {
       email: hrmsUsersTable.email,
       name: hrmsUsersTable.name,
       endTime: shiftTemplatesTable.endTime,
+      tenantId: employeesTable.tenantId,
     }).from(employeesTable)
       .innerJoin(shiftAssignmentsTable, and(
         eq(shiftAssignmentsTable.employeeId, employeesTable.id),
@@ -847,6 +858,7 @@ async function alertShiftAwareNoSignOut() {
           recipientName: emp.name ?? "",
           shiftEnd: emp.endTime,
         },
+        tenantId: emp.tenantId ?? undefined,
       }).catch(() => {});
     }
   } catch (e) {
@@ -871,7 +883,7 @@ async function alertOvertimeThreshold() {
       ));
 
     for (const record of overtimeEmployees) {
-      const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
+      const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name, tenantId: hrmsUsersTable.tenantId })
         .from(hrmsUsersTable).where(eq(hrmsUsersTable.employeeId, record.employeeId)).limit(1);
       if (!empUser?.email) continue;
       await dispatchNotification({
@@ -879,6 +891,7 @@ async function alertOvertimeThreshold() {
         recipientEmail: empUser.email, recipientName: empUser.name ?? "",
         recipientEmployeeDbId: record.employeeId,
         variables: { recipientName: empUser.name ?? "", hours: String(Math.floor((record.totalMinutesWorked ?? 0) / 60)) },
+        tenantId: empUser.tenantId ?? undefined,
       }).catch(() => {});
     }
   } catch (e) {
@@ -899,6 +912,7 @@ async function alertConsecutiveAbsences() {
       id: employeesTable.id,
       email: hrmsUsersTable.email,
       name: hrmsUsersTable.name,
+      tenantId: employeesTable.tenantId,
     }).from(employeesTable)
       .leftJoin(hrmsUsersTable, eq(hrmsUsersTable.employeeId, employeesTable.id))
       .where(and(eq(employeesTable.isActive, true), isNotNull(hrmsUsersTable.email)));
@@ -933,6 +947,7 @@ async function alertConsecutiveAbsences() {
           recipientEmail: emp.email, recipientName: emp.name ?? "",
           recipientEmployeeDbId: emp.id,
           variables: { days: String(absent), recipientName: emp.name ?? "" },
+          tenantId: emp.tenantId ?? undefined,
         }).catch(() => {});
       }
     }
@@ -975,7 +990,7 @@ export async function remindPreOnboardingPending() {
     for (const record of candidateRecords) {
       if (!pendingDocRecordIds.has(record.id)) continue;
 
-      const [candidate] = await db.select({ email: candidatesTable.email, firstName: candidatesTable.firstName, lastName: candidatesTable.lastName, phone: candidatesTable.phone })
+      const [candidate] = await db.select({ email: candidatesTable.email, firstName: candidatesTable.firstName, lastName: candidatesTable.lastName, phone: candidatesTable.phone, tenantId: candidatesTable.tenantId })
         .from(candidatesTable).where(eq(candidatesTable.id, record.candidateId)).limit(1);
       if (!candidate?.email) continue;
 
@@ -986,6 +1001,7 @@ export async function remindPreOnboardingPending() {
         recipientCandidateId: record.candidateId,
         variables: { joiningDate, recipientName: `${candidate.firstName} ${candidate.lastName}` },
         entityType: "pre_onboarding_record", entityId: record.id,
+        tenantId: candidate.tenantId ?? undefined,
       }).catch(() => {});
     }
   } catch (e) {
@@ -1047,6 +1063,7 @@ async function remindPendingPayrollApprovals() {
       id: hrmsUsersTable.id,
       email: hrmsUsersTable.email,
       name: hrmsUsersTable.name,
+      tenantId: hrmsUsersTable.tenantId,
     })
       .from(hrmsUsersTable)
       .where(and(
@@ -1099,6 +1116,7 @@ async function remindPendingPayrollApprovals() {
             runUrl,
           },
           entityType: "payroll_run", entityId: run.id,
+          tenantId: a.tenantId ?? undefined,
         }).catch((e) => logger.warn({ err: e, runId: run.id, to: a.email }, "[scheduler] payroll reminder dispatch failed"));
       }
     }
@@ -1148,6 +1166,7 @@ export async function remindOverdueExitClearanceTasks() {
       employeeFirstName: employeesTable.firstName,
       employeeLastName: employeesTable.lastName,
       employeeCode: employeesTable.employeeId,
+      tenantId: exitRequestsTable.tenantId,
     }).from(exitClearanceTasksTable)
       .innerJoin(exitRequestsTable, eq(exitClearanceTasksTable.exitRequestId, exitRequestsTable.id))
       .innerJoin(employeesTable, eq(exitRequestsTable.employeeId, employeesTable.id))
@@ -1214,6 +1233,7 @@ export async function remindOverdueExitClearanceTasks() {
         entityType: "exit_clearance_task",
         entityId: t.id,
         channels: ["whatsapp"],
+        tenantId: t.tenantId ?? undefined,
       }).catch((err) => logger.warn({ err, taskId: t.id }, "[scheduler] exit_clearance_task_overdue dispatch failed"));
       processed++;
 
@@ -1272,6 +1292,7 @@ export async function dispatchForm16ForFy(
       firstName: employeesTable.firstName,
       lastName: employeesTable.lastName,
       email: employeesTable.email,
+      tenantId: employeesTable.tenantId,
     })
       .from(employeesTable)
       .innerJoin(payrollRecordsTable, eq(payrollRecordsTable.employeeId, employeesTable.id))
@@ -1325,6 +1346,7 @@ export async function dispatchForm16ForFy(
         entityType: entityTypeKey, entityId: e.id,
         bypassPreferences: true,
         channels: ["email"],
+        tenantId: e.tenantId ?? undefined,
       }).then(() => { sent++; })
         .catch((err) => logger.warn({ err, employeeId: e.id, to: e.email }, "[scheduler] form_16 dispatch failed"));
     }

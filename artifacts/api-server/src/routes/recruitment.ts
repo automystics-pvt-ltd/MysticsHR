@@ -963,7 +963,8 @@ router.post("/offers/:id/issue", requireHrmsUser, requireRole(...HR_WRITE_ROLES)
         recipientCandidateId: row.candidateId,
         variables: { jobTitle: row.jobTitle, joiningDate: row.joiningDate ?? "", offerCode: row.offerCode, recipientName: `${candidate.firstName} ${candidate.lastName}` },
         entityType: "offer_letter", entityId: id,
-      }).catch(() => {});
+      
+      tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
     }
 
     res.json(row);

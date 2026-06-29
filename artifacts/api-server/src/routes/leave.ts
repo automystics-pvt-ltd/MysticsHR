@@ -615,7 +615,8 @@ router.put("/leave/applications/:id", requireHrmsUser, requireRole(...HR_ROLES),
           recipientEmployeeDbId: app.employeeId,
           variables: { ...sharedVars, recipientName: empUser.name ?? "Team Member" },
           entityType: "leave_application", entityId: appId,
-        }).catch(() => {});
+        
+        tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
       }
       for (const ap of approvers) {
         if (!ap.email) continue;
@@ -625,7 +626,8 @@ router.put("/leave/applications/:id", requireHrmsUser, requireRole(...HR_ROLES),
           recipientEmployeeDbId: ap.employeeId ?? null,
           variables: { ...sharedVars, recipientName: ap.name ?? "Team Member" },
           entityType: "leave_application", entityId: appId,
-        }).catch(() => {});
+        
+        tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
       }
     } catch (e) { console.error("[leave] edit-dates notification dispatch failed:", e); }
 
@@ -873,7 +875,8 @@ router.post("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), a
           days: String(totalDays), leaveType: leaveType.name,
         },
         entityType: "leave_application", entityId: app.id,
-      }).catch(() => {});
+      
+      tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
     }
     res.status(201).json(app);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
@@ -1021,7 +1024,8 @@ router.post("/leave/applications/:id/hr-action", requireHrmsUser, requireRole(..
           recipientName: empUser.name ?? "Team Member",
         },
         entityType: "leave_application", entityId: appId,
-      }).catch(() => {});
+      
+      tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
     }
     res.json(updated);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }

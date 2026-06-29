@@ -28,6 +28,7 @@ const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
 const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
 
 const MAX_IMPORT_ROWS = 1000;
+const tooManyRowsMessage = `Too many rows: limit is ${MAX_IMPORT_ROWS} per import`;
 
 type RowMap = Record<string, string>;
 type SectionResult = { imported: number; errors: { row: number; error: string }[] };

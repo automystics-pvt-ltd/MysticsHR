@@ -241,7 +241,8 @@ router.post("/documents/generate", requireHrmsUser, requireRole(...HR_ROLES), as
           },
           entityType: "document_request", entityId: linkedRequest.id,
           channels: ["email"],
-        }).catch(() => {});
+        
+        tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
       }
     }
 
@@ -255,7 +256,8 @@ router.post("/documents/generate", requireHrmsUser, requireRole(...HR_ROLES), as
         recipientEmployeeDbId: employeeId,
         variables: { documentType, recipientName: empUser.name },
         entityType: "issued_document", entityId: issued.id,
-      }).catch(() => {});
+      
+      tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
     }
 
     res.status(201).json({
@@ -611,7 +613,8 @@ router.post("/documents/requests", requireHrmsUser, requireRole(...ALL_ROLES), a
             recipientName: hr.name ?? "HR",
           },
           entityType: "document_request", entityId: created.id,
-        }).catch(() => {});
+        
+        tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
       }
     }
 
@@ -682,7 +685,8 @@ router.put("/documents/requests/:id", requireHrmsUser, requireRole(...HR_ROLES),
           },
           entityType: "document_request", entityId: updated.id,
           channels: ["email"],
-        }).catch(() => {});
+        
+        tenantId: req.hrmsUser!.tenantId,}).catch(() => {});
       }
     }
 
