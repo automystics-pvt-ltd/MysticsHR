@@ -32,7 +32,7 @@ export const clearanceStatusEnum = pgEnum("clearance_status", [
 
 export const exitRequestsTable = pgTable("exit_requests", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   exitType: exitTypeEnum("exit_type").notNull(),
   status: exitStatusEnum("status").notNull().default("Submitted"),
@@ -53,6 +53,7 @@ export const exitRequestsTable = pgTable("exit_requests", {
 
 export const exitClearanceTasksTable = pgTable("exit_clearance_tasks", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   exitRequestId: integer("exit_request_id").notNull().references(() => exitRequestsTable.id),
   department: text("department").notNull(),
   taskName: text("task_name").notNull(),
@@ -99,7 +100,7 @@ export const exitInterviewsTable = pgTable("exit_interviews", {
 
 export const reportSchedulesTable = pgTable("report_schedules", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   reportType: text("report_type").notNull(),
   name: text("name").notNull(),
   frequency: text("frequency").notNull(),
@@ -114,7 +115,7 @@ export const reportSchedulesTable = pgTable("report_schedules", {
 
 export const savedReportTemplatesTable = pgTable("saved_report_templates", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   name: text("name").notNull(),
   reportType: text("report_type").notNull(),
   selectedFields: text("selected_fields").array().notNull().default([]),

@@ -14,7 +14,7 @@ export const offerStatusEnum = pgEnum("offer_status", [
 
 export const offerLettersTable = pgTable("offer_letters", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   offerCode: text("offer_code").notNull(),
   candidateId: integer("candidate_id").notNull().references(() => candidatesTable.id),
   jobTitle: text("job_title").notNull(),

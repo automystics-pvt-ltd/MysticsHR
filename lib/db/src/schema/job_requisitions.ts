@@ -23,7 +23,7 @@ export const employmentTypeRequisitionEnum = pgEnum("requisition_employment_type
 
 export const jobRequisitionsTable = pgTable("job_requisitions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   requisitionCode: text("requisition_code").notNull(),
   title: text("title").notNull(),
   departmentId: integer("department_id").references(() => departmentsTable.id),

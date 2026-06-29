@@ -13,7 +13,7 @@ export const hrDocumentTypeEnum = pgEnum("hr_document_type", [
 // ─── DOCUMENT TEMPLATES ───────────────────────────────────────────────────────
 export const documentTemplatesTable = pgTable("document_templates", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   documentType: hrDocumentTypeEnum("document_type").notNull(),
   name: text("name").notNull(),
   companyName: text("company_name"),
@@ -29,7 +29,7 @@ export const documentTemplatesTable = pgTable("document_templates", {
 // ─── ISSUED DOCUMENTS ─────────────────────────────────────────────────────────
 export const issuedDocumentsTable = pgTable("issued_documents", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   templateId: integer("template_id").references(() => documentTemplatesTable.id),
   documentType: hrDocumentTypeEnum("document_type").notNull(),
@@ -47,6 +47,7 @@ export const documentRequestStatusEnum = pgEnum("document_request_status", [
 
 export const documentRequestsTable = pgTable("document_requests", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   documentType: hrDocumentTypeEnum("document_type").notNull(),
   reason: text("reason"),

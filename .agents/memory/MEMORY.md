@@ -1,2 +1,1 @@
-- [Multi-tenant schema strategy](multi-tenant-schema.md) — tenantId nullable in Drizzle (push compat), enforced by JWT; super_admin kept in enum for compat but unused
-- [Platform admin credentials](platform-admin.md) — platform@mysticshr.io / Admin@1234; bcrypt cost 12; stored in platform_admins table (not hrms_users)
+- [Multi-tenant schema strategy](multi-tenant-schema.md) — tenantId: add nullable, backfill all rows, then notNull via push; super_admin removed from enum; platform admin in separate table

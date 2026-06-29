@@ -3,7 +3,7 @@ import { tenantsTable } from "./tenants";
 
 export const notificationTemplatesTable = pgTable("notification_templates", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   eventType: text("event_type").notNull(),
   channel: text("channel").notNull().default("email"),
   emailSubject: text("email_subject"),

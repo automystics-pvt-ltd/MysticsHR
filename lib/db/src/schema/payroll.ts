@@ -51,7 +51,7 @@ export const lockExceptionStatusEnum = pgEnum("lock_exception_status", [
 // ─── SALARY STRUCTURES ────────────────────────────────────────────────────────
 export const salaryStructuresTable = pgTable("salary_structures", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   name: text("name").notNull(),
   effectiveFrom: date("effective_from").notNull(),
@@ -68,6 +68,7 @@ export const salaryStructuresTable = pgTable("salary_structures", {
 // ─── SALARY COMPONENTS ────────────────────────────────────────────────────────
 export const salaryComponentsTable = pgTable("salary_components", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   salaryStructureId: integer("salary_structure_id").notNull().references(() => salaryStructuresTable.id),
   componentType: salaryComponentTypeEnum("component_type").notNull(),
   componentName: text("component_name").notNull(),
@@ -83,7 +84,7 @@ export const salaryComponentsTable = pgTable("salary_components", {
 // ─── PAYROLL RUNS ─────────────────────────────────────────────────────────────
 export const payrollRunsTable = pgTable("payroll_runs", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   periodYear: integer("period_year").notNull(),
   periodMonth: integer("period_month").notNull(),
   status: payrollRunStatusEnum("status").notNull().default("Draft"),
@@ -103,6 +104,7 @@ export const payrollRunsTable = pgTable("payroll_runs", {
 // ─── PAYROLL RECORDS ──────────────────────────────────────────────────────────
 export const payrollRecordsTable = pgTable("payroll_records", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   payrollRunId: integer("payroll_run_id").notNull().references(() => payrollRunsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   salaryStructureId: integer("salary_structure_id").references(() => salaryStructuresTable.id),
@@ -143,6 +145,7 @@ export const payrollRecordsTable = pgTable("payroll_records", {
 // ─── PAYSLIPS ─────────────────────────────────────────────────────────────────
 export const payslipsTable = pgTable("payslips", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   payrollRecordId: integer("payroll_record_id").notNull().references(() => payrollRecordsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   periodYear: integer("period_year").notNull(),
@@ -156,7 +159,7 @@ export const payslipsTable = pgTable("payslips", {
 // ─── TAX REGIME DECLARATIONS ──────────────────────────────────────────────────
 export const taxRegimeDeclarationsTable = pgTable("tax_regime_declarations", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   financialYear: text("financial_year").notNull(),
   regime: taxRegimeEnum("regime").notNull().default("New"),
@@ -170,7 +173,7 @@ export const taxRegimeDeclarationsTable = pgTable("tax_regime_declarations", {
 // ─── SALARY REVISIONS ─────────────────────────────────────────────────────────
 export const salaryRevisionsTable = pgTable("salary_revisions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   oldStructureId: integer("old_structure_id").references(() => salaryStructuresTable.id),
   newStructureId: integer("new_structure_id").references(() => salaryStructuresTable.id),
@@ -188,7 +191,7 @@ export const salaryRevisionsTable = pgTable("salary_revisions", {
 // ─── PAYROLL LOCKS ────────────────────────────────────────────────────────────
 export const payrollLocksTable = pgTable("payroll_locks", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   year: integer("year").notNull(),
   month: integer("month").notNull(),
   isLocked: boolean("is_locked").notNull().default(false),
@@ -218,7 +221,7 @@ export const payrollLockExceptionsTable = pgTable("payroll_lock_exceptions", {
 // ─── PAYROLL SETTINGS ─────────────────────────────────────────────────────────
 export const payrollSettingsTable = pgTable("payroll_settings", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   settingKey: text("setting_key").notNull(),
   settingValue: text("setting_value").notNull(),
   description: text("description"),
@@ -230,7 +233,7 @@ export const payrollSettingsTable = pgTable("payroll_settings", {
 // ─── LOAN REPAYMENTS ──────────────────────────────────────────────────────────
 export const loanRepaymentsTable = pgTable("loan_repayments", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   loanType: text("loan_type").notNull(),
   principalAmount: numeric("principal_amount", { precision: 12, scale: 2 }).notNull(),

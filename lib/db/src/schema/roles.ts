@@ -5,7 +5,7 @@ import { tenantsTable } from "./tenants";
 
 export const rolesTable = pgTable("roles", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   slug: varchar("slug", { length: 50 }).notNull(),
   label: varchar("label", { length: 100 }).notNull(),
   description: text("description"),

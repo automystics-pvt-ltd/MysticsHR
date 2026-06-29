@@ -17,7 +17,7 @@ export const weekDayEnum = pgEnum("week_day", [
 
 export const shiftTemplatesTable = pgTable("shift_templates", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   name: text("name").notNull(),
   shiftType: shiftTypeEnum("shift_type").notNull().default("Fixed"),
   startTime: text("start_time").notNull(),
@@ -38,7 +38,7 @@ export const shiftTemplatesTable = pgTable("shift_templates", {
 
 export const shiftAssignmentsTable = pgTable("shift_assignments", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   shiftTemplateId: integer("shift_template_id").notNull().references(() => shiftTemplatesTable.id),
   effectiveFrom: date("effective_from").notNull(),
@@ -55,7 +55,7 @@ export const shiftSwapStatusEnum = pgEnum("shift_swap_status", [
 
 export const shiftSwapsTable = pgTable("shift_swaps", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   requesterEmployeeId: integer("requester_employee_id").notNull().references(() => employeesTable.id),
   swapWithEmployeeId: integer("swap_with_employee_id").notNull().references(() => employeesTable.id),
   swapDate: date("swap_date").notNull(),

@@ -20,7 +20,7 @@ export const regularizationStatusEnum = pgEnum("regularization_status", [
 
 export const attendanceRecordsTable = pgTable("attendance_records", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   attendanceDate: date("attendance_date").notNull(),
   signInTime: timestamp("sign_in_time", { withTimezone: true }),
@@ -50,7 +50,7 @@ export const attendanceRecordsTable = pgTable("attendance_records", {
 
 export const attendanceRegularizationsTable = pgTable("attendance_regularizations", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   attendanceDate: date("attendance_date").notNull(),
   requestedSignIn: timestamp("requested_sign_in", { withTimezone: true }),
@@ -67,6 +67,7 @@ export const attendanceRegularizationsTable = pgTable("attendance_regularization
 
 export const overtimeRecordsTable = pgTable("overtime_records", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   attendanceDate: date("attendance_date").notNull(),
   overtimeMinutes: integer("overtime_minutes").notNull().default(0),

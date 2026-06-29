@@ -26,7 +26,7 @@ export const genderEnum = pgEnum("gender", ["Male", "Female", "Other"]);
 
 export const employeesTable = pgTable("employees", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: text("employee_id").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),

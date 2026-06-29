@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { interviewRoundsTable } from "./interview_rounds";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const recommendationEnum = pgEnum("interview_recommendation", [
   "Strong Hire",
@@ -12,6 +13,7 @@ export const recommendationEnum = pgEnum("interview_recommendation", [
 
 export const interviewFeedbackTable = pgTable("interview_feedback", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   interviewRoundId: integer("interview_round_id").notNull().references(() => interviewRoundsTable.id),
   interviewerId: integer("interviewer_id").references(() => hrmsUsersTable.id),
   technicalScore: integer("technical_score"),

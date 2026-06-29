@@ -27,7 +27,7 @@ export const sourceOfHireEnum = pgEnum("source_of_hire", [
 
 export const candidatesTable = pgTable("candidates", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   requisitionId: integer("requisition_id").references(() => jobRequisitionsTable.id),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),

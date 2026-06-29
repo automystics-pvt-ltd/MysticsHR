@@ -7,7 +7,6 @@ import { employeesTable } from "./employees";
 import { tenantsTable } from "./tenants";
 
 export const hrmsRoleEnum = pgEnum("hrms_role", [
-  "super_admin",
   "customer_admin",
   "hr_manager",
   "hr_executive",
@@ -18,7 +17,7 @@ export const hrmsRoleEnum = pgEnum("hrms_role", [
 
 export const hrmsUsersTable = pgTable("hrms_users", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   employeeId: integer("employee_id").references(() => employeesTable.id),
   email: text("email").notNull(),
   name: text("name").notNull(),

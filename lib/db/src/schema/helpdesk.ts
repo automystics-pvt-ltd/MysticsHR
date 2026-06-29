@@ -20,7 +20,7 @@ export const ticketStatusEnum = pgEnum("ticket_status", [
 // ─── HELPDESK TICKETS ─────────────────────────────────────────────────────────
 export const helpdeskTicketsTable = pgTable("helpdesk_tickets", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   subject: text("subject").notNull(),
   description: text("description").notNull(),
   category: ticketCategoryEnum("category").notNull(),
@@ -41,6 +41,7 @@ export const helpdeskTicketsTable = pgTable("helpdesk_tickets", {
 // ─── TICKET COMMENTS ──────────────────────────────────────────────────────────
 export const ticketCommentsTable = pgTable("ticket_comments", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   ticketId: integer("ticket_id").notNull().references(() => helpdeskTicketsTable.id),
   authorId: integer("author_id").notNull().references(() => hrmsUsersTable.id),
   message: text("message").notNull(),
@@ -51,6 +52,7 @@ export const ticketCommentsTable = pgTable("ticket_comments", {
 // ─── TICKET ATTACHMENTS ───────────────────────────────────────────────────────
 export const ticketAttachmentsTable = pgTable("ticket_attachments", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   ticketId: integer("ticket_id").notNull().references(() => helpdeskTicketsTable.id),
   commentId: integer("comment_id").references(() => ticketCommentsTable.id),
   uploadedByUserId: integer("uploaded_by_user_id").references(() => hrmsUsersTable.id),

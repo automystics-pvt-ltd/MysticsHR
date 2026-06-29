@@ -6,7 +6,7 @@ import { tenantsTable } from "./tenants";
 
 export const userNotificationsTable = pgTable("user_notifications", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   recipientUserId: integer("recipient_user_id").notNull().references(() => hrmsUsersTable.id),
   title: text("title").notNull(),
   message: text("message").notNull(),

@@ -28,7 +28,7 @@ export const appraisalOutcomeEnum = pgEnum("appraisal_outcome_label", [
 // ─── PERFORMANCE CYCLES ────────────────────────────────────────────────────────
 export const performanceCyclesTable = pgTable("performance_cycles", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   title: text("title").notNull(),
   cycleType: cycleTypeEnum("cycle_type").notNull().default("Annual"),
   startDate: date("start_date").notNull(),
@@ -44,7 +44,7 @@ export const performanceCyclesTable = pgTable("performance_cycles", {
 // ─── PERFORMANCE GOALS (KRA/KPI) ──────────────────────────────────────────────
 export const performanceGoalsTable = pgTable("performance_goals", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   cycleId: integer("cycle_id").notNull().references(() => performanceCyclesTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   title: text("title").notNull(),
@@ -61,6 +61,7 @@ export const performanceGoalsTable = pgTable("performance_goals", {
 // ─── GOAL PROGRESS UPDATES ────────────────────────────────────────────────────
 export const goalProgressTable = pgTable("goal_progress", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   goalId: integer("goal_id").notNull().references(() => performanceGoalsTable.id),
   progressPercent: integer("progress_percent").notNull().default(0),
   commentary: text("commentary"),
@@ -71,6 +72,7 @@ export const goalProgressTable = pgTable("goal_progress", {
 // ─── SELF APPRAISALS ──────────────────────────────────────────────────────────
 export const selfAppraisalsTable = pgTable("self_appraisals", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   goalId: integer("goal_id").notNull().references(() => performanceGoalsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   rating: integer("rating").notNull(),
@@ -81,6 +83,7 @@ export const selfAppraisalsTable = pgTable("self_appraisals", {
 // ─── MANAGER EVALUATIONS ──────────────────────────────────────────────────────
 export const managerEvaluationsTable = pgTable("manager_evaluations", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   goalId: integer("goal_id").notNull().references(() => performanceGoalsTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   rating: integer("rating").notNull(),
@@ -92,7 +95,7 @@ export const managerEvaluationsTable = pgTable("manager_evaluations", {
 // ─── APPRAISAL OUTCOMES ───────────────────────────────────────────────────────
 export const appraisalOutcomesTable = pgTable("appraisal_outcomes", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenantsTable.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   cycleId: integer("cycle_id").notNull().references(() => performanceCyclesTable.id),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
   finalScore: numeric("final_score", { precision: 5, scale: 2 }),

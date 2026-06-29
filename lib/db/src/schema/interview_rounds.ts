@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { candidatesTable } from "./candidates";
 import { hrmsUsersTable } from "./hrms_users";
+import { tenantsTable } from "./tenants";
 
 export const interviewStatusEnum = pgEnum("interview_status", [
   "Scheduled",
@@ -11,6 +12,7 @@ export const interviewStatusEnum = pgEnum("interview_status", [
 
 export const interviewRoundsTable = pgTable("interview_rounds", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenantsTable.id),
   candidateId: integer("candidate_id").notNull().references(() => candidatesTable.id),
   roundNumber: integer("round_number").notNull().default(1),
   roundName: text("round_name").notNull(),
