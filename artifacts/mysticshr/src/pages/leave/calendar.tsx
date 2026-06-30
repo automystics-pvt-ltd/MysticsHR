@@ -118,13 +118,13 @@ export default function LeaveCalendarPage() {
       <Card className="border shadow-none">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-4">
-            <Button variant="ghost" size="sm" onClick={() => goMonth(-1)}><ChevronLeft className="w-4 h-4" /></Button>
-            <h2 className="font-semibold text-gray-700">{monthName}</h2>
-            <Button variant="ghost" size="sm" onClick={() => goMonth(1)}><ChevronRight className="w-4 h-4" /></Button>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg shadow-none" onClick={() => goMonth(-1)}><ChevronLeft className="w-3.5 h-3.5" /></Button>
+            <h2 className="font-semibold text-foreground text-base tracking-tight">{monthName}</h2>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg shadow-none" onClick={() => goMonth(1)}><ChevronRight className="w-3.5 h-3.5" /></Button>
           </div>
           <div className="grid grid-cols-7 gap-1">
             {days.map(d => (
-              <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
+              <div key={d} className="text-center text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground py-1">{d}</div>
             ))}
             {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
             {Array.from({ length: numDays }, (_, i) => i + 1).map(day => {
@@ -136,8 +136,8 @@ export default function LeaveCalendarPage() {
                 return day >= from && day <= to;
               });
               return (
-                <div key={day} className={`min-h-[72px] rounded p-1 border ${isToday ? "border-blue-400 bg-blue-50" : "border-gray-100"} ${isBlackout ? "bg-red-50" : ""}`}>
-                  <div className={`text-xs font-medium mb-1 ${isToday ? "text-blue-600" : "text-gray-600"}`}>{day}</div>
+                <div key={day} className={`min-h-[72px] rounded-lg p-1.5 border transition-colors ${isToday ? "border-primary/50 bg-primary/5 shadow-sm" : "border-border"} ${isBlackout ? "bg-destructive/5 border-destructive/30" : ""}`}>
+                  <div className={`text-xs font-semibold mb-1 ${isToday ? "text-primary" : "text-foreground/70"}`}>{day}</div>
                   <div className="space-y-0.5">
                     {dayEntries.slice(0, 3).map((e, idx) => (
                       <div key={idx} className={`text-[10px] rounded px-1 truncate ${STATUS_COLORS[e.status] ?? "bg-gray-100"}`}>
@@ -145,7 +145,7 @@ export default function LeaveCalendarPage() {
                       </div>
                     ))}
                     {dayEntries.length > 3 && (
-                      <div className="text-[10px] text-gray-400">+{dayEntries.length - 3} more</div>
+                      <div className="text-[10px] text-muted-foreground">+{dayEntries.length - 3} more</div>
                     )}
                     {isBlackout && (
                       <div className="text-[10px] text-red-500 font-medium">Blackout</div>

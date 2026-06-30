@@ -671,19 +671,19 @@ function MyLeaveCalendar({ applications }: { applications: AppLite[] }) {
   );
 
   return (
-    <div className="border rounded-lg bg-white">
-      <div className="flex items-center justify-between p-3 border-b">
-        <Button variant="ghost" size="sm" onClick={() => setCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>
-          <ChevronLeft className="w-4 h-4" />
+    <div className="border rounded-xl bg-card">
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>
+          <ChevronLeft className="w-3.5 h-3.5" />
         </Button>
-        <h3 className="font-semibold text-gray-700 text-sm">{monthName}</h3>
-        <Button variant="ghost" size="sm" onClick={() => setCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>
-          <ChevronRight className="w-4 h-4" />
+        <h3 className="font-semibold text-sm tracking-tight">{monthName}</h3>
+        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>
+          <ChevronRight className="w-3.5 h-3.5" />
         </Button>
       </div>
       <div className="grid grid-cols-7 gap-1 p-3">
         {weekDays.map((d) => (
-          <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
+          <div key={d} className="text-center text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground py-1">{d}</div>
         ))}
         {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
         {Array.from({ length: numDays }, (_, i) => i + 1).map((day) => {
@@ -693,9 +693,9 @@ function MyLeaveCalendar({ applications }: { applications: AppLite[] }) {
             <div
               key={day}
               onClick={() => apps.length > 0 && setDayDetail({ date: new Date(year, monthIdx, day), apps })}
-              className={`min-h-[72px] rounded p-1 border ${isToday ? "border-blue-400 bg-blue-50" : "border-gray-100"} ${apps.length > 0 ? "cursor-pointer hover:bg-gray-50" : ""}`}
+              className={`min-h-[72px] rounded-lg p-1.5 border transition-colors ${isToday ? "border-primary/50 bg-primary/5 shadow-sm" : "border-border"} ${apps.length > 0 ? "cursor-pointer hover:bg-muted/50" : ""}`}
             >
-              <div className={`text-xs font-medium mb-1 ${isToday ? "text-blue-600" : "text-gray-600"}`}>{day}</div>
+              <div className={`text-xs font-semibold mb-1 ${isToday ? "text-primary" : "text-foreground/70"}`}>{day}</div>
               <div className="space-y-0.5">
                 {apps.slice(0, 3).map((a) => (
                   <button
