@@ -5,7 +5,7 @@ import {
   employeesTable,
   hrmsUsersTable,
 } from "@workspace/db/schema";
-import { and, eq, desc, isNull, or } from "drizzle-orm";
+import { and, eq, desc, isNull, or, lte, gte, notInArray } from "drizzle-orm";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 
@@ -77,6 +77,25 @@ router.post("/wfh", requireHrmsUser, async (req, res) => {
     }
     if (toDate < fromDate) {
       res.status(400).json({ error: "toDate must be on or after fromDate" });
+      return;
+    }
+
+    // Check for overlapping pending/approved WFH requests
+    const [overlap] = await db
+      .select({ id: wfhRequestsTable.id })
+      .from(wfhRequestsTable)
+      .where(
+        and(
+          eq(wfhRequestsTable.employeeId, employeeId),
+          eq(wfhRequestsTable.tenantId, tenantId),
+          notInArray(wfhRequestsTable.status, ["Rejected", "Cancelled"]),
+          lte(wfhRequestsTable.fromDate, toDate),
+          gte(wfhRequestsTable.toDate, fromDate),
+        ),
+      )
+      .limit(1);
+    if (overlap) {
+      res.status(422).json({ error: "You already have a WFH request overlapping these dates" });
       return;
     }
 

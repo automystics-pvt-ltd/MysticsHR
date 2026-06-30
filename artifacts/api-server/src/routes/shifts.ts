@@ -22,7 +22,7 @@ type ShiftSwapStatus = "Pending" | "Approved" | "Rejected";
 
 // --- SHIFT TEMPLATES ---
 
-router.get("/shifts/templates", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
+router.get("/shifts/templates", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const { isActive, departmentId } = req.query;
     const where: SQL<unknown>[] = [eq(shiftTemplatesTable.tenantId, req.hrmsUser!.tenantId)];

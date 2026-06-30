@@ -5,7 +5,7 @@ import {
   shiftTemplatesTable,
   shiftAssignmentsTable,
 } from "@workspace/db/schema";
-import { and, eq, desc, inArray } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull, or, lte, gte } from "drizzle-orm";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { employeesTable } from "@workspace/db/schema";
@@ -35,7 +35,7 @@ router.get("/shift-change-requests", requireHrmsUser, async (req, res) => {
         employeeId: shiftChangeRequestsTable.employeeId,
         firstName: employeesTable.firstName,
         lastName: employeesTable.lastName,
-        empCode: employeesTable.empCode,
+        empCode: employeesTable.employeeId,
         currentShiftId: shiftChangeRequestsTable.currentShiftId,
         requestedShiftId: shiftChangeRequestsTable.requestedShiftId,
         effectiveDate: shiftChangeRequestsTable.effectiveDate,
@@ -240,14 +240,38 @@ router.post(
         .where(eq(shiftChangeRequestsTable.id, id))
         .returning();
 
-      // If approved, insert a new shift assignment effective from the requested date
+      // If approved, close the old active assignment and create a new one in a transaction
       if (action === "Approved" && existing.requestedShiftId) {
-        await db.insert(shiftAssignmentsTable).values({
-          tenantId,
-          employeeId: existing.employeeId,
-          shiftTemplateId: existing.requestedShiftId,
-          effectiveFrom: existing.effectiveDate,
-          assignedById: userId,
+        const effectiveDate = existing.effectiveDate; // "YYYY-MM-DD"
+        // Calculate effectiveTo for the old assignment (day before effectiveDate)
+        const effectiveDateObj = new Date(effectiveDate + "T00:00:00Z");
+        effectiveDateObj.setUTCDate(effectiveDateObj.getUTCDate() - 1);
+        const dayBefore = effectiveDateObj.toISOString().split("T")[0];
+
+        await db.transaction(async (tx) => {
+          // Close current active assignment (effectiveTo = effectiveDate - 1 day)
+          await tx
+            .update(shiftAssignmentsTable)
+            .set({ effectiveTo: dayBefore, updatedAt: new Date() })
+            .where(
+              and(
+                eq(shiftAssignmentsTable.employeeId, existing.employeeId),
+                eq(shiftAssignmentsTable.tenantId, tenantId),
+                or(
+                  isNull(shiftAssignmentsTable.effectiveTo),
+                  gte(shiftAssignmentsTable.effectiveTo, effectiveDate),
+                ),
+              ),
+            );
+
+          // Insert the new assignment
+          await tx.insert(shiftAssignmentsTable).values({
+            tenantId,
+            employeeId: existing.employeeId,
+            shiftTemplateId: existing.requestedShiftId!,
+            effectiveFrom: effectiveDate,
+            assignedById: userId,
+          });
         });
       }
 

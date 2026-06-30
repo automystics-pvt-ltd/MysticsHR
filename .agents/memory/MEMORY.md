@@ -1,1 +1,6 @@
 - [Platform Admin bug patterns](platform-admin-patterns.md) — wouter v3 Link renders as <a>; pass className directly, never wrap with <a>. Use AlertDialog + state instead of confirm(), useToast instead of alert().
+- [Expense state machine](expense-state-machine.md) — Expense claims: Draft→Submit(needs items)→Approved/Rejected→Paid; all transitions server-enforced.
+- [Shift assignment overlap](shift-assignment-overlap.md) — When approving a shift change, old assignment must be closed (effectiveTo = effectiveDate-1) in the same transaction as the new insert.
+- [Payroll India compliance](payroll-india-compliance.md) — PF cap ₹15K basic/12%, ESI eligibility ≤₹21K, PT Karnataka slabs, new regime std deduction ₹75K (FY2024-25).
+- [WFH overlap guard](wfh-overlap-guard.md) — WFH create must check notInArray(status, ['Rejected','Cancelled']) + date overlap before insert.
+- [Shift templates access](shift-templates-access.md) — GET /shifts/templates must be ALL_ROLES so employees can select a shift when submitting shift-change requests.

@@ -44,6 +44,7 @@ interface ExpenseClaim {
   financeRemarks?: string | null;
   paidDate?: string | null;
   createdAt: string;
+  itemCount?: number;
   items?: ExpenseItem[];
 }
 
@@ -217,7 +218,8 @@ export default function ExpensePage() {
                         variant="outline"
                         className="h-7 text-xs"
                         onClick={(e) => { e.stopPropagation(); submitMut.mutate(c.id); }}
-                        disabled={submitMut.isPending}
+                        disabled={submitMut.isPending || (c.itemCount ?? 0) === 0}
+                        title={(c.itemCount ?? 0) === 0 ? "Add at least one item before submitting" : undefined}
                       >
                         <Send className="w-3 h-3 mr-1" /> Submit
                       </Button>

@@ -37,6 +37,7 @@ router.get("/expense-claims", requireHrmsUser, async (req, res) => {
         firstName: employeesTable.firstName,
         lastName: employeesTable.lastName,
         empCode: employeesTable.employeeId,
+        itemCount: sql<number>`(SELECT COUNT(*) FROM expense_claim_items WHERE claim_id = ${expenseClaimsTable.id})::int`,
       })
       .from(expenseClaimsTable)
       .leftJoin(employeesTable, eq(expenseClaimsTable.employeeId, employeesTable.id))
@@ -107,6 +108,18 @@ router.post("/expense-claims", requireHrmsUser, async (req, res) => {
       return;
     }
 
+    for (const item of items) {
+      const a = Number(item.amount);
+      if (!item.category || !item.description || !item.expenseDate) {
+        res.status(400).json({ error: "Each item must have category, description, and expenseDate" });
+        return;
+      }
+      if (isNaN(a) || a <= 0) {
+        res.status(400).json({ error: "Each item amount must be a positive number" });
+        return;
+      }
+    }
+
     const totalAmount = items.reduce((sum, i) => sum + Number(i.amount), 0).toFixed(2);
 
     const [claim] = await db
@@ -153,6 +166,16 @@ router.post("/expense-claims/:id/submit", requireHrmsUser, async (req, res) => {
     if (claim.employeeId !== employeeId) { res.status(403).json({ error: "Forbidden" }); return; }
     if (claim.status !== "Draft") { res.status(422).json({ error: "Only Draft claims can be submitted" }); return; }
 
+    // Must have at least one item
+    const [itemCount] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(expenseClaimItemsTable)
+      .where(eq(expenseClaimItemsTable.claimId, id));
+    if (!itemCount || itemCount.count === 0) {
+      res.status(422).json({ error: "Claim must have at least one item before submitting" });
+      return;
+    }
+
     const [updated] = await db
       .update(expenseClaimsTable)
       .set({ status: "Submitted", updatedAt: new Date() })
@@ -186,9 +209,19 @@ router.post("/expense-claims/:id/items", requireHrmsUser, async (req, res) => {
 
     const { category, description, amount, receiptUrl, expenseDate } = req.body;
 
+    if (!category || !description || !expenseDate) {
+      res.status(400).json({ error: "category, description, and expenseDate are required" });
+      return;
+    }
+    const parsedAmount = Number(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      res.status(400).json({ error: "amount must be a positive number" });
+      return;
+    }
+
     const [item] = await db
       .insert(expenseClaimItemsTable)
-      .values({ claimId: id, tenantId, category, description, amount: String(amount), receiptUrl, expenseDate })
+      .values({ claimId: id, tenantId, category, description, amount: String(parsedAmount), receiptUrl: receiptUrl ?? null, expenseDate })
       .returning();
 
     // Recalculate total
@@ -255,6 +288,19 @@ router.post("/expense-claims/:id/action", requireHrmsUser, async (req, res) => {
     const [existing] = await db.select().from(expenseClaimsTable)
       .where(and(eq(expenseClaimsTable.id, id), eq(expenseClaimsTable.tenantId, tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+    // State machine validation
+    if (action === "Approved" || action === "Rejected") {
+      if (existing.status !== "Submitted") {
+        res.status(422).json({ error: `Can only approve/reject a Submitted claim (current status: ${existing.status})` });
+        return;
+      }
+    } else if (action === "Paid") {
+      if (existing.status !== "Approved") {
+        res.status(422).json({ error: "Can only mark an Approved claim as Paid" });
+        return;
+      }
+    }
 
     const now = new Date();
     let updateFields: Record<string, unknown> = { updatedAt: now };
