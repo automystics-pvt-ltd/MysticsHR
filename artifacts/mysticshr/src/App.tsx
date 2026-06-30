@@ -686,6 +686,9 @@ function AppRoutes() {
             </RoleProtectedRoute>
           </ProtectedRoute>
         </Route>
+        <Route path="/settings">
+          <Redirect to="/settings/security" />
+        </Route>
         <Route path="/settings/security">
           <ProtectedRoute>
             <RoleProtectedRoute allowedRoles={["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin", "employee"]}>
