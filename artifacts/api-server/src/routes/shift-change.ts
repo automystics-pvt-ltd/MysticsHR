@@ -8,6 +8,7 @@ import {
 import { and, eq, desc, inArray, isNull, or, lte, gte } from "drizzle-orm";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
+import { notifyEmployee, notifyUser } from "../lib/notification-service";
 import { employeesTable } from "@workspace/db/schema";
 
 const router = Router();
@@ -129,6 +130,7 @@ router.post("/shift-change-requests", requireHrmsUser, async (req, res) => {
       .returning();
 
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "SHIFT_CHANGE", recordId: created.id, ipAddress: req.ip });
+    notifyUser({ tenantId, userId: req.hrmsUser!.id, title: "Shift Change Request Submitted", message: `Your shift change request effective ${effectiveDate} is pending approval.`, entityType: "shift_change_request", entityId: created.id }).catch(() => {});
     res.status(201).json(created);
   } catch (e) {
     console.error(e);
@@ -276,6 +278,7 @@ router.post(
       }
 
       await logAudit({ user: req.hrmsUser, action: `ACTION_${action.toUpperCase()}`, module: "SHIFT_CHANGE", recordId: id, ipAddress: req.ip });
+      notifyEmployee({ tenantId, employeeId: existing.employeeId!, title: `Shift Change Request ${action}`, message: `Your shift change request has been ${action.toLowerCase()}.`, entityType: "shift_change_request", entityId: id }).catch(() => {});
       res.json(updated);
     } catch (e) {
       console.error(e);

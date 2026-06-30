@@ -1,3 +1,5 @@
 - [RBAC module visibility fix](rbac-module-visibility.md) — modules missing from MODULE_REGISTRY are silently hidden from nav; add to both client + server registries.
 - [API client dist d.ts files](api-client-dist-types.md) — both `lib/api-client-react/src/generated/api.schemas.ts` AND `lib/api-client-react/dist/generated/api.schemas.d.ts` must be updated together or TS resolves stale types.
 - [Attendance suspicion config](attendance-suspicion-config.md) — requireGps toggle persists in system_settings; clock-in endpoint enforces it server-side; schema in both src and dist d.ts must match.
+- [Approval notifications pattern](approval-notifications.md) — notifyUser() at submit + notifyEmployee() at approve/reject; fire-and-forget .catch(()=>{}) before res.json()
+- [NotificationBell fetch pattern](notification-bell-fetch.md) — TanStack Query with inline apiFetch (BASE_URL+/api, credentials:include); polls /notifications + /unread-count every 30s; mark-read on click

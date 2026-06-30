@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import { db } from "./db";
-import { notificationLogsTable, notificationTemplatesTable, notificationPreferencesTable, systemSettingsTable, employeesTable, candidatesTable } from "@workspace/db/schema";
+import { notificationLogsTable, notificationTemplatesTable, notificationPreferencesTable, systemSettingsTable, employeesTable, candidatesTable, hrmsUsersTable, userNotificationsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 
 /**
@@ -633,4 +633,56 @@ function getDefaultWhatsAppMsg(eventType: string, vars: Record<string, string>):
     onboarding_doc_pending: `MysticsHR: You have pending pre-onboarding documents. Please complete them before ${vars.joiningDate ?? "your joining date"}.`,
   };
   return msgs[eventType] ?? `MysticsHR notification: ${eventType.replace(/_/g, " ")}`;
+}
+
+/**
+ * Create an in-app notification for a specific hrms user (by userId).
+ * Use this when you already have the userId (e.g. the submitting user).
+ * Fire-and-forget: errors are silently swallowed.
+ */
+export async function notifyUser(params: {
+  tenantId: number;
+  userId: number;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+}): Promise<void> {
+  await db.insert(userNotificationsTable).values({
+    tenantId: params.tenantId,
+    recipientUserId: params.userId,
+    title: params.title,
+    message: params.message,
+    entityType: params.entityType ?? null,
+    entityId: params.entityId ?? null,
+  });
+}
+
+/**
+ * Create an in-app notification for the hrms user linked to a given employeeId.
+ * Use this when you only have the employee's DB id (e.g. the approver notifying the submitter).
+ * Fire-and-forget: errors are silently swallowed.
+ */
+export async function notifyEmployee(params: {
+  tenantId: number;
+  employeeId: number;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+}): Promise<void> {
+  const [user] = await db
+    .select({ id: hrmsUsersTable.id })
+    .from(hrmsUsersTable)
+    .where(and(eq(hrmsUsersTable.employeeId, params.employeeId), eq(hrmsUsersTable.tenantId, params.tenantId)))
+    .limit(1);
+  if (!user) return;
+  await db.insert(userNotificationsTable).values({
+    tenantId: params.tenantId,
+    recipientUserId: user.id,
+    title: params.title,
+    message: params.message,
+    entityType: params.entityType ?? null,
+    entityId: params.entityId ?? null,
+  });
 }

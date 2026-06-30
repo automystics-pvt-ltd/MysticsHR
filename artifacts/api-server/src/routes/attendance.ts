@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
+import { notifyEmployee, notifyUser } from "../lib/notification-service";
 import { db } from "../lib/db";
 import { checkPayrollLock } from "../lib/payroll-lock";
 import {
@@ -443,6 +444,7 @@ router.post("/attendance/regularizations", requireHrmsUser, requireRole(...ALL_R
     }
 
     await logAudit({ user: req.hrmsUser, action: "REGULARIZATION_REQUEST", module: "Attendance", recordId: created.id, newValue: body.attendanceDate, ipAddress: req.ip });
+    notifyUser({ tenantId: req.hrmsUser!.tenantId, userId: req.hrmsUser!.id, title: "Regularization Request Submitted", message: `Your attendance regularization request for ${body.attendanceDate} is pending approval.`, entityType: "attendance_regularization", entityId: created.id }).catch(() => {});
     res.status(201).json(created);
   } catch (err) {
     console.error(err);
@@ -540,6 +542,7 @@ router.post("/attendance/regularizations/:id/action", requireHrmsUser, requireRo
     });
 
     await logAudit({ user: req.hrmsUser, action: `REGULARIZATION_${action.toUpperCase()}`, module: "Attendance", recordId: regId, newValue: action, ipAddress: req.ip });
+    notifyEmployee({ tenantId: req.hrmsUser!.tenantId, employeeId: reg.employeeId as number, title: `Regularization Request ${action}`, message: `Your attendance regularization request for ${reg.attendanceDate} has been ${action.toLowerCase()}.`, entityType: "attendance_regularization", entityId: regId }).catch(() => {});
     res.json(updated);
   } catch (err) {
     console.error(err);

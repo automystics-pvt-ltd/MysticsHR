@@ -8,6 +8,7 @@ import {
 import { and, eq, desc, isNull, or, lte, gte, notInArray } from "drizzle-orm";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
+import { notifyEmployee, notifyUser } from "../lib/notification-service";
 
 const router = Router();
 
@@ -105,6 +106,7 @@ router.post("/wfh", requireHrmsUser, async (req, res) => {
       .returning();
 
     await logAudit({ user: req.hrmsUser, action: "CREATE", module: "WFH", recordId: row.id, ipAddress: req.ip });
+    notifyUser({ tenantId, userId: req.hrmsUser!.id, title: "WFH Request Submitted", message: `Your WFH request (${fromDate} – ${toDate}) is pending approval.`, entityType: "wfh_request", entityId: row.id }).catch(() => {});
     res.status(201).json(row);
   } catch (err) {
     console.error(err);
@@ -191,6 +193,7 @@ router.post("/wfh/:id/action", requireHrmsUser, async (req, res) => {
       .returning();
 
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "WFH", recordId: id, ipAddress: req.ip });
+    notifyEmployee({ tenantId, employeeId: existing.employeeId!, title: `WFH Request ${action}`, message: `Your WFH request has been ${action.toLowerCase()}.`, entityType: "wfh_request", entityId: id }).catch(() => {});
     res.json(updated);
   } catch (err) {
     console.error(err);

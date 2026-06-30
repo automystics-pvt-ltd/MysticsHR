@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireHrmsUser, requireRole } from "../lib/auth";
-import { dispatchNotification } from "../lib/notification-service";
+import { dispatchNotification, notifyEmployee, notifyUser } from "../lib/notification-service";
 import { logAudit } from "../lib/audit";
 import { db } from "../lib/db";
 import { checkPayrollLock } from "../lib/payroll-lock";
@@ -864,6 +864,7 @@ router.post("/leave/applications", requireHrmsUser, requireRole(...ALL_ROLES), a
     });
 
     await logAudit({ user: req.hrmsUser, action: "SUBMIT_LEAVE", module: "Leave", recordId: app.id, newValue: `${leaveType.code} ${fromDate}~${toDate}`, ipAddress: req.ip });
+    notifyUser({ tenantId, userId: req.hrmsUser!.id, title: "Leave Request Submitted", message: `Your ${leaveType.name} leave request (${fromDate} – ${toDate}) is pending approval.`, entityType: "leave_application", entityId: app.id }).catch(() => {});
     // Notify HOD/HR about new leave application
     const empInfo = await db.select({ name: employeesTable.firstName, lastName: employeesTable.lastName })
       .from(employeesTable).where(and(eq(employeesTable.id, app.employeeId), eq(employeesTable.tenantId, tenantId))).then(r => r[0]);
@@ -952,6 +953,7 @@ router.post("/leave/applications/:id/hod-action", requireHrmsUser, requireRole("
     });
 
     await logAudit({ user: req.hrmsUser, action: `HOD_${action.toUpperCase()}_LEAVE`, module: "Leave", recordId: appId, newValue: action, ipAddress: req.ip });
+    notifyEmployee({ tenantId, employeeId: app.employeeId, title: `Leave Request ${action}`, message: `Your leave request has been ${action.toLowerCase()} by your manager.`, entityType: "leave_application", entityId: appId }).catch(() => {});
     res.json(updated);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -1012,6 +1014,7 @@ router.post("/leave/applications/:id/hr-action", requireHrmsUser, requireRole(..
     });
 
     await logAudit({ user: req.hrmsUser, action: `HR_${action.toUpperCase()}_LEAVE`, module: "Leave", recordId: appId, newValue: action, ipAddress: req.ip });
+    notifyEmployee({ tenantId, employeeId: app.employeeId, title: `Leave Request ${action}`, message: `Your leave request has been ${action.toLowerCase()} by HR.`, entityType: "leave_application", entityId: appId }).catch(() => {});
     // Notify employee about leave decision
     const [empUser] = await db.select({ email: hrmsUsersTable.email, name: hrmsUsersTable.name })
       .from(hrmsUsersTable).where(and(eq(hrmsUsersTable.employeeId, app.employeeId), eq(hrmsUsersTable.tenantId, tenantId)));

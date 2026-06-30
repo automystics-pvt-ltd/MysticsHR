@@ -8,6 +8,7 @@ import {
 import { and, eq, desc, sql } from "drizzle-orm";
 import { requireHrmsUser } from "../lib/auth";
 import { logAudit } from "../lib/audit";
+import { notifyEmployee, notifyUser } from "../lib/notification-service";
 
 const router = Router();
 
@@ -183,6 +184,7 @@ router.post("/expense-claims/:id/submit", requireHrmsUser, async (req, res) => {
       .returning();
 
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "ExpenseClaims", recordId: id, ipAddress: req.ip });
+    notifyUser({ tenantId, userId: req.hrmsUser!.id, title: "Expense Claim Submitted", message: `Your expense claim "${updated?.title ?? ""}" is pending approval.`, entityType: "expense_claim", entityId: id }).catch(() => {});
     res.json(updated);
   } catch (err) {
     console.error(err);
@@ -317,6 +319,9 @@ router.post("/expense-claims/:id/action", requireHrmsUser, async (req, res) => {
 
     const [updated] = await db.update(expenseClaimsTable).set(updateFields).where(eq(expenseClaimsTable.id, id)).returning();
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "ExpenseClaims", recordId: id, ipAddress: req.ip });
+    if (action === "Approved" || action === "Rejected") {
+      notifyEmployee({ tenantId, employeeId: existing.employeeId!, title: `Expense Claim ${action}`, message: `Your expense claim "${existing.title}" has been ${action.toLowerCase()}.`, entityType: "expense_claim", entityId: id }).catch(() => {});
+    }
     res.json(updated);
   } catch (err) {
     console.error(err);

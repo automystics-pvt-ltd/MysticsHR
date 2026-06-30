@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
+import { notifyEmployee, notifyUser } from "../lib/notification-service";
 import { db } from "../lib/db";
 import {
   permissionApplicationsTable,
@@ -355,6 +356,7 @@ router.post("/permissions", requireHrmsUser, requireRole(...ALL_ROLES), async (r
     }).returning();
 
     await logAudit({ user: req.hrmsUser!, action: "SUBMIT_PERMISSION", module: "Permissions", recordId: created.id, newValue: `${permissionDate} ${startTime}-${endTime}`, ipAddress: req.ip });
+    notifyUser({ tenantId: req.hrmsUser!.tenantId, userId: req.hrmsUser!.id, title: "Permission Request Submitted", message: `Your permission request for ${permissionDate} (${startTime}–${endTime}) is pending approval.`, entityType: "permission_application", entityId: created.id }).catch(() => {});
     res.status(201).json(created);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -457,6 +459,7 @@ router.post("/permissions/:id/action", requireHrmsUser, requireRole("customer_ad
     });
 
     await logAudit({ user: req.hrmsUser!, action: `${action.toUpperCase()}_PERMISSION`, module: "Permissions", recordId: permId, newValue: action, ipAddress: req.ip });
+    notifyEmployee({ tenantId: req.hrmsUser!.tenantId, employeeId: perm.employeeId, title: `Permission Request ${action}`, message: `Your permission request for ${perm.permissionDate} has been ${action.toLowerCase()}.`, entityType: "permission_application", entityId: permId }).catch(() => {});
     res.json(updated);
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "LIMIT_EXCEEDED") {
