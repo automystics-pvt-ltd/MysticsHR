@@ -728,7 +728,8 @@ function CustomEmployeeFieldsTab() {
     try {
       const r = await fetch(`${BASE_URL}/api/custom-fields`, { credentials: "include" });
       if (r.ok) setFields(await r.json() as CustomField[]);
-    } catch { /* ignore */ } finally { setLoading(false); }
+      else toast({ title: "Failed to load custom fields", variant: "destructive" });
+    } catch (e) { console.error("custom-fields fetch error", e); } finally { setLoading(false); }
   };
 
   useEffect(() => { void fetchFields(); }, []);
@@ -850,7 +851,8 @@ function LeaveBlackoutsTab() {
     try {
       const r = await fetch(`${BASE_URL}/api/leave-blackouts`, { credentials: "include" });
       if (r.ok) setBlackouts(await r.json() as LeaveBlackout[]);
-    } catch { /* ignore */ } finally { setLoading(false); }
+      else toast({ title: "Failed to load leave blackouts", variant: "destructive" });
+    } catch (e) { console.error("leave-blackouts fetch error", e); } finally { setLoading(false); }
   };
 
   useEffect(() => { void fetchBlackouts(); }, []);

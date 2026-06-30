@@ -16,6 +16,7 @@ import {
   useHrActionLeave,
   getListLeaveApplicationsQueryKey,
 } from "@workspace/api-client-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   CheckCircle, XCircle, ClipboardList, Inbox,
   Home as HomeIcon, Receipt, CalendarDays, Timer, RefreshCcw, ArrowLeftRight,
@@ -78,27 +79,29 @@ export default function ApprovalsHubPage() {
   const [remarks, setRemarks] = useState("");
   const [actionError, setActionError] = useState("");
 
-  const { data: leaveApplications = [] } = useListLeaveApplications({});
+  const { data: leaveApplications = [], isLoading: leaveLoading } = useListLeaveApplications({});
 
-  const { data: wfhRequests = [] } = useQuery({
+  const { data: wfhRequests = [], isLoading: wfhLoading } = useQuery({
     queryKey: ["wfh-requests-hub"],
     queryFn: () => apiFetch<{ id: number; firstName?: string; lastName?: string; fromDate: string; toDate: string; reason: string; status: string; createdAt: string }[]>("/wfh"),
   });
 
-  const { data: expenseClaims = [] } = useQuery({
+  const { data: expenseClaims = [], isLoading: expenseLoading } = useQuery({
     queryKey: ["expense-claims-hub"],
     queryFn: () => apiFetch<{ id: number; firstName?: string; lastName?: string; title: string; claimDate: string; totalAmount: string; status: string }[]>("/expense-claims"),
   });
 
-  const { data: regularizations = [] } = useQuery({
+  const { data: regularizations = [], isLoading: regLoading } = useQuery({
     queryKey: ["regularizations-hub"],
     queryFn: () => apiFetch<{ id: number; firstName?: string; lastName?: string; empCode?: string; attendanceDate: string; requestedSignIn?: string; requestedSignOut?: string; reason: string; status: string; createdAt: string }[]>("/attendance/regularizations"),
   });
 
-  const { data: shiftChangeRequests = [] } = useQuery({
+  const { data: shiftChangeRequests = [], isLoading: shiftLoading } = useQuery({
     queryKey: ["shift-change-requests-hub"],
     queryFn: () => apiFetch<{ id: number; employeeName: string; currentShiftName: string; requestedShiftName: string; effectiveDate: string; reason: string; status: string }[]>("/shift-change-requests"),
   });
+
+  const isPageLoading = leaveLoading || wfhLoading || expenseLoading || regLoading || shiftLoading;
 
   const hodLeaveMut = useHodActionLeave();
   const hrLeaveMut = useHrActionLeave();
@@ -224,6 +227,24 @@ export default function ApprovalsHubPage() {
         </Card>
       )}
 
+      {isPageLoading ? (
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-4 w-1/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                    <Skeleton className="h-3 w-1/4" />
+                  </div>
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
       <Tabs defaultValue="leave">
         <TabsList className="flex flex-wrap h-auto gap-1">
           <TabsTrigger value="leave">
@@ -388,6 +409,7 @@ export default function ApprovalsHubPage() {
           )}
         </TabsContent>
       </Tabs>
+      )}
 
       {/* Confirm Action Dialog */}
       <Dialog open={!!actionDialog} onOpenChange={() => setActionDialog(null)}>

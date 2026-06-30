@@ -4,3 +4,4 @@
 - [Approval notifications pattern](approval-notifications.md) — notifyUser() at submit + notifyEmployee() at approve/reject; fire-and-forget .catch(()=>{}) before res.json()
 - [NotificationBell fetch pattern](notification-bell-fetch.md) — TanStack Query with inline apiFetch (BASE_URL+/api, credentials:include); polls /notifications + /unread-count every 30s; mark-read on click
 - [Seed.ts tenantId pattern](seed-tenantid-pattern.md) — every DB insert in seed.ts needs tenantId; narrowed to number after null-guard at top of seed(); billing.ts Stripe URLs need `?? ""` and `customerId!`
+- [Toast system — Sonner only](toast-system.md) — @radix-ui/react-toast ToastProvider crashes (React bundling conflict); use-toast.ts is a shim routing all useToast()/toast() calls to Sonner; SonnerToaster mounted in App.tsx.

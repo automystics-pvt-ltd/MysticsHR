@@ -381,12 +381,18 @@ export default function OrgChartPage() {
   const [, setLocation] = useLocation();
   const [filters, setFilters] = useState<FilterState>(() => parseFiltersFromSearch(urlSearch));
 
-  // Re-hydrate when the URL changes externally (back button etc.)
+  // When we programmatically update the URL via updateFilters we don't want
+  // the effect below to re-parse and re-set the same filters (redundant render).
+  const skipUrlEffect = useRef(false);
+
+  // Re-hydrate when the URL changes externally (back button, share link, etc.)
   useEffect(() => {
+    if (skipUrlEffect.current) { skipUrlEffect.current = false; return; }
     setFilters(parseFiltersFromSearch(urlSearch));
   }, [urlSearch]);
 
   const updateFilters = useCallback((next: FilterState) => {
+    skipUrlEffect.current = true;
     setFilters(next);
     const newSearch = serialiseFiltersToSearch(next, urlSearch);
     // wouter setLocation accepts a path; preserve the current pathname.

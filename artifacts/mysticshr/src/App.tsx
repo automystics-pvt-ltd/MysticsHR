@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useCurrentHrmsUser, type HrmsRole, hasRole } from "@/lib/useCurrentHrmsUser";
 import { useMyPermissions } from "@/lib/useMyPermissions";
+import { Toaster as SonnerToaster } from "sonner";
 
 const LandingPage = lazy(() => import("@/pages/landing"));
 const LoginPage = lazy(() => import("@/pages/login"));
@@ -775,6 +776,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <AppRoutes />
+          <SonnerToaster richColors closeButton position="top-right" />
         </AuthProvider>
       </QueryClientProvider>
     </WouterRouter>
