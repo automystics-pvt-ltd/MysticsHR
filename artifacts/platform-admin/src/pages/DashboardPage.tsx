@@ -42,9 +42,9 @@ function KpiCard({ icon: Icon, label, value, sub, iconColor, href }: {
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
-            <p className="text-3xl font-bold text-foreground mt-1.5">
+            <div className="text-3xl font-bold text-foreground mt-1.5">
               {value == null ? <Skeleton className="h-9 w-16" /> : value.toLocaleString()}
-            </p>
+            </div>
             {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
           </div>
           <div className={`w-9 h-9 rounded-lg ${iconColor} flex items-center justify-center flex-shrink-0`}>

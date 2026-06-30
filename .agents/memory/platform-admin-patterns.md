@@ -9,9 +9,15 @@ In wouter v3, `<Link>` renders as an `<a>` tag directly. Pass `className` and al
 **Wrong:** `<Link href="..."><a className="...">text</a></Link>`
 **Right:** `<Link href="..." className="...">text</Link>`
 
-**Why:** wouter v2 used to accept `<a>` children and patch href; v3 changed to render itself as the anchor.
+**Why:** wouter v2 used to accept `<a>` children and patch href; v3 changed to render itself as the anchor. This affected AdminLayout sidebar nav, TenantsPage, TenantDetailPage, and DashboardPage.
 
 **How to apply:** Any time a Link wraps an <a> child in platform-admin, remove the inner <a> and hoist its className/props to Link.
+
+## Block-level elements inside <p>
+Never put block-level elements (div, Skeleton which renders as div, etc.) inside a `<p>` tag — invalid HTML that causes hydration errors.
+
+**Wrong:** `<p><Skeleton className="..." /></p>`
+**Right:** `<div className="..."><Skeleton className="..." /></div>` or use `<span>` for inline context.
 
 ## Confirm dialogs
 Use `AlertDialog` from `@/components/ui/alert-dialog` with a `confirmDlg` state object instead of `window.confirm()` or `alert()`. Pattern:

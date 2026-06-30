@@ -41,16 +41,14 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
             const active = location === href || location.startsWith(href + "/");
             return (
-              <Link key={href} href={href}>
-                <a className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer group ${
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-                }`}>
-                  <Icon className={`w-4 h-4 flex-shrink-0 ${active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground"}`} />
-                  <span className="flex-1">{label}</span>
-                  {active && <ChevronRight className="w-3 h-3 text-primary opacity-60" />}
-                </a>
+              <Link key={href} href={href} className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer group ${
+                active
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+              }`}>
+                <Icon className={`w-4 h-4 flex-shrink-0 ${active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground"}`} />
+                <span className="flex-1">{label}</span>
+                {active && <ChevronRight className="w-3 h-3 text-primary opacity-60" />}
               </Link>
             );
           })}
