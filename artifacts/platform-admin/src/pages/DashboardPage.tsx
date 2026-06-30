@@ -54,7 +54,7 @@ function KpiCard({ icon: Icon, label, value, sub, iconColor, href }: {
       </CardContent>
     </Card>
   );
-  if (href) return <Link href={href}><a className="block">{content}</a></Link>;
+  if (href) return <Link href={href} className="block">{content}</Link>;
   return content;
 }
 
@@ -158,9 +158,7 @@ export function DashboardPage() {
                 <Building2 className="w-4 h-4 text-muted-foreground" />
                 <CardTitle className="text-sm font-semibold">Recent Tenants</CardTitle>
               </div>
-              <Link href="/tenants">
-                <a className="text-xs text-primary hover:underline">View all</a>
-              </Link>
+              <Link href="/tenants" className="text-xs text-primary hover:underline">View all</Link>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -173,9 +171,7 @@ export function DashboardPage() {
                 {analytics.recentTenants.map((t) => (
                   <li key={t.id} className="flex items-center justify-between px-5 py-3 hover:bg-accent/30 transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
-                      <Link href={`/tenants/${t.id}`}>
-                        <a className="font-medium text-sm text-foreground hover:text-primary transition-colors truncate">{t.name}</a>
-                      </Link>
+                      <Link href={`/tenants/${t.id}`} className="font-medium text-sm text-foreground hover:text-primary transition-colors truncate">{t.name}</Link>
                       <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${STATUS_COLORS[t.status] ?? ""}`}>
                         {t.status}
                       </Badge>
@@ -202,9 +198,7 @@ export function DashboardPage() {
               <Clock className="w-4 h-4 text-muted-foreground" />
               <CardTitle className="text-sm font-semibold">Recent Platform Activity</CardTitle>
             </div>
-            <Link href="/audit-logs">
-              <a className="text-xs text-primary hover:underline">View all</a>
-            </Link>
+            <Link href="/audit-logs" className="text-xs text-primary hover:underline">View all</Link>
           </div>
         </CardHeader>
         <CardContent className="p-0">

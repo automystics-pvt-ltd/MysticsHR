@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Building2, Plus, ChevronRight, MoreHorizontal, Search } from "lucide-react";
@@ -46,6 +47,7 @@ export function TenantsPage() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [confirmDlg, setConfirmDlg] = useState<{ open: boolean; label: string; onConfirm: () => void }>({ open: false, label: "", onConfirm: () => {} });
   const [form, setForm] = useState({
     name: "", slug: "", status: "active", planId: "",
     contactEmail: "", industry: "", country: "", website: "", notes: "",
@@ -147,12 +149,10 @@ export function TenantsPage() {
             )) : filtered.map((t) => (
               <TableRow key={t.id} className="border-border hover:bg-accent/20 transition-colors">
                 <TableCell>
-                  <Link href={`/tenants/${t.id}`}>
-                    <a className="font-medium text-foreground hover:text-primary flex items-center gap-1.5 group">
-                      <Building2 className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary" />
-                      <span>{t.name}</span>
-                      <code className="text-[10px] text-muted-foreground bg-muted px-1 rounded ml-1">{t.slug}</code>
-                    </a>
+                  <Link href={`/tenants/${t.id}`} className="font-medium text-foreground hover:text-primary flex items-center gap-1.5 group">
+                    <Building2 className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary" />
+                    <span>{t.name}</span>
+                    <code className="text-[10px] text-muted-foreground bg-muted px-1 rounded ml-1">{t.slug}</code>
                   </Link>
                 </TableCell>
                 <TableCell>
@@ -174,7 +174,7 @@ export function TenantsPage() {
                 <TableCell>
                   <div className="flex items-center gap-1">
                     <Link href={`/tenants/${t.id}`}>
-                      <a><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"><ChevronRight className="w-3.5 h-3.5" /></Button></a>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"><ChevronRight className="w-3.5 h-3.5" /></Button>
                     </Link>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -184,7 +184,7 @@ export function TenantsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-popover border-popover-border">
                         <DropdownMenuItem asChild>
-                          <Link href={`/tenants/${t.id}`}><a className="w-full cursor-pointer">View Details</a></Link>
+                          <Link href={`/tenants/${t.id}`} className="w-full cursor-pointer">View Details</Link>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {t.status === "active" && (
@@ -207,7 +207,7 @@ export function TenantsPage() {
                         )}
                         {t.status !== "archived" && (
                           <DropdownMenuItem className="text-destructive focus:text-destructive"
-                            onClick={() => { if (confirm(`Archive "${t.name}"? This will suspend access.`)) updateMutation.mutate({ id: t.id, data: { status: "archived" } }); }}>
+                            onClick={() => setConfirmDlg({ open: true, label: `Archive "${t.name}"? This will suspend access immediately.`, onConfirm: () => updateMutation.mutate({ id: t.id, data: { status: "archived" } }) })}>
                             Archive
                           </DropdownMenuItem>
                         )}
@@ -302,6 +302,21 @@ export function TenantsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={confirmDlg.open} onOpenChange={o => !o && setConfirmDlg(d => ({ ...d, open: false }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDlg.label}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDlg.onConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

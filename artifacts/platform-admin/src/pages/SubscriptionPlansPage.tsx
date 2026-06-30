@@ -10,7 +10,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Users, Building2, GitBranch, Zap, CreditCard } from "lucide-react";
 
 const PLAN_TYPES = ["trial","starter","professional","enterprise","custom"] as const;
@@ -62,10 +64,12 @@ const emptyForm = {
 
 export function SubscriptionPlansPage() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [editPlan, setEditPlan] = useState<SubscriptionPlan | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [formError, setFormError] = useState<string | null>(null);
+  const [confirmDlg, setConfirmDlg] = useState<{ open: boolean; label: string; onConfirm: () => void }>({ open: false, label: "", onConfirm: () => {} });
 
   const { data, isLoading } = useQuery({
     queryKey: ["platform-plans"],
@@ -87,7 +91,7 @@ export function SubscriptionPlansPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.deletePlan(id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["platform-plans"] }),
-    onError: (e: Error) => alert(e.message),
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
   function resetForm() {
@@ -181,7 +185,7 @@ export function SubscriptionPlansPage() {
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => { if (confirm(`Delete "${plan.name}"?`)) deleteMutation.mutate(plan.id); }}>
+                      onClick={() => setConfirmDlg({ open: true, label: `Delete plan "${plan.name}"? This cannot be undone.`, onConfirm: () => deleteMutation.mutate(plan.id) })}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -384,6 +388,21 @@ export function SubscriptionPlansPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={confirmDlg.open} onOpenChange={o => !o && setConfirmDlg(d => ({ ...d, open: false }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDlg.label}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDlg.onConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -797,6 +798,7 @@ function BillingTab({ tenantId }: { tenantId: number }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [payDialog, setPayDialog] = useState<{ open: boolean; invoice: Invoice | null }>({ open: false, invoice: null });
   const [editBilling, setEditBilling] = useState(false);
+  const [confirmDlg, setConfirmDlg] = useState<{ open: boolean; label: string; onConfirm: () => void }>({ open: false, label: "", onConfirm: () => {} });
 
   const [createForm, setCreateForm] = useState({
     billingCycle: "monthly", amountCents: "", currency: "INR",
@@ -1061,7 +1063,7 @@ function BillingTab({ tenantId }: { tenantId: number }) {
                     )}
                     {inv.status !== "paid" && inv.status !== "void" && (
                       <Button size="sm" variant="ghost" className="h-6 text-xs px-1.5 text-muted-foreground hover:text-red-400"
-                        onClick={() => { if (confirm(`Void ${inv.invoiceNumber}?`)) voidM.mutate(inv.id); }}>
+                        onClick={() => setConfirmDlg({ open: true, label: `Void ${inv.invoiceNumber}? This cannot be undone.`, onConfirm: () => voidM.mutate(inv.id) })}>
                         <Ban className="w-3 h-3" />
                       </Button>
                     )}
@@ -1221,6 +1223,21 @@ function BillingTab({ tenantId }: { tenantId: number }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={confirmDlg.open} onOpenChange={o => !o && setConfirmDlg(d => ({ ...d, open: false }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDlg.label}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDlg.onConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1256,7 +1273,7 @@ export function TenantDetailPage() {
     return (
       <div className="p-6 text-center text-muted-foreground">
         Tenant not found.{" "}
-        <Link href="/tenants"><a className="text-primary hover:underline">Back to tenants</a></Link>
+        <Link href="/tenants" className="text-primary hover:underline">Back to tenants</Link>
       </div>
     );
   }
@@ -1267,10 +1284,8 @@ export function TenantDetailPage() {
     <div className="p-6 max-w-5xl mx-auto space-y-5">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm">
-        <Link href="/tenants">
-          <a className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronLeft className="w-4 h-4" />Tenants
-          </a>
+        <Link href="/tenants" className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+          <ChevronLeft className="w-4 h-4" />Tenants
         </Link>
         <span className="text-border">/</span>
         <span className="text-foreground font-medium">{tenant.name}</span>

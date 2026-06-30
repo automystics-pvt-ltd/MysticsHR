@@ -16,6 +16,7 @@ import {
   Clock, XCircle, DollarSign, TrendingUp, Ban,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-blue-500/15 text-blue-400 border-blue-500/20",
@@ -44,6 +45,7 @@ export function InvoicesPage() {
   const [search, setSearch] = useState("");
   const [payDialog, setPayDialog] = useState<PayDialogState>({ open: false, invoice: null });
   const [payForm, setPayForm] = useState({ paymentMethod: "Bank Transfer", referenceNumber: "", notes: "", paymentDate: "" });
+  const [confirmDlg, setConfirmDlg] = useState<{ open: boolean; label: string; onConfirm: () => void }>({ open: false, label: "", onConfirm: () => {} });
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["platform-invoices", statusFilter],
@@ -260,7 +262,7 @@ export function InvoicesPage() {
                         )}
                         {inv.status !== "paid" && inv.status !== "void" && (
                           <Button size="sm" variant="ghost" className="h-6 text-xs px-2 text-muted-foreground hover:text-red-400"
-                            onClick={() => { if (confirm(`Void invoice ${inv.invoiceNumber}?`)) voidM.mutate(inv.id); }}>
+                            onClick={() => setConfirmDlg({ open: true, label: `Void invoice ${inv.invoiceNumber}? This cannot be undone.`, onConfirm: () => voidM.mutate(inv.id) })}>
                             <XCircle className="w-3 h-3" />
                           </Button>
                         )}
@@ -344,6 +346,21 @@ export function InvoicesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={confirmDlg.open} onOpenChange={o => !o && setConfirmDlg(d => ({ ...d, open: false }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDlg.label}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDlg.onConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
