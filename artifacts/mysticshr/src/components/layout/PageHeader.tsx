@@ -23,14 +23,20 @@ export function PageHeader({
   compact = false,
 }: PageHeaderProps) {
   return (
-    <div className={cn("flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between", compact ? "mb-4" : "mb-6", className)}>
+    <div
+      className={cn(
+        "flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between",
+        compact ? "mb-4" : "mb-6",
+        className
+      )}
+    >
       <div className="flex items-start gap-3 min-w-0">
         {backHref && (
           <Link href={backHref}>
             <Button
               variant="ghost"
               size="icon"
-              className="mt-0.5 h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+              className="mt-0.5 h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
               aria-label="Go back"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -38,19 +44,24 @@ export function PageHeader({
           </Link>
         )}
         <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className={cn("font-bold text-foreground tracking-tight", compact ? "text-xl" : "text-2xl")}>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1
+              className={cn(
+                "font-bold text-foreground tracking-tight",
+                compact ? "text-xl" : "text-2xl"
+              )}
+            >
               {title}
             </h1>
             {badge}
           </div>
           {description && (
-            <p className="text-muted-foreground mt-0.5 text-sm">{description}</p>
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">{description}</p>
           )}
         </div>
       </div>
       {actions && (
-        <div className="flex items-center gap-2 shrink-0 flex-wrap mt-2 sm:mt-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap mt-3 sm:mt-0">
           {actions}
         </div>
       )}

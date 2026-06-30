@@ -466,7 +466,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-[100dvh] bg-muted/20">
       {/* Left panel — branding (hidden on mobile) */}
-      <div className="hidden lg:flex lg:w-[420px] flex-col justify-between bg-foreground p-10 shrink-0">
+      <div className="hidden lg:flex lg:w-[420px] flex-col justify-between bg-sidebar p-10 shrink-0" style={{ background: "hsl(252 56% 12%)" }}>
         <div>
           <div className="flex items-center gap-2 mb-12">
             <img src={`${BASE_URL}/logo.svg`} alt="MysticsHR" className="h-8 invert" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />

@@ -54,7 +54,11 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
   })();
 
   const displayName = hrmsUser?.name ?? "User";
-  const initial = displayName.charAt(0).toUpperCase();
+  const initials = displayName
+    .split(" ")
+    .slice(0, 2)
+    .map((n: string) => n.charAt(0).toUpperCase())
+    .join("");
 
   async function handleSignOut() {
     await logout();
@@ -63,7 +67,7 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
 
   return (
     <header
-      className="h-14 border-b border-border bg-background/95 backdrop-blur-sm flex items-center gap-2 px-3 md:px-5 shrink-0 sticky top-0 z-30"
+      className="h-14 border-b border-border bg-card/95 backdrop-blur-sm flex items-center gap-2 px-3 md:px-5 shrink-0 sticky top-0 z-30 shadow-sm"
       data-testid="app-topbar"
     >
       <SidebarMenuButton onOpen={onMobileMenuOpen} />
@@ -74,7 +78,12 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors text-sm">Home</Link>
+                <Link
+                  href="/dashboard"
+                  className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+                >
+                  Home
+                </Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             {active && (
@@ -82,10 +91,17 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
                   {trailingSegments.length === 0 ? (
-                    <BreadcrumbPage className="text-sm font-medium">{active.name}</BreadcrumbPage>
+                    <BreadcrumbPage className="text-sm font-medium text-foreground">
+                      {active.name}
+                    </BreadcrumbPage>
                   ) : (
                     <BreadcrumbLink asChild>
-                      <Link href={active.href} className="text-muted-foreground hover:text-foreground transition-colors text-sm">{active.name}</Link>
+                      <Link
+                        href={active.href}
+                        className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+                      >
+                        {active.name}
+                      </Link>
                     </BreadcrumbLink>
                   )}
                 </BreadcrumbItem>
@@ -96,10 +112,17 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
                   {s.isLast ? (
-                    <BreadcrumbPage className="text-sm font-medium">{s.label}</BreadcrumbPage>
+                    <BreadcrumbPage className="text-sm font-medium text-foreground">
+                      {s.label}
+                    </BreadcrumbPage>
                   ) : (
                     <BreadcrumbLink asChild>
-                      <Link href={s.href} className="text-muted-foreground hover:text-foreground transition-colors text-sm">{s.label}</Link>
+                      <Link
+                        href={s.href}
+                        className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+                      >
+                        {s.label}
+                      </Link>
                     </BreadcrumbLink>
                   )}
                 </BreadcrumbItem>
@@ -110,7 +133,7 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
       </div>
 
       {/* Page title — mobile */}
-      <div className="flex-1 md:hidden font-semibold text-base truncate">
+      <div className="flex-1 md:hidden font-semibold text-base truncate text-foreground">
         {active?.name ?? "MysticsHR"}
       </div>
 
@@ -118,14 +141,14 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
       <Button
         variant="outline"
         size="sm"
-        className="hidden sm:inline-flex items-center gap-2 text-muted-foreground h-8 px-3 min-w-[180px] max-w-[220px] justify-between bg-muted/50 border-border/60 hover:bg-muted"
+        className="hidden sm:inline-flex items-center gap-2 text-muted-foreground h-9 px-3 min-w-[190px] max-w-[240px] justify-between bg-muted/60 border-border hover:bg-muted hover:text-foreground rounded-lg"
         onClick={onCommandOpen}
         data-testid="topbar-search-trigger"
         aria-label="Search modules and pages"
       >
         <span className="flex items-center gap-2">
-          <Search className="w-3.5 h-3.5" />
-          <span className="text-xs">Search…</span>
+          <Search className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Search…</span>
         </span>
         <kbd className="hidden md:inline-flex items-center gap-0.5 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
           {isMac ? "⌘" : "Ctrl"}K
@@ -134,7 +157,7 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
       <Button
         variant="ghost"
         size="icon"
-        className="sm:hidden h-8 w-8"
+        className="sm:hidden h-9 w-9 text-muted-foreground hover:text-foreground"
         onClick={onCommandOpen}
         aria-label="Search"
       >
@@ -149,15 +172,15 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className="h-8 px-1.5 gap-2 hover:bg-muted rounded-lg"
+            className="h-9 px-1.5 gap-2 hover:bg-muted rounded-lg"
             data-testid="topbar-user-menu"
             aria-label="User menu"
           >
-            <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-semibold flex items-center justify-center text-xs">
-              {initial}
+            <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-xs shadow-sm">
+              {initials}
             </div>
             <div className="hidden lg:flex flex-col items-start min-w-0 max-w-[140px]">
-              <span className="text-xs font-medium leading-tight truncate w-full text-left">
+              <span className="text-xs font-semibold leading-tight truncate w-full text-left text-foreground">
                 {displayName}
               </span>
               <span className="text-[10px] text-muted-foreground leading-tight truncate w-full text-left">
@@ -166,14 +189,14 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
             </div>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-56 shadow-lg">
           <DropdownMenuLabel>
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold flex items-center justify-center text-sm shrink-0">
-                {initial}
+              <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-sm shrink-0">
+                {initials}
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="font-medium text-sm truncate">{displayName}</span>
+                <span className="font-semibold text-sm truncate">{displayName}</span>
                 <span className="text-xs text-muted-foreground font-normal truncate">
                   {formatRole(role)}
                 </span>
@@ -181,21 +204,29 @@ export function TopBar({ onMobileMenuOpen, onCommandOpen }: TopBarProps) {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setLocation("/ess")} data-testid="user-menu-profile">
-            <UserIcon className="w-4 h-4 mr-2 text-muted-foreground" />
+          <DropdownMenuItem
+            onClick={() => setLocation("/ess")}
+            data-testid="user-menu-profile"
+            className="gap-2"
+          >
+            <UserIcon className="w-4 h-4 text-muted-foreground" />
             My Profile
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setLocation("/settings/security")}>
-            <Shield className="w-4 h-4 mr-2 text-muted-foreground" />
+          <DropdownMenuItem onClick={() => setLocation("/settings/security")} className="gap-2">
+            <Shield className="w-4 h-4 text-muted-foreground" />
             Security
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setLocation("/settings/api-keys")}>
-            <Settings className="w-4 h-4 mr-2 text-muted-foreground" />
+          <DropdownMenuItem onClick={() => setLocation("/settings/api-keys")} className="gap-2">
+            <Settings className="w-4 h-4 text-muted-foreground" />
             Settings
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleSignOut} data-testid="user-menu-signout" className="text-destructive focus:text-destructive">
-            <LogOut className="w-4 h-4 mr-2" />
+          <DropdownMenuItem
+            onClick={handleSignOut}
+            data-testid="user-menu-signout"
+            className="text-destructive focus:text-destructive gap-2"
+          >
+            <LogOut className="w-4 h-4" />
             Sign Out
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -28,12 +28,18 @@ export interface AttendanceSuspicionConfig {
   maxRadiusMeters: number;
   /** Registered office locations. Empty list disables the radius rule. */
   offices: AttendanceSuspicionOffice[];
+  /**
+   * When true, clock-in is blocked if the employee's browser cannot provide
+   * GPS co-ordinates (denied permission or unsupported device).
+   */
+  requireGps: boolean;
 }
 
 export const DEFAULT_ATTENDANCE_SUSPICION_CONFIG: AttendanceSuspicionConfig = {
   maxAccuracyMeters: 200,
   maxRadiusMeters: 500,
   offices: [],
+  requireGps: false,
 };
 
 const CATEGORY = "attendance_suspicion";
@@ -81,6 +87,7 @@ export async function loadAttendanceSuspicionConfig(tenantId?: number): Promise<
     maxAccuracyMeters: clampNumber(v["maxAccuracyMeters"], DEFAULT_ATTENDANCE_SUSPICION_CONFIG.maxAccuracyMeters, 0),
     maxRadiusMeters: clampNumber(v["maxRadiusMeters"], DEFAULT_ATTENDANCE_SUSPICION_CONFIG.maxRadiusMeters, 0),
     offices: normalizeOffices(v["offices"]),
+    requireGps: v["requireGps"] === true,
   };
 }
 
@@ -90,6 +97,7 @@ export async function saveAttendanceSuspicionConfig(input: Partial<AttendanceSus
     maxAccuracyMeters: clampNumber(input.maxAccuracyMeters, current.maxAccuracyMeters, 0),
     maxRadiusMeters: clampNumber(input.maxRadiusMeters, current.maxRadiusMeters, 0),
     offices: input.offices ? normalizeOffices(input.offices) : current.offices,
+    requireGps: typeof input.requireGps === "boolean" ? input.requireGps : current.requireGps,
   };
   const conds = tenantId
     ? and(eq(systemSettingsTable.category, CATEGORY), eq(systemSettingsTable.key, KEY), eq(systemSettingsTable.tenantId, tenantId))

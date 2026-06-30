@@ -13,10 +13,14 @@ export const MODULE_REGISTRY = [
   { key: "attendance",        label: "Attendance",            group: "Time & Attendance" },
   { key: "leave",             label: "Leave",                 group: "Time & Attendance" },
   { key: "work-permissions",  label: "Permissions",           group: "Time & Attendance" },
+  { key: "wfh",               label: "Work From Home",        group: "Time & Attendance" },
+  { key: "shift-change",      label: "Shift Change",          group: "Time & Attendance" },
+  { key: "approvals",         label: "Approvals Hub",         group: "Time & Attendance" },
   { key: "payroll",           label: "Payroll",               group: "Payroll" },
   { key: "performance",       label: "Performance",           group: "Performance" },
   { key: "helpdesk",          label: "Helpdesk",              group: "Employee Services" },
   { key: "documents",         label: "Documents",             group: "Employee Services" },
+  { key: "expense-claims",    label: "Expense Claims",        group: "Employee Services" },
   { key: "communications",    label: "Communications",        group: "Employee Services" },
   { key: "exit",              label: "Exit & Offboarding",    group: "Separation" },
   { key: "analytics",         label: "Analytics",             group: "Insights" },
@@ -26,6 +30,7 @@ export const MODULE_REGISTRY = [
   { key: "audit-logs",        label: "Audit Logs",            group: "Administration" },
   { key: "system-config",     label: "System Configuration",  group: "Administration" },
   { key: "api-keys",          label: "API Keys",              group: "Administration" },
+  { key: "billing",           label: "Billing & Subscription",group: "Administration" },
 ] as const;
 
 export type ModuleKey = (typeof MODULE_REGISTRY)[number]["key"];

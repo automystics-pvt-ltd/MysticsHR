@@ -677,6 +677,13 @@ router.post("/attendance/me/clock-in", requireHrmsUser, requireRole(...ALL_ROLES
     if (existing?.signInTime) { res.status(422).json({ error: "You have already clocked in for today" }); return; }
 
     const telemetry = parseClockTelemetry(req.body, req.get("user-agent"));
+
+    const suspCfg = await loadAttendanceSuspicionConfig(req.hrmsUser!.tenantId);
+    if (suspCfg.requireGps && (telemetry.latitude == null || telemetry.longitude == null)) {
+      res.status(422).json({ error: "Location access is required to clock in. Please allow location permission in your browser and try again." });
+      return;
+    }
+
     const now = new Date();
     let record: typeof attendanceRecordsTable.$inferSelect | undefined;
     if (existing) {

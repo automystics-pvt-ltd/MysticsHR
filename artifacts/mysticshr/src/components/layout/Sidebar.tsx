@@ -13,7 +13,7 @@ export function SidebarMenuButton({ onOpen }: { onOpen: () => void }) {
   return (
     <button
       onClick={onOpen}
-      className="md:hidden p-2 rounded-md hover:bg-accent transition-colors"
+      className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
       aria-label="Open navigation menu"
     >
       <Menu className="w-5 h-5" />
@@ -67,7 +67,11 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
     setOpenGroups((s) => ({ ...s, [id]: !(s[id] ?? effectiveOpen[id]) }));
 
   const displayName = hrmsUser?.name ?? "User";
-  const initial = displayName.charAt(0).toUpperCase();
+  const initials = displayName
+    .split(" ")
+    .slice(0, 2)
+    .map((n: string) => n.charAt(0).toUpperCase())
+    .join("");
 
   async function handleSignOut() {
     await logout();
@@ -78,7 +82,7 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
     <TooltipProvider delayDuration={150}>
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm"
           onClick={() => setOpen(false)}
           aria-hidden="true"
         />
@@ -88,23 +92,34 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
         className={cn(
           "fixed inset-y-0 left-0 z-50 bg-sidebar border-r border-sidebar-border text-sidebar-foreground transition-all duration-200 ease-in-out flex flex-col md:translate-x-0 md:static",
           isOpen ? "translate-x-0" : "-translate-x-full",
-          collapsed ? "w-[60px]" : "w-60",
+          collapsed ? "w-[60px]" : "w-[230px]",
         )}
         data-testid="app-sidebar"
       >
         {/* Brand row */}
-        <div className={cn("h-14 border-b border-sidebar-border flex items-center justify-between gap-2 shrink-0", collapsed ? "px-2" : "px-3")}>
+        <div
+          className={cn(
+            "h-14 border-b border-sidebar-border flex items-center justify-between gap-2 shrink-0",
+            collapsed ? "px-2" : "px-3"
+          )}
+        >
           <Link
             href="/dashboard"
-            className="flex items-center gap-2.5 font-bold text-sidebar-primary min-w-0"
+            className="flex items-center gap-2.5 min-w-0"
           >
-            <img src={`${BASE}/logo.svg`} alt="MysticsHR" className="w-7 h-7 shrink-0" />
-            {!collapsed && <span className="text-base font-semibold truncate">MysticsHR</span>}
+            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0 shadow-sm">
+              <img src={`${BASE}/logo.svg`} alt="MysticsHR" className="w-4 h-4" />
+            </div>
+            {!collapsed && (
+              <span className="text-sm font-bold text-sidebar-primary truncate tracking-tight">
+                MysticsHR
+              </span>
+            )}
           </Link>
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden text-sidebar-foreground shrink-0 h-7 w-7"
+            className="md:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-border/50 shrink-0 h-7 w-7"
             onClick={() => setOpen(false)}
             aria-label="Close menu"
           >
@@ -113,7 +128,7 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
           <Button
             variant="ghost"
             size="icon"
-            className="hidden md:flex text-sidebar-foreground/60 hover:text-sidebar-foreground shrink-0 h-7 w-7"
+            className="hidden md:flex text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-border/50 shrink-0 h-7 w-7"
             onClick={() => setCollapsed(!collapsed)}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
@@ -122,23 +137,29 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-0.5 scrollbar-thin" aria-label="Main navigation">
+        <nav
+          className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5 scrollbar-thin"
+          aria-label="Main navigation"
+        >
           {groups.map((group) => (
-            <div key={group.id} className="mb-1">
+            <div key={group.id} className="mb-2">
               {!collapsed && (
                 <button
                   onClick={() => toggleGroup(group.id)}
-                  className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40 hover:text-sidebar-foreground/70 transition-colors"
+                  className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/35 hover:text-sidebar-foreground/60 transition-colors"
                 >
                   <span>{group.label}</span>
                   <ChevronDown
-                    className={cn("w-3 h-3 transition-transform duration-200", effectiveOpen[group.id] ? "rotate-0" : "-rotate-90")}
+                    className={cn(
+                      "w-3 h-3 transition-transform duration-200",
+                      effectiveOpen[group.id] ? "rotate-0" : "-rotate-90"
+                    )}
                   />
                 </button>
               )}
-              {collapsed && <div className="my-1 mx-2 h-px bg-sidebar-border/50" />}
+              {collapsed && <div className="my-1.5 mx-2 h-px bg-sidebar-border/40" />}
               {(collapsed || effectiveOpen[group.id]) && (
-                <ul className="space-y-0.5">
+                <ul className="space-y-0.5 mt-0.5">
                   {group.items.map((item) => {
                     const isActive = location === item.href || location.startsWith(item.href + "/");
                     const Icon = item.icon;
@@ -147,15 +168,22 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
                         href={item.href}
                         onClick={() => setOpen(false)}
                         className={cn(
-                          "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-all duration-150",
+                          "flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150",
                           isActive
                             ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
-                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-                          collapsed && "justify-center px-0",
+                            : "text-sidebar-foreground/60 hover:bg-sidebar-border/50 hover:text-sidebar-foreground",
+                          collapsed && "justify-center px-0 py-2.5",
                         )}
                         aria-current={isActive ? "page" : undefined}
                       >
-                        <Icon className={cn("w-4 h-4 shrink-0", isActive ? "" : "opacity-75")} aria-hidden="true" />
+                        <Icon
+                          className={cn(
+                            "shrink-0 transition-colors",
+                            collapsed ? "w-4.5 h-4.5" : "w-4 h-4",
+                            isActive ? "text-sidebar-accent-foreground" : "opacity-70"
+                          )}
+                          aria-hidden="true"
+                        />
                         {!collapsed && <span className="truncate">{item.name}</span>}
                       </Link>
                     );
@@ -165,7 +193,9 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
                         {collapsed ? (
                           <Tooltip>
                             <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-                            <TooltipContent side="right" className="font-medium">{item.name}</TooltipContent>
+                            <TooltipContent side="right" className="font-medium text-xs">
+                              {item.name}
+                            </TooltipContent>
                           </Tooltip>
                         ) : (
                           linkContent
@@ -180,40 +210,40 @@ export function Sidebar({ isOpen, setOpen, collapsed, setCollapsed }: SidebarPro
         </nav>
 
         {/* User footer */}
-        <div className={cn("shrink-0 border-t border-sidebar-border", collapsed ? "p-1.5" : "p-2")}>
+        <div className={cn("shrink-0 border-t border-sidebar-border/60", collapsed ? "p-2" : "p-2.5")}>
           {collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={handleSignOut}
-                  className="w-full flex items-center justify-center rounded-md p-2 hover:bg-sidebar-accent/50 transition-colors"
+                  className="w-full flex items-center justify-center rounded-lg p-2 hover:bg-sidebar-border/50 transition-colors"
                   aria-label="Sign out"
                 >
-                  <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground font-semibold flex items-center justify-center text-xs">
-                    {initial}
+                  <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-xs">
+                    {initials}
                   </div>
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <div className="text-xs">
-                  <p className="font-medium">{displayName}</p>
+                <div className="text-xs space-y-0.5">
+                  <p className="font-semibold">{displayName}</p>
                   <p className="text-muted-foreground">{formatRole(role)}</p>
                 </div>
               </TooltipContent>
             </Tooltip>
           ) : (
-            <div className="flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-sidebar-accent/30 transition-colors group">
-              <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-semibold flex items-center justify-center text-xs shrink-0">
-                {initial}
+            <div className="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-sidebar-border/50 transition-colors group cursor-default">
+              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
+                {initials}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-sidebar-foreground truncate">{displayName}</p>
-                <p className="text-[10px] text-sidebar-foreground/50 truncate">{formatRole(role)}</p>
+                <p className="text-xs font-semibold text-sidebar-foreground truncate">{displayName}</p>
+                <p className="text-[10px] text-sidebar-foreground/45 truncate">{formatRole(role)}</p>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-sidebar-foreground/50 hover:text-sidebar-foreground shrink-0"
+                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-transparent shrink-0"
                 onClick={handleSignOut}
                 aria-label="Sign out"
               >

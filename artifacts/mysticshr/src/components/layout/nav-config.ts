@@ -434,6 +434,8 @@ export function filterNavByPermissions(permissionsMap: Record<string, string[]>)
       ...g,
       items: g.items.filter((i) => {
         if (!i.moduleKey) return true;
+        // If module is not in the permissions map, fall back to role-based visibility (show it)
+        if (!(i.moduleKey in permissionsMap)) return true;
         return (permissionsMap[i.moduleKey] ?? []).includes("view");
       }),
     }))

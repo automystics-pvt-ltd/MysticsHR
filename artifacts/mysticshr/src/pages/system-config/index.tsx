@@ -1420,6 +1420,7 @@ function AttendanceSuspicionTab() {
   const [maxAccuracy, setMaxAccuracy] = useState<string>("200");
   const [maxRadius, setMaxRadius] = useState<string>("500");
   const [offices, setOffices] = useState<Array<{ name: string; latitude: number; longitude: number; location?: string | null }>>([]);
+  const [requireGps, setRequireGps] = useState<boolean>(false);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
@@ -1427,6 +1428,7 @@ function AttendanceSuspicionTab() {
     setMaxAccuracy(String(data.maxAccuracyMeters ?? 200));
     setMaxRadius(String(data.maxRadiusMeters ?? 500));
     setOffices(data.offices ?? []);
+    setRequireGps(data.requireGps ?? false);
   }, [data, dirty]);
 
   function addOffice() {
@@ -1454,7 +1456,7 @@ function AttendanceSuspicionTab() {
       if (!Number.isFinite(o.latitude) || o.latitude < -90 || o.latitude > 90) { toast({ title: `Invalid latitude for ${o.name}`, variant: "destructive" }); return; }
       if (!Number.isFinite(o.longitude) || o.longitude < -180 || o.longitude > 180) { toast({ title: `Invalid longitude for ${o.name}`, variant: "destructive" }); return; }
     }
-    await update.mutateAsync({ data: { maxAccuracyMeters: acc, maxRadiusMeters: rad, offices } });
+    await update.mutateAsync({ data: { maxAccuracyMeters: acc, maxRadiusMeters: rad, offices, requireGps } });
     toast({ title: "Suspicion settings saved" });
     setDirty(false);
     void qc.invalidateQueries({ queryKey: getGetAttendanceSuspicionConfigQueryKey() });
@@ -1472,11 +1474,27 @@ function AttendanceSuspicionTab() {
       <CardContent className="space-y-6">
         {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
           <>
+            <div className="flex items-center justify-between rounded-lg border p-4 bg-amber-50/50">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Require GPS for clock-in</Label>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, employees cannot clock in unless their browser provides location co-ordinates.
+                  Useful for strict on-site attendance enforcement.
+                </p>
+              </div>
+              <Switch
+                checked={requireGps}
+                onCheckedChange={(v) => { setRequireGps(v); setDirty(true); }}
+                disabled={!canWrite}
+                data-testid="switch-require-gps"
+              />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label className="text-xs">Max acceptable GPS accuracy (metres)</Label>
                 <Input
-                  type="number" min={0} value={maxAccuracy} onChange={(e) => setMaxAccuracy(e.target.value)}
+                  type="number" min={0} value={maxAccuracy} onChange={(e) => { setMaxAccuracy(e.target.value); setDirty(true); }}
                   disabled={!canWrite} data-testid="input-max-accuracy"
                 />
                 <p className="text-xs text-muted-foreground mt-1">Punches with worse accuracy than this are flagged.</p>
@@ -1484,7 +1502,7 @@ function AttendanceSuspicionTab() {
               <div>
                 <Label className="text-xs">Max distance from any office (metres)</Label>
                 <Input
-                  type="number" min={0} value={maxRadius} onChange={(e) => setMaxRadius(e.target.value)}
+                  type="number" min={0} value={maxRadius} onChange={(e) => { setMaxRadius(e.target.value); setDirty(true); }}
                   disabled={!canWrite} data-testid="input-max-radius"
                 />
                 <p className="text-xs text-muted-foreground mt-1">Punches farther than this from every registered office are flagged.</p>

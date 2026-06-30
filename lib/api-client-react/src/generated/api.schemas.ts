@@ -297,6 +297,8 @@ export interface AttendanceSuspicionConfig {
    */
   maxRadiusMeters: number;
   offices: AttendanceSuspicionOffice[];
+  /** When true, clock-in is blocked unless the browser provides GPS co-ordinates. */
+  requireGps: boolean;
 }
 
 /**
@@ -308,6 +310,7 @@ export interface AttendanceSuspicionConfigUpdate {
   /** @minimum 0 */
   maxRadiusMeters?: number;
   offices?: AttendanceSuspicionOffice[];
+  requireGps?: boolean;
 }
 
 /**
