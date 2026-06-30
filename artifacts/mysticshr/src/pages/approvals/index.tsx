@@ -168,7 +168,7 @@ export default function ApprovalsHubPage() {
   if (!canApprove) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
-        <PageHeader title="Approvals Hub" description="Manage all pending approvals in one place" icon={<ClipboardList className="w-5 h-5 text-primary" />} />
+        <PageHeader title="Approvals Hub" description="Manage all pending approvals in one place" />
         <Card className="mt-6">
           <CardContent className="p-10 text-center">
             <ClipboardList className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
@@ -184,7 +184,6 @@ export default function ApprovalsHubPage() {
       <PageHeader
         title="Approvals Hub"
         description="All pending approvals in one place"
-        icon={<ClipboardList className="w-5 h-5 text-primary" />}
       />
 
       {totalPending > 0 ? (

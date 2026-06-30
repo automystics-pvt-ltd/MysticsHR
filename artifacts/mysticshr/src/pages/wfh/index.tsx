@@ -117,7 +117,6 @@ export default function WfhPage() {
       <PageHeader
         title="Work From Home"
         description="Submit and manage WFH requests"
-        icon={<Home className="w-5 h-5 text-primary" />}
         actions={
           !isHrOrManager && (
             <Button size="sm" onClick={() => setShowCreate(true)}>

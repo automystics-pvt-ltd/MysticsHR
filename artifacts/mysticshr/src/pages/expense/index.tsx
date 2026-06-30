@@ -155,7 +155,6 @@ export default function ExpensePage() {
       <PageHeader
         title="Expense Claims"
         description="Submit and manage expense reimbursements"
-        icon={<Receipt className="w-5 h-5 text-primary" />}
         actions={
           !isManager && (
             <Button size="sm" onClick={() => setShowCreate(true)}>
