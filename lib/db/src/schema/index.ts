@@ -45,3 +45,4 @@ export * from "./tenant_registrations";
 export * from "./password_reset_tokens";
 export * from "./wfh_requests";
 export * from "./expense_claims";
+export * from "./shift_change_requests";

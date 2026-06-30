@@ -1,5 +1,6 @@
 import {
   useGetDashboardKpis,
+  getGetDashboardKpisQueryKey,
   useGetDashboardRecentActivity,
   useGetDashboardHeadcountByDepartment,
   useGetDashboardEmployeeStatusBreakdown,
@@ -338,7 +339,7 @@ export default function DashboardPage() {
   // Only load expensive KPIs for roles that need them
   const needsKpis = isAnyManager || isHod;
   const { data: kpis, isLoading: kpisLoading } = useGetDashboardKpis({
-    query: { enabled: needsKpis },
+    query: { enabled: needsKpis, queryKey: getGetDashboardKpisQueryKey() },
   });
 
   // Permission gates for quick actions

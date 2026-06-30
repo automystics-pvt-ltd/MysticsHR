@@ -45,6 +45,7 @@ import {
   useGetEmployeesIdOnboardingChecklist,
   usePostEmployeesIdOnboardingChecklist,
   getGetEmployeesIdProfileQueryKey,
+  useGetShiftsTemplates,
   getGetEmployeesIdEducationQueryKey,
   getGetEmployeesIdWorkExperienceQueryKey,
   getGetEmployeesIdEmpDocumentsQueryKey,
@@ -60,7 +61,7 @@ import type {
   EmployeeFamilyMember,
   OnboardingTask,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -918,6 +919,40 @@ export default function EmployeeDetailPage() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState<Record<string, string>>({});
 
+  const [editingOrg, setEditingOrg] = useState(false);
+  const [orgForm, setOrgForm] = useState({ branchId: "", defaultShiftTemplateId: "" });
+
+  const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+  const { data: branchList = [] } = useQuery<any[]>({
+    queryKey: ["branches"],
+    queryFn: () => fetch(`${BASE_URL}/api/branches`, { credentials: "include" }).then((r) => r.json()),
+  });
+  const branches = Array.isArray(branchList) ? branchList : [];
+  const { data: shiftResp } = useGetShiftsTemplates();
+  const shiftTemplates: any[] = (Array.isArray(shiftResp) ? shiftResp : (shiftResp as any)?.data) ?? [];
+
+  function openOrgEdit() {
+    setOrgForm({
+      branchId: String((emp as any)?.branchId ?? ""),
+      defaultShiftTemplateId: String((emp as any)?.defaultShiftTemplateId ?? ""),
+    });
+    setEditingOrg(true);
+  }
+
+  async function saveOrg() {
+    try {
+      const payload: Record<string, number | null> = {
+        branchId: orgForm.branchId ? Number(orgForm.branchId) : null,
+        defaultShiftTemplateId: orgForm.defaultShiftTemplateId ? Number(orgForm.defaultShiftTemplateId) : null,
+      };
+      await updateEmp.mutateAsync({ id: empId, data: payload });
+      setEditingOrg(false);
+      qc.invalidateQueries({ queryKey: getGetEmployeeQueryKey(empId) });
+    } catch (e) {
+      console.error("Save org failed", e);
+    }
+  }
+
   function openProfileEdit() {
     setProfileForm({
       nationalId: profile?.nationalId ?? "",
@@ -1109,8 +1144,9 @@ export default function EmployeeDetailPage() {
 
         <TabsContent value="employment">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Employment Details</CardTitle>
+              {canEdit && <Button size="sm" variant="outline" onClick={openOrgEdit}>Edit Org</Button>}
             </CardHeader>
             <CardContent>
               <dl>
@@ -1224,6 +1260,42 @@ export default function EmployeeDetailPage() {
           </TabsContent>
         )}
       </Tabs>
+
+      <Dialog open={editingOrg} onOpenChange={setEditingOrg}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Edit Org Assignment</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Branch / Office</Label>
+              <Select value={orgForm.branchId || "_none"} onValueChange={(v) => setOrgForm((f) => ({ ...f, branchId: v === "_none" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— None —</SelectItem>
+                  {branches.map((b: any) => (
+                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Default Shift Template</Label>
+              <Select value={orgForm.defaultShiftTemplateId || "_none"} onValueChange={(v) => setOrgForm((f) => ({ ...f, defaultShiftTemplateId: v === "_none" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="Select shift" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— None —</SelectItem>
+                  {shiftTemplates.map((s: any) => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingOrg(false)}>Cancel</Button>
+            <Button onClick={saveOrg} disabled={updateEmp.isPending}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editingProfile} onOpenChange={setEditingProfile}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">

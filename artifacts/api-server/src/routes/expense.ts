@@ -61,7 +61,7 @@ router.get("/expense-claims", requireHrmsUser, async (req, res) => {
 router.get("/expense-claims/:id", requireHrmsUser, async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
 
     const [claim] = await db
       .select()
@@ -141,7 +141,7 @@ router.post("/expense-claims/:id/submit", requireHrmsUser, async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
     const employeeId = req.hrmsUser!.employeeId;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
 
     const [claim] = await db
       .select()
@@ -172,7 +172,7 @@ router.post("/expense-claims/:id/items", requireHrmsUser, async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
     const employeeId = req.hrmsUser!.employeeId;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
 
     const [claim] = await db
       .select()
@@ -211,8 +211,8 @@ router.delete("/expense-claims/:id/items/:itemId", requireHrmsUser, async (req, 
   try {
     const tenantId = req.hrmsUser!.tenantId;
     const employeeId = req.hrmsUser!.employeeId;
-    const id = parseInt(req.params.id, 10);
-    const itemId = parseInt(req.params.itemId, 10);
+    const id = parseInt(req.params.id as string, 10);
+    const itemId = parseInt(req.params.itemId as string, 10);
 
     const [claim] = await db.select().from(expenseClaimsTable)
       .where(and(eq(expenseClaimsTable.id, id), eq(expenseClaimsTable.tenantId, tenantId))).limit(1);
@@ -241,7 +241,7 @@ router.post("/expense-claims/:id/action", requireHrmsUser, async (req, res) => {
     const tenantId = req.hrmsUser!.tenantId;
     const userId = req.hrmsUser!.id;
     const role = req.hrmsUser!.role;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
 
     const isHr = ["customer_admin", "hr_manager", "hr_executive"].includes(role);
     if (!isHr && role !== "hod") { res.status(403).json({ error: "Insufficient role" }); return; }

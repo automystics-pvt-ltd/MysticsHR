@@ -98,7 +98,7 @@ router.post("/wfh/:id/cancel", requireHrmsUser, async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
     const employeeId = req.hrmsUser!.employeeId;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
 
     const [existing] = await db
       .select()
@@ -130,7 +130,7 @@ router.post("/wfh/:id/action", requireHrmsUser, async (req, res) => {
     const tenantId = req.hrmsUser!.tenantId;
     const userId = req.hrmsUser!.id;
     const role = req.hrmsUser!.role;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
 
     const isHr = ["customer_admin", "hr_manager", "hr_executive"].includes(role);
     const isHod = role === "hod";

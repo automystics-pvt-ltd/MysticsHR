@@ -623,7 +623,7 @@ function PayrollSettingsTab() {
 
 // ─── RBAC Permissions Tab ─────────────────────────────────────────────────────
 
-const ALL_ROLES: RolePermissionsItem[] = ["customer_admin","hr_manager","hr_executive","hod","payroll_admin","employee"];
+const ALL_ROLES = ["customer_admin","hr_manager","hr_executive","hod","payroll_admin","employee"] as const;
 
 function RolePermissionsTab() {
   const queryClient = useQueryClient();
@@ -689,8 +689,8 @@ function RolePermissionsTab() {
                       <TableCell key={role} className="text-center">
                         <input
                           type="checkbox"
-                          checked={roles.includes(role)}
-                          onChange={() => toggleRole(module, action, role)}
+                          checked={(roles as string[]).includes(role)}
+                          onChange={() => toggleRole(module, action, role as any)}
                           className="h-4 w-4 cursor-pointer"
                           disabled={role === "customer_admin"}
                           title={role === "customer_admin" ? "Super admin always has full access" : `Toggle ${role} for ${module}.${action}`}

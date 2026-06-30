@@ -33,6 +33,7 @@ import selfServiceRouter from "./self-service";
 import billingRouter from "./billing";
 import wfhRouter from "./wfh";
 import expenseRouter from "./expense";
+import shiftChangeRouter from "./shift-change";
 import v1Router from "./v1";
 import { openApiSpec } from "../openapi";
 
@@ -72,6 +73,7 @@ router.use(selfServiceRouter);
 router.use(billingRouter);
 router.use(wfhRouter);
 router.use(expenseRouter);
+router.use(shiftChangeRouter);
 router.use("/v1", v1Router);
 
 router.get("/openapi.json", (_req, res) => res.json(openApiSpec));

@@ -79,6 +79,7 @@ const ApiDocsPage = lazy(() => import("@/pages/settings/api-docs"));
 const BillingPage = lazy(() => import("@/pages/billing/index"));
 const WfhPage = lazy(() => import("@/pages/wfh/index"));
 const ExpensePage = lazy(() => import("@/pages/expense/index"));
+const ShiftChangePage = lazy(() => import("@/pages/shift-change/index"));
 const ApprovalsHubPage = lazy(() => import("@/pages/approvals/index"));
 
 const PayrollChartHarnessLazy = lazy(() => import("./pages/__test__/payroll-chart-harness"));
@@ -451,6 +452,12 @@ function AppRoutes() {
         <Route path="/wfh">
           <ProtectedRoute>
             <WfhPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/shift-change">
+          <ProtectedRoute>
+            <ShiftChangePage />
           </ProtectedRoute>
         </Route>
 

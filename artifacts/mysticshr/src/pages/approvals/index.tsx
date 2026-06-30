@@ -18,7 +18,7 @@ import {
 } from "@workspace/api-client-react";
 import {
   CheckCircle, XCircle, ClipboardList, Inbox,
-  Home as HomeIcon, Receipt, CalendarDays, Timer, RefreshCcw
+  Home as HomeIcon, Receipt, CalendarDays, Timer, RefreshCcw, ArrowLeftRight,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -41,7 +41,12 @@ function fmtDate(d: string | null | undefined) {
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-type ActionDialog = { type: "leave" | "wfh" | "expense" | "regularization"; id: number; action: "Approved" | "Rejected"; subType?: "hod" | "hr" };
+type ActionDialog = {
+  type: "leave" | "wfh" | "expense" | "regularization" | "shift-change";
+  id: number;
+  action: "Approved" | "Rejected";
+  subType?: "hod" | "hr";
+};
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700",
@@ -90,6 +95,11 @@ export default function ApprovalsHubPage() {
     queryFn: () => apiFetch<{ id: number; firstName?: string; lastName?: string; empCode?: string; attendanceDate: string; requestedSignIn?: string; requestedSignOut?: string; reason: string; status: string; createdAt: string }[]>("/attendance/regularizations"),
   });
 
+  const { data: shiftChangeRequests = [] } = useQuery({
+    queryKey: ["shift-change-requests-hub"],
+    queryFn: () => apiFetch<{ id: number; employeeName: string; currentShiftName: string; requestedShiftName: string; effectiveDate: string; reason: string; status: string }[]>("/shift-change-requests"),
+  });
+
   const hodLeaveMut = useHodActionLeave();
   const hrLeaveMut = useHrActionLeave();
 
@@ -111,12 +121,19 @@ export default function ApprovalsHubPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["regularizations-hub"] }); },
   });
 
+  const shiftChangeActionMut = useMutation({
+    mutationFn: ({ id, action, remarks }: { id: number; action: string; remarks: string }) =>
+      apiFetch(`/shift-change-requests/${id}/action`, { method: "POST", body: JSON.stringify({ action, remarks }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shift-change-requests-hub"] }); },
+  });
+
   const pendingLeave = (leaveApplications as { status: string }[]).filter((a) => ["Pending", "HOD Approved"].includes(a.status));
   const pendingWfh = wfhRequests.filter((r) => r.status === "Pending");
   const pendingExpense = expenseClaims.filter((c) => c.status === "Submitted");
   const pendingReg = regularizations.filter((r) => r.status === "Pending");
+  const pendingShiftChange = shiftChangeRequests.filter((r) => r.status === "Pending");
 
-  const totalPending = pendingLeave.length + pendingWfh.length + pendingExpense.length + pendingReg.length;
+  const totalPending = pendingLeave.length + pendingWfh.length + pendingExpense.length + pendingReg.length + pendingShiftChange.length;
 
   async function handleConfirmAction() {
     if (!actionDialog) return;
@@ -135,6 +152,8 @@ export default function ApprovalsHubPage() {
         await expenseActionMut.mutateAsync({ id: actionDialog.id, action: actionDialog.action, remarks });
       } else if (actionDialog.type === "regularization") {
         await regularizationActionMut.mutateAsync({ id: actionDialog.id, action: actionDialog.action, remarks });
+      } else if (actionDialog.type === "shift-change") {
+        await shiftChangeActionMut.mutateAsync({ id: actionDialog.id, action: actionDialog.action, remarks });
       }
       toast({ title: `Request ${actionDialog.action.toLowerCase()} successfully` });
       setActionDialog(null); setRemarks(""); setActionError("");
@@ -226,6 +245,11 @@ export default function ApprovalsHubPage() {
             <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />
             Regularization
             <PendingCount count={pendingReg.length} />
+          </TabsTrigger>
+          <TabsTrigger value="shift-change">
+            <ArrowLeftRight className="w-3.5 h-3.5 mr-1.5" />
+            Shift Change
+            <PendingCount count={pendingShiftChange.length} />
           </TabsTrigger>
         </TabsList>
 
@@ -326,6 +350,36 @@ export default function ApprovalsHubPage() {
                     <div className="shrink-0">
                       <Badge className={STATUS_COLORS[r.status] ?? ""}>{r.status}</Badge>
                       <ActionButtons type="regularization" id={r.id} status={r.status} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+
+        {/* Shift Change Tab */}
+        <TabsContent value="shift-change" className="mt-4 space-y-3">
+          {shiftChangeRequests.length === 0 ? (
+            <EmptyState icon={<ArrowLeftRight />} label="No shift change requests" />
+          ) : (
+            shiftChangeRequests.map((r) => (
+              <Card key={r.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-0.5 flex-1">
+                      <p className="font-medium text-sm">{r.employeeName}</p>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span>{r.currentShiftName}</span>
+                        <ArrowLeftRight className="w-3 h-3 shrink-0" />
+                        <span className="font-medium text-foreground">{r.requestedShiftName}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Effective: {fmtDate(r.effectiveDate)}</p>
+                      <p className="text-xs text-foreground">{r.reason}</p>
+                    </div>
+                    <div className="shrink-0">
+                      <Badge className={STATUS_COLORS[r.status] ?? ""}>{r.status}</Badge>
+                      <ActionButtons type="shift-change" id={r.id} status={r.status} />
                     </div>
                   </div>
                 </CardContent>

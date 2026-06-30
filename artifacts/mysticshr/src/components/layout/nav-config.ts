@@ -18,6 +18,7 @@ import {
   Banknote,
   Target,
   Home,
+  ArrowLeftRight,
   Ticket,
   FileBadge,
   TrendingDown,
@@ -212,6 +213,14 @@ export const NAV_GROUPS: NavGroup[] = [
         roles: ALL_ROLES,
         moduleKey: "wfh",
         keywords: ["wfh", "remote", "work from home"],
+      },
+      {
+        name: "Shift Change",
+        href: "/shift-change",
+        icon: ArrowLeftRight,
+        roles: ALL_ROLES,
+        moduleKey: "shift-change",
+        keywords: ["shift", "shift change", "schedule change"],
       },
       {
         name: "Approvals",
