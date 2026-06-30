@@ -131,7 +131,7 @@ function DepartmentDrilldownDialog({
         <div className="text-xs text-muted-foreground mb-2">
           {filtered.length} employee{filtered.length === 1 ? "" : "s"} · Gross {fmt(totalGross)} · Net {fmt(totalNet)}
         </div>
-        <div className="max-h-[60vh] overflow-auto border rounded-lg">
+        <div className="max-h-[60vh] overflow-x-auto overflow-y-auto border rounded-lg">
           {isLoading ? (
             <div className="p-6 text-center text-sm text-muted-foreground">Loading…</div>
           ) : filtered.length === 0 ? (
@@ -519,7 +519,7 @@ export function PayrollAnalyticsSection({
           {aggregateVariance && (
             <div
               data-testid="yoy-kpi-strip"
-              className="grid grid-cols-3 gap-2 mb-3 pb-3 border-b"
+              className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3 pb-3 border-b"
             >
               {[
                 { label: "Total Gross", v: aggregateVariance.gross, fmtVal: (n: number) => compactInr(n), invertColor: false },

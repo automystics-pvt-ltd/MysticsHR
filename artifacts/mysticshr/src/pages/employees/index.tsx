@@ -190,8 +190,8 @@ export default function EmployeesPage() {
       />
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-xs">
+      <div className="flex flex-wrap gap-2">
+        <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search employees..."
@@ -201,7 +201,7 @@ export default function EmployeesPage() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === "_all" ? "" : v); setPage(0); }}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -212,7 +212,7 @@ export default function EmployeesPage() {
           </SelectContent>
         </Select>
         <Select value={deptFilter} onValueChange={(v) => { setDeptFilter(v === "_all" ? "" : v); setPage(0); }}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="All Departments" />
           </SelectTrigger>
           <SelectContent>
@@ -223,7 +223,7 @@ export default function EmployeesPage() {
           </SelectContent>
         </Select>
         <Select value={skillFilter || "_all"} onValueChange={(v) => { setSkillFilter(v === "_all" ? "" : v); setPage(0); }}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="All Skills" />
           </SelectTrigger>
           <SelectContent>
@@ -234,7 +234,7 @@ export default function EmployeesPage() {
           </SelectContent>
         </Select>
         <Select value={certFilter || "_all"} onValueChange={(v) => { setCertFilter(v === "_all" ? "" : v); setPage(0); }}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="All Certifications" />
           </SelectTrigger>
           <SelectContent>

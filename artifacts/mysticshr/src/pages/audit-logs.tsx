@@ -32,9 +32,9 @@ export default function AuditLogsPage() {
         description={`${total} log entries`}
       />
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <Select value={module} onValueChange={(v) => { setModule(v === "_all" ? "" : v); setPage(0); }}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="All Modules" />
           </SelectTrigger>
           <SelectContent>

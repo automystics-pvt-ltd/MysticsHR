@@ -348,7 +348,7 @@ function HrAttendanceView() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div><Label>Date *</Label><Input type="date" value={form.attendanceDate} onChange={e => setForm({ ...form, attendanceDate: e.target.value })} /></div>
               <div><Label>Sign In</Label><Input type="time" value={form.signInTime} onChange={e => setForm({ ...form, signInTime: e.target.value })} /></div>
               <div><Label>Sign Out</Label><Input type="time" value={form.signOutTime} onChange={e => setForm({ ...form, signOutTime: e.target.value })} /></div>

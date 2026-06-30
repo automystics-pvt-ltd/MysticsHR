@@ -463,7 +463,7 @@ export default function BillingPage() {
                   </div>
                 </div>
                 <Separator />
-                <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                   <div>
                     <p className="text-lg font-bold">{sub?.plan?.maxUsers === -1 ? "∞" : sub?.plan?.maxUsers ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">Max Users</p>
@@ -609,8 +609,8 @@ export default function BillingPage() {
             </div>
           )}
           {!invoicesLoading && (invoiceData?.data.length ?? 0) > 0 && (
-            <div className="rounded-xl border overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="rounded-xl border overflow-x-auto">
+              <table className="w-full text-sm min-w-[540px]">
                 <thead className="bg-muted/50">
                   <tr className="text-xs text-muted-foreground">
                     <th className="text-left px-4 py-3 font-medium">Invoice</th>

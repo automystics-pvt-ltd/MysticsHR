@@ -176,7 +176,7 @@ function StatutoryRatesTab() {
           <CardTitle className="text-base flex items-center gap-2"><Scale className="w-4 h-4" />Provident Fund (PF)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 max-w-lg">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>Employee Contribution (%)</Label>
               <Input type="number" value={merged.pfEmployee ?? "12"} onChange={(e) => set("pfEmployee", e.target.value)} />
@@ -202,7 +202,7 @@ function StatutoryRatesTab() {
           <CardTitle className="text-base">Employee State Insurance (ESI)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 max-w-lg">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>Employee Rate (%)</Label>
               <Input type="number" step="0.01" value={merged.esiEmployee ?? "0.75"} onChange={(e) => set("esiEmployee", e.target.value)} />

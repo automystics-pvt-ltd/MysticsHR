@@ -305,8 +305,8 @@ export default function ExpensePage() {
                       <Input className="h-8 text-xs" type="date" value={item.expenseDate} onChange={(e) => updateItem(i, "expenseDate", e.target.value)} />
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2 space-y-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="sm:col-span-2 space-y-1">
                       <Label className="text-xs">Description</Label>
                       <Input className="h-8 text-xs" placeholder="e.g. Lunch with client" value={item.description} onChange={(e) => updateItem(i, "description", e.target.value)} />
                     </div>

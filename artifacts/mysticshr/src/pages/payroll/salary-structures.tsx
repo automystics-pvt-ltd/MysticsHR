@@ -280,8 +280,8 @@ export default function SalaryStructuresPage() {
               {viewDetail.components && viewDetail.components.length > 0 && (
                 <div>
                   <h4 className="font-medium mb-2">Components</h4>
-                  <div className="rounded-lg border overflow-hidden">
-                    <table className="w-full text-sm">
+                  <div className="rounded-lg border overflow-x-auto">
+                    <table className="w-full text-sm min-w-[300px]">
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="text-left p-2 pl-3">Component</th>

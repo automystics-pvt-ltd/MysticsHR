@@ -263,7 +263,7 @@ function EducationSection({ employeeId, canEdit }: { employeeId: number; canEdit
               <div className="space-y-1.5"><Label>Field of Study</Label><Input value={field} onChange={(e) => setField(e.target.value)} /></div>
             </div>
             <div className="space-y-1.5"><Label>Institution *</Label><Input value={institution} onChange={(e) => setInstitution(e.target.value)} /></div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5"><Label>Start Year</Label><Input type="number" value={startYear} onChange={(e) => setStartYear(e.target.value)} /></div>
               <div className="space-y-1.5"><Label>End Year</Label><Input type="number" value={endYear} onChange={(e) => setEndYear(e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Grade / %</Label><Input value={grade} onChange={(e) => setGrade(e.target.value)} /></div>
@@ -551,7 +551,7 @@ function SkillsSection({ employeeId, canEdit }: { employeeId: number; canEdit: b
           <DialogHeader><DialogTitle>{editing ? "Edit Skill" : "Add Skill"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Skill *</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>Proficiency</Label>
                 <Select value={proficiency || "_none"} onValueChange={(v) => setProficiency(v === "_none" ? "" : v)}>
@@ -764,7 +764,7 @@ function FamilySection({ employeeId, canEdit }: { employeeId: number; canEdit: b
               <div className="space-y-1.5"><Label>Name *</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Relation *</Label><Input value={relation} onChange={(e) => setRelation(e.target.value)} placeholder="Spouse, Father, Child…" /></div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Gender</Label><Input value={gender} onChange={(e) => setGender(e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
@@ -1332,7 +1332,7 @@ export default function EmployeeDetailPage() {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Emergency Contact</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[["Name", "emergencyContactName"], ["Phone", "emergencyContactPhone"], ["Relation", "emergencyContactRelation"]].map(([label, key]) => (
                   <div key={key} className="space-y-1.5"><Label>{label}</Label><Input value={profileForm[key] ?? ""} onChange={pf(key)} /></div>
                 ))}
@@ -1340,7 +1340,7 @@ export default function EmployeeDetailPage() {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Statutory</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[["PAN", "pan"], ["Aadhaar", "aadhaar"], ["PF Number", "pfNumber"], ["ESI Number", "esiNumber"], ["UAN", "uan"]].map(([label, key]) => (
                   <div key={key} className="space-y-1.5"><Label>{label}</Label><Input value={profileForm[key] ?? ""} onChange={pf(key)} /></div>
                 ))}

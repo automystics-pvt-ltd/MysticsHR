@@ -386,7 +386,7 @@ export default function CandidateDetailPage() {
                     moveStage.mutate({ id, data: { stage: newStage, rejectionReason: reason ?? null } });
                   }}
                 >
-                  <SelectTrigger className="w-[200px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[200px] h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {STAGES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>

@@ -25,7 +25,7 @@ export default function PreOnboardingPage() {
       </div>
 
       <Select value={statusFilter || "_all"} onValueChange={(v) => setStatusFilter(v === "_all" ? "" : v)}>
-        <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+        <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="All Statuses" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="_all">All Statuses</SelectItem>
           <SelectItem value="Pending">Pending</SelectItem>

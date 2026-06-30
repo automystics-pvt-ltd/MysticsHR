@@ -413,7 +413,7 @@ export default function ShiftsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <Label>Shift Template *</Label>
                     <Select value={assignForm.shiftTemplateId?.toString() ?? ""} onValueChange={v => setAssignForm({ ...assignForm, shiftTemplateId: Number(v) })}>
@@ -441,7 +441,8 @@ export default function ShiftsPage() {
               <Card>
                 <CardHeader><CardTitle className="text-base">Current Assignments</CardTitle></CardHeader>
                 <CardContent>
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[360px]">
                     <thead><tr className="border-b"><th className="text-left py-1">Shift</th><th className="text-left py-1">From</th><th className="text-left py-1">To</th><th></th></tr></thead>
                     <tbody>
                       {assignments.map((a: ShiftAssignment) => (
@@ -456,6 +457,7 @@ export default function ShiftsPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </CardContent>
               </Card>
             )}
