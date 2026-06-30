@@ -355,14 +355,14 @@ router.post("/billing/stripe/create-checkout", requireHrmsUser, async (req, res)
     }
 
     const session = await createStripeCheckoutSession({
-      customerId,
+      customerId: customerId!,
       priceId,
       successUrl: `${returnUrl}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${returnUrl}?payment=cancelled`,
       tenantId,
     });
 
-    res.json({ url: session.url, sessionId: session.id });
+    res.json({ url: session.url ?? "", sessionId: session.id });
   } catch (err) {
     logger.error({ err }, "billing.stripe.create-checkout error");
     res.status(500).json({ error: "Failed to create Stripe checkout session" });
@@ -385,7 +385,7 @@ router.post("/billing/stripe/portal", requireHrmsUser, async (req, res) => {
     }
 
     const session = await createStripeBillingPortalSession(tenant.stripeCustomerId, returnUrl);
-    res.json({ url: session.url });
+    res.json({ url: session.url ?? "" });
   } catch (err) {
     logger.error({ err }, "billing.stripe.portal error");
     res.status(500).json({ error: "Failed to create billing portal session" });

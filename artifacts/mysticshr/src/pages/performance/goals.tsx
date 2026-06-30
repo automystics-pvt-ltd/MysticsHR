@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useCurrentHrmsUser, hasRole } from "@/lib/useCurrentHrmsUser";
 import { Target, Plus, Trash2, TrendingUp, AlertCircle } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const STATUS_COLORS: Record<string, string> = {
   Draft: "bg-gray-100 text-gray-700 border-gray-200",
@@ -101,10 +102,10 @@ function GoalCard({ goal, canManage, canDelete }: { goal: PerformanceGoal; canMa
   const qc = useQueryClient();
   const deleteGoal = useDeletePerformanceGoal();
   const [showProgress, setShowProgress] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   function handleDelete() {
-    if (!confirm("Delete this goal?")) return;
-    deleteGoal.mutate({ id: goal.id }, { onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/performance/goals"] }) });
+    setPendingConfirm({ title: "Delete Goal", description: "This goal and all its progress history will be permanently deleted.", onConfirm: () => deleteGoal.mutate({ id: goal.id }, { onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/performance/goals"] }) }) });
   }
 
   return (
@@ -147,6 +148,7 @@ function GoalCard({ goal, canManage, canDelete }: { goal: PerformanceGoal; canMa
         </div>
       </CardContent>
       {showProgress && <ProgressModal goal={goal} open={showProgress} onClose={() => setShowProgress(false)} />}
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </Card>
   );
 }

@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Calendar, AlertCircle, ArrowRight, ChevronLeft, ChevronRight, List, CalendarDays } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -121,6 +122,7 @@ export default function LeavePage() {
   const [showApply, setShowApply] = useState(false);
   const [showLopWarning, setShowLopWarning] = useState(false);
   const [lopInfo, setLopInfo] = useState<{ available: number; requested: number } | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   const [form, setForm] = useState({
     leaveTypeId: "",
@@ -172,12 +174,8 @@ export default function LeavePage() {
     }
   }
 
-  async function handleCancel(id: number) {
-    if (!confirm("Cancel this leave application?")) return;
-    try {
-      await cancelMutation.mutateAsync({ id, data: {} });
-      invalidate();
-    } catch { toast({ title: "Error", description: "Failed to cancel leave application", variant: "destructive" }); }
+  function handleCancel(id: number) {
+    setPendingConfirm({ title: "Cancel Leave Application", description: "Are you sure you want to cancel this leave application? This action cannot be undone.", onConfirm: async () => { try { await cancelMutation.mutateAsync({ id, data: {} }); invalidate(); } catch { toast({ title: "Error", description: "Failed to cancel leave application", variant: "destructive" }); } } });
   }
 
   return (
@@ -586,6 +584,7 @@ export default function LeavePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }

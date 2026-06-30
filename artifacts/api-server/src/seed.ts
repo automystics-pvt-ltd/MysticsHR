@@ -44,6 +44,11 @@ import {
   // Notifications
   notificationLogsTable,
   userNotificationsTable,
+  // WFH / Expense / Shift Change
+  wfhRequestsTable,
+  expenseClaimsTable,
+  expenseClaimItemsTable,
+  shiftChangeRequestsTable,
 } from "@workspace/db/schema";
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -69,6 +74,7 @@ async function seed() {
   const allTenants = await db.select().from(tenantsTable);
   const defaultTenant = allTenants.find((t) => t.slug === "default");
   const tenantId = defaultTenant?.id;
+  if (!tenantId) throw new Error("Seed failed: default tenant not found after insert");
   console.log("Default tenant seeded:", tenantId);
 
   // ── Roles ──────────────────────────────────────────────────────────────
@@ -212,10 +218,10 @@ async function seed() {
 
   // ── Shifts ─────────────────────────────────────────────────────────────
   await db.insert(shiftTemplatesTable).values([
-    { name: "General Shift (9-6)", shiftType: "Fixed", startTime: "09:00", endTime: "18:00", gracePeriodMinutes: 15, breakDurationMinutes: 60, minWorkingHoursMinutes: 480, weeklyOff: ["Saturday", "Sunday"], overtimeThresholdMinutes: 30 },
-    { name: "Early Shift (7-4)", shiftType: "Fixed", startTime: "07:00", endTime: "16:00", gracePeriodMinutes: 10, breakDurationMinutes: 45, weeklyOff: ["Sunday"] },
-    { name: "Night Shift (10-7)", shiftType: "Night Shift", startTime: "22:00", endTime: "07:00", breakDurationMinutes: 60, weeklyOff: ["Sunday"], shiftRatePerHour: "75.00", nightDifferentialRate: "150.00" },
-    { name: "Flexible WFH", shiftType: "Flexible", startTime: "10:00", endTime: "19:00", gracePeriodMinutes: 60, breakDurationMinutes: 60, weeklyOff: ["Saturday", "Sunday"] },
+    { tenantId, name: "General Shift (9-6)", shiftType: "Fixed", startTime: "09:00", endTime: "18:00", gracePeriodMinutes: 15, breakDurationMinutes: 60, minWorkingHoursMinutes: 480, weeklyOff: ["Saturday", "Sunday"], overtimeThresholdMinutes: 30 },
+    { tenantId, name: "Early Shift (7-4)", shiftType: "Fixed", startTime: "07:00", endTime: "16:00", gracePeriodMinutes: 10, breakDurationMinutes: 45, weeklyOff: ["Sunday"] },
+    { tenantId, name: "Night Shift (10-7)", shiftType: "Night Shift", startTime: "22:00", endTime: "07:00", breakDurationMinutes: 60, weeklyOff: ["Sunday"], shiftRatePerHour: "75.00", nightDifferentialRate: "150.00" },
+    { tenantId, name: "Flexible WFH", shiftType: "Flexible", startTime: "10:00", endTime: "19:00", gracePeriodMinutes: 60, breakDurationMinutes: 60, weeklyOff: ["Saturday", "Sunday"] },
   ]).onConflictDoNothing();
   const allShifts = await db.select().from(shiftTemplatesTable);
   const generalShift = allShifts.find((s) => s.name === "General Shift (9-6)");
@@ -225,7 +231,7 @@ async function seed() {
     if (existingAssign.length === 0) {
       await db.insert(shiftAssignmentsTable).values(
         activeEmps.map((e) => ({
-          employeeId: e.id, shiftTemplateId: generalShift.id,
+          tenantId, employeeId: e.id, shiftTemplateId: generalShift.id,
           effectiveFrom: e.dateOfJoining ?? "2024-01-01", assignedById: hrMgr?.id,
         }))
       );
@@ -235,12 +241,12 @@ async function seed() {
 
   // ── Leave types & policies ─────────────────────────────────────────────
   await db.insert(leaveTypesTable).values([
-    { name: "Casual Leave", code: "CL", annualQuota: "12", carryForwardEnabled: false, advanceNoticeDays: 1, allowHalfDay: true, description: "For personal matters and short breaks" },
-    { name: "Sick Leave", code: "SL", annualQuota: "10", carryForwardEnabled: true, carryForwardMax: "5", advanceNoticeDays: 0, allowHalfDay: true, description: "For illness with medical certificate if > 2 days" },
-    { name: "Earned Leave", code: "EL", annualQuota: "18", carryForwardEnabled: true, carryForwardMax: "30", encashmentEnabled: true, advanceNoticeDays: 7, description: "Paid time off; encashable on exit" },
-    { name: "Maternity Leave", code: "ML", annualQuota: "180", carryForwardEnabled: false, advanceNoticeDays: 30, allowHalfDay: false, description: "26 weeks paid maternity leave" },
-    { name: "Paternity Leave", code: "PL", annualQuota: "5", carryForwardEnabled: false, advanceNoticeDays: 7, allowHalfDay: false, description: "5 working days for new fathers" },
-    { name: "Loss of Pay", code: "LOP", annualQuota: "0", carryForwardEnabled: false, lopByDefault: true, advanceNoticeDays: 0, description: "Unpaid leave when no balance available" },
+    { tenantId, name: "Casual Leave", code: "CL", annualQuota: "12", carryForwardEnabled: false, advanceNoticeDays: 1, allowHalfDay: true, description: "For personal matters and short breaks" },
+    { tenantId, name: "Sick Leave", code: "SL", annualQuota: "10", carryForwardEnabled: true, carryForwardMax: "5", advanceNoticeDays: 0, allowHalfDay: true, description: "For illness with medical certificate if > 2 days" },
+    { tenantId, name: "Earned Leave", code: "EL", annualQuota: "18", carryForwardEnabled: true, carryForwardMax: "30", encashmentEnabled: true, advanceNoticeDays: 7, description: "Paid time off; encashable on exit" },
+    { tenantId, name: "Maternity Leave", code: "ML", annualQuota: "180", carryForwardEnabled: false, advanceNoticeDays: 30, allowHalfDay: false, description: "26 weeks paid maternity leave" },
+    { tenantId, name: "Paternity Leave", code: "PL", annualQuota: "5", carryForwardEnabled: false, advanceNoticeDays: 7, allowHalfDay: false, description: "5 working days for new fathers" },
+    { tenantId, name: "Loss of Pay", code: "LOP", annualQuota: "0", carryForwardEnabled: false, lopByDefault: true, advanceNoticeDays: 0, description: "Unpaid leave when no balance available" },
   ]).onConflictDoNothing();
   const allLeaveTypes = await db.select().from(leaveTypesTable);
   const cl = allLeaveTypes.find((l) => l.code === "CL");
@@ -250,6 +256,7 @@ async function seed() {
   // Leave policies (1:1 with types)
   for (const lt of allLeaveTypes) {
     await db.insert(leavePoliciesTable).values({
+      tenantId,
       leaveTypeId: lt.id,
       requiresHodApproval: lt.code !== "LOP",
       requiresHrApproval: lt.requiresHrApproval,
@@ -263,13 +270,14 @@ async function seed() {
   }
 
   // Leave balances for current year
-  const balanceRows: Array<{ employeeId: number; leaveTypeId: number; year: number; allocated: string; used: string; pending: string }> = [];
+  const balanceRows: Array<{ tenantId: number; employeeId: number; leaveTypeId: number; year: number; allocated: string; used: string; pending: string }> = [];
   for (const e of activeEmps) {
     for (const lt of allLeaveTypes) {
       if (lt.code === "ML" && e.gender !== "Female") continue;
       if (lt.code === "PL" && e.gender !== "Male") continue;
       if (lt.code === "LOP") continue;
       balanceRows.push({
+        tenantId,
         employeeId: e.id,
         leaveTypeId: lt.id,
         year: yr,
@@ -289,27 +297,27 @@ async function seed() {
   if (existingApps.length === 0 && cl && sl && el && emp6 && emp1 && emp4 && emp8) {
     await db.insert(leaveApplicationsTable).values([
       {
-        employeeId: emp6.id, leaveTypeId: cl.id, fromDate: dateOffset(5), toDate: dateOffset(6),
+        tenantId, employeeId: emp6.id, leaveTypeId: cl.id, fromDate: dateOffset(5), toDate: dateOffset(6),
         totalDays: "2", reason: "Personal work — sister's wedding", status: "Pending",
       },
       {
-        employeeId: emp1.id, leaveTypeId: el.id, fromDate: dateOffset(15), toDate: dateOffset(19),
+        tenantId, employeeId: emp1.id, leaveTypeId: el.id, fromDate: dateOffset(15), toDate: dateOffset(19),
         totalDays: "5", reason: "Family vacation — Munnar trip", status: "Approved",
         hodActionedById: hodUser?.id, hodRemarks: "Approved. Coverage planned.", hodActionedAt: tsOffset(-2),
         hrActionedById: hrMgr?.id, hrRemarks: "All clear.", hrActionedAt: tsOffset(-1),
       },
       {
-        employeeId: emp8.id, leaveTypeId: sl.id, fromDate: dateOffset(-3), toDate: dateOffset(-3),
+        tenantId, employeeId: emp8.id, leaveTypeId: sl.id, fromDate: dateOffset(-3), toDate: dateOffset(-3),
         totalDays: "1", reason: "Fever and headache", status: "Approved",
         hrActionedById: hrExec?.id, hrRemarks: "Get well soon.", hrActionedAt: tsOffset(-3),
       },
       {
-        employeeId: emp4.id, leaveTypeId: cl.id, fromDate: dateOffset(-10), toDate: dateOffset(-10),
+        tenantId, employeeId: emp4.id, leaveTypeId: cl.id, fromDate: dateOffset(-10), toDate: dateOffset(-10),
         totalDays: "1", reason: "Bank work", status: "Rejected",
         hodActionedById: hodUser?.id, hodRemarks: "Quarterly closing — please reschedule.", hodActionedAt: tsOffset(-11),
       },
       {
-        employeeId: emp6.id, leaveTypeId: el.id, fromDate: dateOffset(30), toDate: dateOffset(34),
+        tenantId, employeeId: emp6.id, leaveTypeId: el.id, fromDate: dateOffset(30), toDate: dateOffset(34),
         totalDays: "5", reason: "Travel to home town", status: "HOD Approved",
         hodActionedById: hodUser?.id, hodRemarks: "Approved at HOD level.", hodActionedAt: tsOffset(-1),
       },
@@ -328,7 +336,7 @@ async function seed() {
       const dateStr = dt.toISOString().slice(0, 10);
       for (const e of activeEmps) {
         if (dow === 0 || dow === 6) {
-          attRows.push({ employeeId: e.id, attendanceDate: dateStr, status: "Week Off" });
+          attRows.push({ tenantId, employeeId: e.id, attendanceDate: dateStr, status: "Week Off" });
           continue;
         }
         // 88% present, 6% half-day, 4% leave, 2% absent
@@ -339,7 +347,7 @@ async function seed() {
           const inT = new Date(dt); inT.setHours(inH, inM, 0, 0);
           const outT = new Date(dt); outT.setHours(outH, outM, 0, 0);
           attRows.push({
-            employeeId: e.id, attendanceDate: dateStr, status: "Present",
+            tenantId, employeeId: e.id, attendanceDate: dateStr, status: "Present",
             signInTime: inT, signOutTime: outT,
             totalMinutesWorked: Math.round((outT.getTime() - inT.getTime()) / 60000) - 60,
             breakDurationMinutes: 60,
@@ -349,13 +357,13 @@ async function seed() {
           const inT = new Date(dt); inT.setHours(9, 30, 0, 0);
           const outT = new Date(dt); outT.setHours(13, 30, 0, 0);
           attRows.push({
-            employeeId: e.id, attendanceDate: dateStr, status: "Half-Day",
+            tenantId, employeeId: e.id, attendanceDate: dateStr, status: "Half-Day",
             signInTime: inT, signOutTime: outT, totalMinutesWorked: 240,
           });
         } else if (r < 0.98) {
-          attRows.push({ employeeId: e.id, attendanceDate: dateStr, status: "On Leave" });
+          attRows.push({ tenantId, employeeId: e.id, attendanceDate: dateStr, status: "On Leave" });
         } else {
-          attRows.push({ employeeId: e.id, attendanceDate: dateStr, status: "Absent" });
+          attRows.push({ tenantId, employeeId: e.id, attendanceDate: dateStr, status: "Absent" });
         }
       }
     }
@@ -364,7 +372,7 @@ async function seed() {
     for (const e of activeEmps.slice(0, 5)) {
       const inT = new Date(); inT.setHours(9, 18, 0, 0);
       attRows.push({
-        employeeId: e.id, attendanceDate: today, status: "Present",
+        tenantId, employeeId: e.id, attendanceDate: today, status: "Present",
         signInTime: inT, signInTimezone: "Asia/Kolkata",
       });
     }
@@ -376,7 +384,7 @@ async function seed() {
     // A regularization request
     if (emp6) {
       await db.insert(attendanceRegularizationsTable).values({
-        employeeId: emp6.id, attendanceDate: dateOffset(-5),
+        tenantId, employeeId: emp6.id, attendanceDate: dateOffset(-5),
         requestedSignIn: tsOffset(-5, 9, 30), requestedSignOut: tsOffset(-5, 18, 15),
         reason: "Forgot to clock-in due to client meeting in the morning.",
         status: "Pending",
@@ -397,19 +405,19 @@ async function seed() {
       const travel = Math.round(monthly * 0.05);
       const medical = Math.round(monthly * 0.05);
       const [struct] = await db.insert(salaryStructuresTable).values({
-        employeeId: e.id, name: `${e.firstName} ${e.lastName} - Standard`,
+        tenantId, employeeId: e.id, name: `${e.firstName} ${e.lastName} - Standard`,
         effectiveFrom: e.dateOfJoining ?? `${yr}-04-01`,
         grossCtc: String(Math.round(monthly)), annualCtc: String(annual),
         isActive: true, createdById: hrMgr?.id,
       }).returning();
       await db.insert(salaryComponentsTable).values([
-        { salaryStructureId: struct.id, componentType: "Basic", componentName: "Basic Salary", amount: String(basic), isEarning: true, sequence: 1 },
-        { salaryStructureId: struct.id, componentType: "HRA", componentName: "House Rent Allowance", amount: String(hra), percentageOfBasic: "50", isEarning: true, sequence: 2 },
-        { salaryStructureId: struct.id, componentType: "Special Allowance", componentName: "Special Allowance", amount: String(special), isEarning: true, sequence: 3 },
-        { salaryStructureId: struct.id, componentType: "Travel Allowance", componentName: "Conveyance", amount: String(travel), isEarning: true, sequence: 4 },
-        { salaryStructureId: struct.id, componentType: "Medical Allowance", componentName: "Medical Allowance", amount: String(medical), isEarning: true, sequence: 5 },
-        { salaryStructureId: struct.id, componentType: "PF Employee", componentName: "Provident Fund", amount: String(Math.min(1800, Math.round(basic * 0.12))), isEarning: false, sequence: 6 },
-        { salaryStructureId: struct.id, componentType: "Professional Tax", componentName: "Professional Tax", amount: "200", isEarning: false, sequence: 7 },
+        { tenantId, salaryStructureId: struct.id, componentType: "Basic", componentName: "Basic Salary", amount: String(basic), isEarning: true, sequence: 1 },
+        { tenantId, salaryStructureId: struct.id, componentType: "HRA", componentName: "House Rent Allowance", amount: String(hra), percentageOfBasic: "50", isEarning: true, sequence: 2 },
+        { tenantId, salaryStructureId: struct.id, componentType: "Special Allowance", componentName: "Special Allowance", amount: String(special), isEarning: true, sequence: 3 },
+        { tenantId, salaryStructureId: struct.id, componentType: "Travel Allowance", componentName: "Conveyance", amount: String(travel), isEarning: true, sequence: 4 },
+        { tenantId, salaryStructureId: struct.id, componentType: "Medical Allowance", componentName: "Medical Allowance", amount: String(medical), isEarning: true, sequence: 5 },
+        { tenantId, salaryStructureId: struct.id, componentType: "PF Employee", componentName: "Provident Fund", amount: String(Math.min(1800, Math.round(basic * 0.12))), isEarning: false, sequence: 6 },
+        { tenantId, salaryStructureId: struct.id, componentType: "Professional Tax", componentName: "Professional Tax", amount: "200", isEarning: false, sequence: 7 },
       ]);
     }
   }
@@ -426,7 +434,7 @@ async function seed() {
       const periodMonth = runDate.getMonth() + 1;
       let totGross = 0, totDed = 0, totNet = 0;
       const [run] = await db.insert(payrollRunsTable).values({
-        periodYear, periodMonth, status: "Locked",
+        tenantId, periodYear, periodMonth, status: "Locked",
         initiatedById: payAdmin?.id, approvedById: superUser?.id,
         runAt: new Date(runDate.getFullYear(), runDate.getMonth(), 28),
         approvedAt: new Date(runDate.getFullYear(), runDate.getMonth(), 30),
@@ -452,7 +460,7 @@ async function seed() {
         const net = gross - ded;
         totGross += gross; totDed += ded; totNet += net;
         const [rec] = await db.insert(payrollRecordsTable).values({
-          payrollRunId: run.id, employeeId: e.id, salaryStructureId: struct.id,
+          tenantId, payrollRunId: run.id, employeeId: e.id, salaryStructureId: struct.id,
           workingDays: "22", presentDays: "22", leaveDays: "0", lopDays: "0",
           basic: String(basic), hra: String(hra), specialAllowance: String(special),
           travelAllowance: String(travel), medicalAllowance: String(medical),
@@ -461,7 +469,7 @@ async function seed() {
           status: "Paid", taxRegime: "New",
         }).returning();
         await db.insert(payslipsTable).values({
-          payrollRecordId: rec.id, employeeId: e.id,
+          tenantId, payrollRecordId: rec.id, employeeId: e.id,
           periodYear, periodMonth,
           payslipData: { basic, hra, special, travel, medical, gross, pf, pt, tds, net },
         });
@@ -477,7 +485,7 @@ async function seed() {
     // Current month draft run
     const cur = new Date();
     await db.insert(payrollRunsTable).values({
-      periodYear: cur.getFullYear(), periodMonth: cur.getMonth() + 1,
+      tenantId, periodYear: cur.getFullYear(), periodMonth: cur.getMonth() + 1,
       status: "Draft", initiatedById: payAdmin?.id, totalEmployees: 0,
     });
   }
@@ -487,6 +495,7 @@ async function seed() {
   const existingCycles = await db.select().from(performanceCyclesTable);
   if (existingCycles.length === 0) {
     const [cycle] = await db.insert(performanceCyclesTable).values({
+      tenantId,
       title: `FY ${yr}-${String(yr + 1).slice(2)} Annual Cycle`,
       cycleType: "Annual",
       startDate: `${yr}-04-01`, endDate: `${yr + 1}-03-31`,
@@ -506,13 +515,13 @@ async function seed() {
     for (const e of activeEmps.slice(0, 5)) {
       for (const [title, desc, weight] of goalTitles.slice(0, 3)) {
         const [g] = await db.insert(performanceGoalsTable).values({
-          cycleId: cycle.id, employeeId: e.id,
+          tenantId, cycleId: cycle.id, employeeId: e.id,
           title, description: desc, weightage: weight,
           targetValue: "100%", measurementMethod: "Manager assessment + objective KPIs",
           status: "Active", assignedBy: hodUser?.id,
         }).returning();
         await db.insert(goalProgressTable).values({
-          goalId: g.id, progressPercent: 30 + Math.floor(Math.random() * 50),
+          tenantId, goalId: g.id, progressPercent: 30 + Math.floor(Math.random() * 50),
           commentary: "Mid-cycle progress update — on track.", updatedBy: hodUser?.id,
         });
       }
@@ -524,11 +533,11 @@ async function seed() {
       const myGoals = arjunGoals.filter((g) => g.employeeId === emp1.id);
       for (const g of myGoals) {
         await db.insert(selfAppraisalsTable).values({
-          goalId: g.id, employeeId: emp1.id, rating: 4,
+          tenantId, goalId: g.id, employeeId: emp1.id, rating: 4,
           commentary: "Met all primary deliverables; some stretch goals slipped due to scope changes.",
         });
         await db.insert(managerEvaluationsTable).values({
-          goalId: g.id, employeeId: emp1.id, rating: 4,
+          tenantId, goalId: g.id, employeeId: emp1.id, rating: 4,
           commentary: "Strong execution. Demonstrated leadership during incident response.",
           evaluatedBy: hodUser?.id,
         });
@@ -542,29 +551,29 @@ async function seed() {
   if (existingTix.length === 0 && emp1 && emp6 && emp8) {
     const tickets = await db.insert(helpdeskTicketsTable).values([
       {
-        subject: "Laptop battery draining quickly", description: "My ThinkPad battery lasts only 2 hours now. Need replacement or repair.",
+        tenantId, subject: "Laptop battery draining quickly", description: "My ThinkPad battery lasts only 2 hours now. Need replacement or repair.",
         category: "IT", priority: "Medium", status: "Open",
         raisedByEmployeeId: emp1.id, slaDeadline: tsOffset(2),
       },
       {
-        subject: "Payslip not showing for last month", description: "I cannot see my March payslip in the ESS portal. Please assist.",
+        tenantId, subject: "Payslip not showing for last month", description: "I cannot see my March payslip in the ESS portal. Please assist.",
         category: "Payroll", priority: "High", status: "In Progress",
         raisedByEmployeeId: emp6.id, assignedToUserId: payAdmin?.id, slaDeadline: tsOffset(1),
       },
       {
-        subject: "Update emergency contact details", description: "Need to update my emergency contact phone number.",
+        tenantId, subject: "Update emergency contact details", description: "Need to update my emergency contact phone number.",
         category: "HR", priority: "Low", status: "Resolved",
         raisedByEmployeeId: emp8.id, assignedToUserId: hrExec?.id,
         resolvedAt: tsOffset(-2), slaDeadline: tsOffset(-1),
       },
       {
-        subject: "Reimbursement claim for client travel", description: "Submitting receipts for Bangalore client visit on March 15.",
+        tenantId, subject: "Reimbursement claim for client travel", description: "Submitting receipts for Bangalore client visit on March 15.",
         category: "Finance", priority: "Medium", status: "Closed",
         raisedByEmployeeId: emp1.id, assignedToUserId: payAdmin?.id,
         resolvedAt: tsOffset(-7), closedAt: tsOffset(-5),
       },
       {
-        subject: "VPN access not working from home", description: "Getting authentication errors when connecting to corporate VPN.",
+        tenantId, subject: "VPN access not working from home", description: "Getting authentication errors when connecting to corporate VPN.",
         category: "IT", priority: "Urgent", status: "Open",
         raisedByEmployeeId: emp6.id, slaDeadline: tsOffset(0, 4),
       },
@@ -572,13 +581,13 @@ async function seed() {
 
     if (tickets[1] && payAdmin && empUser) {
       await db.insert(ticketCommentsTable).values([
-        { ticketId: tickets[1].id, authorId: payAdmin.id, message: "Looking into the payroll system — payslip generation is queued for re-run." },
-        { ticketId: tickets[1].id, authorId: empUser.id, message: "Thanks for the update. When can I expect it?" },
+        { tenantId, ticketId: tickets[1].id, authorId: payAdmin.id, message: "Looking into the payroll system — payslip generation is queued for re-run." },
+        { tenantId, ticketId: tickets[1].id, authorId: empUser.id, message: "Thanks for the update. When can I expect it?" },
       ]);
     }
     if (tickets[2] && hrExec) {
       await db.insert(ticketCommentsTable).values([
-        { ticketId: tickets[2].id, authorId: hrExec.id, message: "Updated in employee record. Please verify in ESS." },
+        { tenantId, ticketId: tickets[2].id, authorId: hrExec.id, message: "Updated in employee record. Please verify in ESS." },
       ]);
     }
   }
@@ -588,20 +597,20 @@ async function seed() {
   const existingChecklists = await db.select().from(onboardingChecklistsTable);
   if (existingChecklists.length === 0 && emp8) {
     const [checklist] = await db.insert(onboardingChecklistsTable).values({
-      employeeId: emp8.id, status: "In Progress", completionPercentage: 60,
+      tenantId, employeeId: emp8.id, status: "In Progress", completionPercentage: 60,
       joiningDate: emp8.dateOfJoining,
       welcomeEmailSentAt: tsOffset(-21),
       idCardGeneratedAt: tsOffset(-20),
     }).returning();
 
     await db.insert(onboardingTasksTable).values([
-      { checklistId: checklist.id, title: "Send welcome email", category: "HR", assigneeRole: "hr_executive", completedAt: tsOffset(-21), completedById: hrExec?.id },
-      { checklistId: checklist.id, title: "Generate employee ID card", category: "HR", assigneeRole: "hr_executive", completedAt: tsOffset(-20), completedById: hrExec?.id },
-      { checklistId: checklist.id, title: "Create email and Slack accounts", category: "IT", assigneeRole: "it", completedAt: tsOffset(-19) },
-      { checklistId: checklist.id, title: "Issue laptop and accessories", category: "IT", assigneeRole: "it", completedAt: tsOffset(-19) },
-      { checklistId: checklist.id, title: "Department orientation session", category: "Department", assigneeRole: "hod", dueDate: dateOffset(2) },
-      { checklistId: checklist.id, title: "Submit personal documents (PAN, Aadhaar, Bank)", category: "Employee", assigneeRole: "employee", dueDate: dateOffset(7) },
-      { checklistId: checklist.id, title: "Complete code of conduct training", category: "HR", assigneeRole: "employee", dueDate: dateOffset(14) },
+      { tenantId, checklistId: checklist.id, title: "Send welcome email", category: "HR", assigneeRole: "hr_executive", completedAt: tsOffset(-21), completedById: hrExec?.id },
+      { tenantId, checklistId: checklist.id, title: "Generate employee ID card", category: "HR", assigneeRole: "hr_executive", completedAt: tsOffset(-20), completedById: hrExec?.id },
+      { tenantId, checklistId: checklist.id, title: "Create email and Slack accounts", category: "IT", assigneeRole: "it", completedAt: tsOffset(-19) },
+      { tenantId, checklistId: checklist.id, title: "Issue laptop and accessories", category: "IT", assigneeRole: "it", completedAt: tsOffset(-19) },
+      { tenantId, checklistId: checklist.id, title: "Department orientation session", category: "Department", assigneeRole: "hod", dueDate: dateOffset(2) },
+      { tenantId, checklistId: checklist.id, title: "Submit personal documents (PAN, Aadhaar, Bank)", category: "Employee", assigneeRole: "employee", dueDate: dateOffset(7) },
+      { tenantId, checklistId: checklist.id, title: "Complete code of conduct training", category: "HR", assigneeRole: "employee", dueDate: dateOffset(14) },
     ]);
   }
   console.log("Onboarding seeded.");
@@ -611,18 +620,18 @@ async function seed() {
   if (existingTemplates.length === 0) {
     const [tplOffer] = await db.insert(documentTemplatesTable).values([
       {
-        documentType: "Offer Letter", name: "Standard Offer Letter",
+        tenantId, documentType: "Offer Letter", name: "Standard Offer Letter",
         companyName: "Automystics Technologies Pvt Ltd",
         companyAddress: "5th Floor, Tech Park, Chennai 600 113",
         bodyTemplate: "Dear {{firstName}} {{lastName}},\n\nWe are pleased to offer you the position of {{designation}} at Automystics Technologies, effective {{dateOfJoining}}. Your annual CTC will be ₹{{ctc}}.\n\nWelcome aboard!\n\nRegards,\nHR Team",
       },
       {
-        documentType: "Experience Certificate", name: "Standard Experience Certificate",
+        tenantId, documentType: "Experience Certificate", name: "Standard Experience Certificate",
         companyName: "Automystics Technologies Pvt Ltd",
         bodyTemplate: "This is to certify that {{firstName}} {{lastName}} (Employee ID: {{employeeId}}) was employed with Automystics Technologies as {{designation}} from {{dateOfJoining}} to {{lastWorkingDay}}. During this tenure, the employee was found to be sincere and hardworking.",
       },
       {
-        documentType: "Appointment Letter", name: "Standard Appointment Letter",
+        tenantId, documentType: "Appointment Letter", name: "Standard Appointment Letter",
         companyName: "Automystics Technologies Pvt Ltd",
         bodyTemplate: "Dear {{firstName}},\n\nFollowing your acceptance of our offer, we hereby confirm your appointment as {{designation}} with effect from {{dateOfJoining}}.",
       },
@@ -630,7 +639,7 @@ async function seed() {
 
     if (tplOffer && emp8) {
       await db.insert(issuedDocumentsTable).values({
-        employeeId: emp8.id, templateId: tplOffer.id, documentType: "Offer Letter",
+        tenantId, employeeId: emp8.id, templateId: tplOffer.id, documentType: "Offer Letter",
         filename: `OfferLetter_${emp8.employeeId}.pdf`,
         generatedBy: hrMgr?.id,
         fieldValues: { firstName: emp8.firstName, lastName: emp8.lastName, designation: "Finance Analyst", dateOfJoining: emp8.dateOfJoining, ctc: emp8.ctc },
@@ -653,13 +662,81 @@ async function seed() {
     const existingUserNotifs = await db.select().from(userNotificationsTable).limit(1);
     if (existingUserNotifs.length === 0) {
       await db.insert(userNotificationsTable).values([
-        { recipientUserId: superUser.id, title: "New leave application", message: "Kavitha Nair has applied for 2 days of casual leave.", entityType: "leave_application" },
-        { recipientUserId: superUser.id, title: "Helpdesk SLA at risk", message: "Ticket #5 (VPN access) is approaching SLA deadline.", entityType: "ticket" },
-        { recipientUserId: superUser.id, title: "Payroll run completed", message: "Last month's payroll run has been processed and locked.", entityType: "payroll_run" },
+        { tenantId, recipientUserId: superUser.id, title: "New leave application", message: "Kavitha Nair has applied for 2 days of casual leave.", entityType: "leave_application" },
+        { tenantId, recipientUserId: superUser.id, title: "Helpdesk SLA at risk", message: "Ticket #5 (VPN access) is approaching SLA deadline.", entityType: "ticket" },
+        { tenantId, recipientUserId: superUser.id, title: "Payroll run completed", message: "Last month's payroll run has been processed and locked.", entityType: "payroll_run" },
       ]);
     }
   }
   console.log("Notifications seeded.");
+
+  // ── WFH Requests ───────────────────────────────────────────────────────
+  const existingWfh = await db.select().from(wfhRequestsTable).limit(1);
+  if (existingWfh.length === 0 && emp1 && emp6 && emp8) {
+    await db.insert(wfhRequestsTable).values([
+      { tenantId, employeeId: emp6.id, fromDate: dateOffset(1), toDate: dateOffset(3), reason: "Client deliverable — need quiet environment at home for focused coding.", status: "Pending" },
+      { tenantId, employeeId: emp1.id, fromDate: dateOffset(-5), toDate: dateOffset(-4), reason: "Infrastructure maintenance at office.", status: "Approved", managerActionedById: hodUser?.id, managerRemarks: "Approved. Ensure you are reachable on Slack.", managerActionedAt: tsOffset(-6) },
+      { tenantId, employeeId: emp8.id, fromDate: dateOffset(7), toDate: dateOffset(9), reason: "Personal — internet installation at new home.", status: "Pending" },
+      { tenantId, employeeId: emp6.id, fromDate: dateOffset(-15), toDate: dateOffset(-13), reason: "High-priority design deliverable.", status: "Rejected", managerActionedById: hodUser?.id, managerRemarks: "Team collaboration required this week.", managerActionedAt: tsOffset(-16) },
+    ]);
+  }
+  console.log("WFH requests seeded.");
+
+  // ── Expense Claims ──────────────────────────────────────────────────────
+  const existingExp = await db.select().from(expenseClaimsTable).limit(1);
+  if (existingExp.length === 0 && emp1 && emp6 && emp8) {
+    const [claim1] = await db.insert(expenseClaimsTable).values({
+      tenantId, employeeId: emp1.id, title: "Bangalore Client Visit — March 2025",
+      claimDate: dateOffset(-20), totalAmount: "4850.00", status: "Submitted",
+      notes: "Travel and accommodation for two-day client onboarding at Bangalore.",
+    }).returning();
+    if (claim1) {
+      await db.insert(expenseClaimItemsTable).values([
+        { tenantId, claimId: claim1.id, category: "Travel", description: "Flight BLR return", amount: "3200.00", expenseDate: dateOffset(-22) },
+        { tenantId, claimId: claim1.id, category: "Accommodation", description: "Hotel (1 night)", amount: "1200.00", expenseDate: dateOffset(-21) },
+        { tenantId, claimId: claim1.id, category: "Meals", description: "Client dinner", amount: "450.00", expenseDate: dateOffset(-21) },
+      ]);
+    }
+    const [claim2] = await db.insert(expenseClaimsTable).values({
+      tenantId, employeeId: emp6.id, title: "Office Supplies — Q2",
+      claimDate: dateOffset(-10), totalAmount: "1250.00", status: "Approved",
+      notes: "Stationery and printer cartridges for design team.",
+      managerActionedById: hrMgr?.id, managerRemarks: "Approved. Submit receipts to finance.", managerActionedAt: tsOffset(-9),
+    }).returning();
+    if (claim2) {
+      await db.insert(expenseClaimItemsTable).values([
+        { tenantId, claimId: claim2.id, category: "Office Supplies", description: "Printer cartridges (x3)", amount: "900.00", expenseDate: dateOffset(-12) },
+        { tenantId, claimId: claim2.id, category: "Office Supplies", description: "Stationery", amount: "350.00", expenseDate: dateOffset(-12) },
+      ]);
+    }
+    const [claim3] = await db.insert(expenseClaimsTable).values({
+      tenantId, employeeId: emp8.id, title: "Training — Cloud Certification",
+      claimDate: dateOffset(-3), totalAmount: "5000.00", status: "Submitted",
+      notes: "AWS Solutions Architect exam fee reimbursement.",
+    }).returning();
+    if (claim3) {
+      await db.insert(expenseClaimItemsTable).values([
+        { tenantId, claimId: claim3.id, category: "Training", description: "AWS SAA-C03 exam fee", amount: "5000.00", expenseDate: dateOffset(-5) },
+      ]);
+    }
+  }
+  console.log("Expense claims seeded.");
+
+  // ── Shift Change Requests ───────────────────────────────────────────────
+  const existingScr = await db.select().from(shiftChangeRequestsTable).limit(1);
+  if (existingScr.length === 0 && emp1 && emp6) {
+    const allShiftsNow = await db.select().from(shiftTemplatesTable);
+    const genShift = allShiftsNow.find((s) => s.name === "General Shift (9-6)");
+    const flexShift = allShiftsNow.find((s) => s.name === "Flexible WFH");
+    const earlyShift = allShiftsNow.find((s) => s.name === "Early Shift (7-4)");
+    if (genShift && flexShift && earlyShift) {
+      await db.insert(shiftChangeRequestsTable).values([
+        { tenantId, employeeId: emp6.id, currentShiftId: genShift.id, requestedShiftId: flexShift.id, effectiveDate: dateOffset(7), reason: "Prefer flexible hours for design work — better creative output in non-peak times.", status: "Pending" },
+        { tenantId, employeeId: emp1.id, currentShiftId: genShift.id, requestedShiftId: earlyShift.id, effectiveDate: dateOffset(-10), reason: "Personal commitments in the evening — early finish preferred.", status: "Approved", managerActionedById: hodUser?.id, managerRemarks: "Approved for a 3-month trial.", managerActionedAt: tsOffset(-11) },
+      ]);
+    }
+  }
+  console.log("Shift change requests seeded.");
 
   // ── Platform Admin ─────────────────────────────────────────────────────
   const existingPlatformAdmins = await db.select({ id: platformAdminsTable.id }).from(platformAdminsTable).limit(1);

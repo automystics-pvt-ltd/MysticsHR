@@ -3,3 +3,4 @@
 - [Attendance suspicion config](attendance-suspicion-config.md) — requireGps toggle persists in system_settings; clock-in endpoint enforces it server-side; schema in both src and dist d.ts must match.
 - [Approval notifications pattern](approval-notifications.md) — notifyUser() at submit + notifyEmployee() at approve/reject; fire-and-forget .catch(()=>{}) before res.json()
 - [NotificationBell fetch pattern](notification-bell-fetch.md) — TanStack Query with inline apiFetch (BASE_URL+/api, credentials:include); polls /notifications + /unread-count every 30s; mark-read on click
+- [Seed.ts tenantId pattern](seed-tenantid-pattern.md) — every DB insert in seed.ts needs tenantId; narrowed to number after null-guard at top of seed(); billing.ts Stripe URLs need `?? ""` and `customerId!`

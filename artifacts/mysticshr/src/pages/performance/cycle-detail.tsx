@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   useGetPerformanceCycle,
   useAdvancePerformanceCycleStage,
@@ -48,6 +50,7 @@ function GoalRow({ goal }: { goal: PerformanceGoal }) {
 export default function CycleDetailPage() {
   const [, params] = useRoute("/performance/cycles/:id");
   const [, navigate] = useLocation();
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
   const qc = useQueryClient();
   const { role } = useCurrentHrmsUser();
   const isHR = hasRole(role, ["customer_admin", "hr_manager", "hr_executive"]);
@@ -65,10 +68,7 @@ export default function CycleDetailPage() {
   const canAdvance = isHR && currentStageIdx >= 0 && currentStageIdx < STAGES.length - 1;
 
   function handleAdvance() {
-    if (!confirm("Advance this cycle to the next stage?")) return;
-    advance.mutate({ id: cycleId }, {
-      onSuccess: () => qc.invalidateQueries({ queryKey: [`/api/performance/cycles/${cycleId}`] }),
-    });
+    setPendingConfirm({ title: "Advance Cycle Stage", description: "This will move the performance cycle to the next stage. This action cannot be reversed.", onConfirm: () => advance.mutate({ id: cycleId }, { onSuccess: () => qc.invalidateQueries({ queryKey: [`/api/performance/cycles/${cycleId}`] }) }) });
   }
 
   return (
@@ -151,6 +151,7 @@ export default function CycleDetailPage() {
           )}
         </CardContent>
       </Card>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }

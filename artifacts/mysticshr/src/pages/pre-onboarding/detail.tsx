@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FC } from "react";
 import { Link, useRoute } from "wouter";
 import {
   useGetPreOnboardingRecord,
@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, CheckCircle2, XCircle, Upload } from "lucide-react";
 import { useCurrentHrmsUser, hasRole } from "@/lib/useCurrentHrmsUser";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: "bg-gray-100 text-gray-700",
@@ -138,6 +139,8 @@ export default function PreOnboardingDetailPage() {
     },
   });
 
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
+
   if (isLoading) return <div className="text-center py-12 text-muted-foreground">Loading...</div>;
   if (!record) return <div className="text-center py-12 text-muted-foreground">Record not found</div>;
 
@@ -175,9 +178,7 @@ export default function PreOnboardingDetailPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => {
-                    if (confirm("Cancel this pre-onboarding?")) updateRecord.mutate({ id, data: { status: "Cancelled" } });
-                  }}
+                  onClick={() => setPendingConfirm({ title: "Cancel Pre-Onboarding", description: "This will mark the pre-onboarding record as Cancelled. This action cannot be undone.", onConfirm: () => updateRecord.mutate({ id, data: { status: "Cancelled" } }) })}
                 >
                   Cancel Pre-Onboarding
                 </Button>
@@ -197,6 +198,7 @@ export default function PreOnboardingDetailPage() {
           )}
         </CardContent>
       </Card>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }

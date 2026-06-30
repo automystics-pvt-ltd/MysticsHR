@@ -15,7 +15,7 @@ export async function logAudit(params: {
 }) {
   try {
     await db.insert(auditLogsTable).values({
-      tenantId: params.tenantId ?? params.user?.tenantId ?? null,
+      tenantId: (params.tenantId ?? params.user?.tenantId) as number,
       userId: params.user?.id ?? null,
       userEmail: params.user?.email ?? null,
       action: params.action,

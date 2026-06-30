@@ -58,7 +58,7 @@ export async function checkPayrollLock(
   if (exception) {
     // Log the override consumption so all lock bypass events are auditable.
     await db.insert(auditLogsTable).values({
-      tenantId: tenantId ?? null,
+      tenantId: tenantId!,
       userId: userId,
       userEmail: userEmail ?? null,
       action: "PAYROLL_LOCK_EXCEPTION_USED",

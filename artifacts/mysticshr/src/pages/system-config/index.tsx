@@ -32,6 +32,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { Settings, Building2, Scale, Banknote, CalendarDays, ShieldCheck, Plus, Pencil, Trash2, Lock, FormInput, Ban, HardDrive, RefreshCw, Play, AlertTriangle, Mail, MessageSquare, Database, Server } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
@@ -371,6 +372,7 @@ function ApprovalChainsTab() {
   const [editing, setEditing] = useState<ApprovalChainConfig | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<Partial<ApprovalChainConfig>>({});
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   function openCreate() {
     setForm({ step: 1, isActive: true });
@@ -400,11 +402,8 @@ function ApprovalChainsTab() {
     }
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm("Delete this step?")) return;
-    await deleteMut.mutateAsync({ id });
-    qc.invalidateQueries({ queryKey: getListApprovalChainsQueryKey() });
-    toast({ title: "Step deleted" });
+  function handleDelete(id: number) {
+    setPendingConfirm({ title: "Delete Approval Step", description: "This approval chain step will be permanently deleted.", onConfirm: async () => { await deleteMut.mutateAsync({ id }); qc.invalidateQueries({ queryKey: getListApprovalChainsQueryKey() }); toast({ title: "Step deleted" }); } });
   }
 
   const grouped = (chains as ApprovalChainConfig[]).reduce<Record<string, ApprovalChainConfig[]>>((acc, c) => {
@@ -511,6 +510,7 @@ function ApprovalChainsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }
@@ -721,6 +721,7 @@ function CustomEmployeeFieldsTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editField, setEditField] = useState<CustomField | null>(null);
   const [form, setForm] = useState({ name: "", type: "text", required: false, options: "", placeholder: "" });
+  const [pendingConfirm2, setPendingConfirm2] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   const fetchFields = async () => {
     setLoading(true);
@@ -752,11 +753,8 @@ function CustomEmployeeFieldsTab() {
     else toast({ title: "Error", description: "Failed to save field", variant: "destructive" });
   }
 
-  async function deleteField(id: string) {
-    if (!confirm("Delete this custom field?")) return;
-    const r = await fetch(`${BASE_URL}/api/custom-fields/${id}`, { method: "DELETE", credentials: "include" });
-    if (r.ok) { toast({ title: "Field deleted" }); void fetchFields(); }
-    else toast({ title: "Error", description: "Failed to delete field", variant: "destructive" });
+  function deleteField(id: string) {
+    setPendingConfirm2({ title: "Delete Custom Field", description: "This custom employee field will be permanently deleted. Existing employee data for this field will be lost.", onConfirm: async () => { const r = await fetch(`${BASE_URL}/api/custom-fields/${id}`, { method: "DELETE", credentials: "include" }); if (r.ok) { toast({ title: "Field deleted" }); void fetchFields(); } else toast({ title: "Error", description: "Failed to delete field", variant: "destructive" }); } });
   }
 
   return (
@@ -831,6 +829,7 @@ function CustomEmployeeFieldsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm2} onOpenChange={o => !o && setPendingConfirm2(null)} title={pendingConfirm2?.title ?? ""} description={pendingConfirm2?.description} onConfirm={() => { pendingConfirm2?.onConfirm(); setPendingConfirm2(null); }} />
     </Card>
   );
 }
@@ -844,6 +843,7 @@ function LeaveBlackoutsTab() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ name: "", startDate: "", endDate: "", reason: "" });
+  const [pendingConfirm3, setPendingConfirm3] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   const fetchBlackouts = async () => {
     setLoading(true);
@@ -864,11 +864,8 @@ function LeaveBlackoutsTab() {
     else toast({ title: "Error", description: "Failed to add blackout period", variant: "destructive" });
   }
 
-  async function deleteBlackout(id: string) {
-    if (!confirm("Remove this blackout period?")) return;
-    const r = await fetch(`${BASE_URL}/api/leave-blackouts/${id}`, { method: "DELETE", credentials: "include" });
-    if (r.ok) { toast({ title: "Blackout period removed" }); void fetchBlackouts(); }
-    else toast({ title: "Error", description: "Failed to delete blackout", variant: "destructive" });
+  function deleteBlackout(id: string) {
+    setPendingConfirm3({ title: "Remove Blackout Period", description: "This leave blackout period will be removed. Employees will be able to apply for leave on these dates again.", onConfirm: async () => { const r = await fetch(`${BASE_URL}/api/leave-blackouts/${id}`, { method: "DELETE", credentials: "include" }); if (r.ok) { toast({ title: "Blackout period removed" }); void fetchBlackouts(); } else toast({ title: "Error", description: "Failed to delete blackout", variant: "destructive" }); } });
   }
 
   return (
@@ -926,6 +923,7 @@ function LeaveBlackoutsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm3} onOpenChange={o => !o && setPendingConfirm3(null)} title={pendingConfirm3?.title ?? ""} description={pendingConfirm3?.description} onConfirm={() => { pendingConfirm3?.onConfirm(); setPendingConfirm3(null); }} />
     </Card>
   );
 }

@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Bell, Mail, MessageSquare, CheckCircle, XCircle, AlertCircle, Pencil, Trash2, Plus, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const EVENT_TYPES = [
   { value: "leave_submitted", label: "Leave Application Submitted" },
@@ -165,6 +166,7 @@ function TemplatesTab() {
   const [editing, setEditing] = useState<NotificationTemplate | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<Partial<NotificationTemplate>>({});
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   function openCreate() {
     setForm({ channel: "email", isActive: true });
@@ -195,11 +197,8 @@ function TemplatesTab() {
     }
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm("Delete this template?")) return;
-    await deleteMut.mutateAsync({ id });
-    qc.invalidateQueries({ queryKey: getListNotificationTemplatesQueryKey() });
-    toast({ title: "Template deleted" });
+  function handleDelete(id: number) {
+    setPendingConfirm({ title: "Delete Template", description: "This notification template will be permanently deleted.", onConfirm: async () => { await deleteMut.mutateAsync({ id }); qc.invalidateQueries({ queryKey: getListNotificationTemplatesQueryKey() }); toast({ title: "Template deleted" }); } });
   }
 
   return (
@@ -301,6 +300,7 @@ function TemplatesTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }

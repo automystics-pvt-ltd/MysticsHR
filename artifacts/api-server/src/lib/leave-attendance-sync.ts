@@ -30,6 +30,7 @@ export async function applyLeaveToAttendance(
   employeeId: number,
   fromDate: string,
   toDate: string,
+  tenantId: number,
 ): Promise<{ inserted: number; updated: number }> {
   const note = autoNote(leaveAppId);
   const existing = await tx
@@ -50,12 +51,12 @@ export async function applyLeaveToAttendance(
   const byDate = new Map(existing.map((r) => [String(r.attendanceDate), r]));
 
   const toUpdate: number[] = [];
-  const toInsert: { employeeId: number; attendanceDate: string; status: "On Leave"; notes: string }[] = [];
+  const toInsert: { tenantId: number; employeeId: number; attendanceDate: string; status: "On Leave"; notes: string }[] = [];
 
   for (const day of iterateDates(fromDate, toDate)) {
     const row = byDate.get(day);
     if (!row) {
-      toInsert.push({ employeeId, attendanceDate: day, status: "On Leave", notes: note });
+      toInsert.push({ tenantId, employeeId, attendanceDate: day, status: "On Leave", notes: note });
     } else if (!row.isHrOverride && (row.status === "Absent" || row.status === "Regularization Pending")) {
       toUpdate.push(row.id);
     }

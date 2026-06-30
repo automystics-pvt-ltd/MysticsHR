@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useGetLeaveCalendar, useListBlackoutDates, useCreateBlackoutDate, useDeleteBlackoutDate, getListBlackoutDatesQueryKey, getGetLeaveCalendarQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ export default function LeaveCalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showBlackout, setShowBlackout] = useState(false);
   const [blackoutForm, setBlackoutForm] = useState({ name: "", fromDate: "", toDate: "", reason: "" });
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   const month = monthKey(currentDate);
   const { data: entries } = useGetLeaveCalendar({ month });
@@ -91,10 +93,8 @@ export default function LeaveCalendarPage() {
     } catch { alert("Failed to create blackout period"); }
   }
 
-  async function handleDeleteBlackout(id: number) {
-    if (!confirm("Remove this blackout period?")) return;
-    await deleteBlackout.mutateAsync({ id });
-    qc.invalidateQueries({ queryKey: getListBlackoutDatesQueryKey({}) });
+  function handleDeleteBlackout(id: number) {
+    setPendingConfirm({ title: "Remove Blackout Period", description: "This blackout period will be removed and leave will be permitted on these dates again.", onConfirm: async () => { await deleteBlackout.mutateAsync({ id }); qc.invalidateQueries({ queryKey: getListBlackoutDatesQueryKey({}) }); } });
   }
 
   const monthName = currentDate.toLocaleString("default", { month: "long", year: "numeric" });
@@ -246,6 +246,7 @@ export default function LeaveCalendarPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }

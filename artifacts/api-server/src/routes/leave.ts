@@ -575,7 +575,7 @@ router.put("/leave/applications/:id", requireHrmsUser, requireRole(...HR_ROLES),
       // Revert dropped days, then apply the new full range (idempotent for
       // days already correctly marked).
       await revertLeaveDaysFromAttendance(tx, app.id, app.employeeId, removedDays);
-      await applyLeaveToAttendance(tx, app.id, app.employeeId, fromDate, toDate);
+      await applyLeaveToAttendance(tx, app.id, app.employeeId, fromDate, toDate, tenantId);
 
       return row;
     });
@@ -711,6 +711,7 @@ async function runBackfillTx(tx: BackfillTx, dryRun: boolean, tenantId: number) 
           app.employeeId,
           app.fromDate as string,
           app.toDate as string,
+          tenantId,
         ),
       );
       totalInserted += counts.inserted;
@@ -937,7 +938,7 @@ router.post("/leave/applications/:id/hod-action", requireHrmsUser, requireRole("
             .set({ used: sql`${leaveBalancesTable.used} + ${totalDays}`, pending: sql`${leaveBalancesTable.pending} - ${totalDays}`, updatedAt: new Date() })
             .where(eq(leaveBalancesTable.id, bal.id));
         }
-        await applyLeaveToAttendance(tx, app.id, app.employeeId, app.fromDate as string, app.toDate as string);
+        await applyLeaveToAttendance(tx, app.id, app.employeeId, app.fromDate as string, app.toDate as string, tenantId);
       } else if (action === "Rejected") {
         // Restore pending balance
         const [bal] = await tx.select().from(leaveBalancesTable).where(
@@ -1008,7 +1009,7 @@ router.post("/leave/applications/:id/hr-action", requireHrmsUser, requireRole(..
         }
       }
       if (action === "Approved") {
-        await applyLeaveToAttendance(tx, app.id, app.employeeId, app.fromDate as string, app.toDate as string);
+        await applyLeaveToAttendance(tx, app.id, app.employeeId, app.fromDate as string, app.toDate as string, tenantId);
       }
       return row;
     });

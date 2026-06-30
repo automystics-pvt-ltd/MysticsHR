@@ -303,7 +303,7 @@ export function buildAuthMockModule() {
         res.status(401).json({ error: "no test user" });
         return;
       }
-      req.hrmsUser = JSON.parse(raw) as TestUser;
+      req.hrmsUser = JSON.parse(raw) as unknown as typeof req.hrmsUser;
       next();
     },
     requireRole: (...roles: string[]) =>

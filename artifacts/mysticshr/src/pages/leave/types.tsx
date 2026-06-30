@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
@@ -45,6 +46,7 @@ export default function LeaveTypesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<LeaveTypeForm>(defaultForm);
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListLeaveTypesQueryKey({}) });
 
@@ -89,10 +91,8 @@ export default function LeaveTypesPage() {
     }
   }
 
-  async function handleDeactivate(id: number) {
-    if (!confirm("Deactivate this leave type?")) return;
-    await deleteMutation.mutateAsync({ id });
-    invalidate();
+  function handleDeactivate(id: number) {
+    setPendingConfirm({ title: "Deactivate Leave Type", description: "This leave type will be deactivated. Employees will no longer be able to apply for it.", onConfirm: async () => { await deleteMutation.mutateAsync({ id }); invalidate(); } });
   }
 
   function set(field: keyof LeaveTypeForm, value: any) {
@@ -230,6 +230,7 @@ export default function LeaveTypesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }

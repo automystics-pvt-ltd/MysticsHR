@@ -165,6 +165,7 @@ function TimezoneCombo({ value, onChange }: { value: string; onChange: (v: strin
   );
 }
 import PerformanceHistoryView from "@/components/PerformanceHistoryView";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const STATUS_COLORS: Record<string, string> = {
   "Active": "bg-green-100 text-green-800",
@@ -206,6 +207,7 @@ function EducationSection({ employeeId, canEdit }: { employeeId: number; canEdit
   const create = usePostEmployeesIdEducation({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdEducationQueryKey(employeeId) }) } });
   const patch = usePatchEmployeeEducationId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdEducationQueryKey(employeeId) }) } });
   const del = useDeleteEmployeeEducationId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdEducationQueryKey(employeeId) }) } });
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
   const importMut = usePostEmployeesIdEducationImport();
   const [importOpen, setImportOpen] = useState(false);
 
@@ -246,7 +248,7 @@ function EducationSection({ employeeId, canEdit }: { employeeId: number; canEdit
             {canEdit && (
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(r)}><Pencil className="w-3.5 h-3.5" /></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del.mutate({ id: r.id })}><Trash2 className="w-3.5 h-3.5" /></Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setPendingConfirm({ title: "Delete Education Record", description: "This education record will be permanently deleted.", onConfirm: () => del.mutate({ id: r.id }) })}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
             )}
           </div>
@@ -282,6 +284,7 @@ function EducationSection({ employeeId, canEdit }: { employeeId: number; canEdit
         onImport={async (rows) => await importMut.mutateAsync({ id: employeeId, data: { rows } })}
         onImported={() => qc.invalidateQueries({ queryKey: getGetEmployeesIdEducationQueryKey(employeeId) })}
       />
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }
@@ -292,6 +295,7 @@ function WorkExpSection({ employeeId, canEdit }: { employeeId: number; canEdit: 
   const create = usePostEmployeesIdWorkExperience({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdWorkExperienceQueryKey(employeeId) }) } });
   const patch = usePatchEmployeeWorkExperienceId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdWorkExperienceQueryKey(employeeId) }) } });
   const del = useDeleteEmployeeWorkExperienceId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdWorkExperienceQueryKey(employeeId) }) } });
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
   const importMut = usePostEmployeesIdWorkExperienceImport();
   const [importOpen, setImportOpen] = useState(false);
 
@@ -334,7 +338,7 @@ function WorkExpSection({ employeeId, canEdit }: { employeeId: number; canEdit: 
             {canEdit && (
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(r)}><Pencil className="w-3.5 h-3.5" /></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del.mutate({ id: r.id })}><Trash2 className="w-3.5 h-3.5" /></Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setPendingConfirm({ title: "Delete Work Experience", description: "This work experience record will be permanently deleted.", onConfirm: () => del.mutate({ id: r.id }) })}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
             )}
           </div>
@@ -373,6 +377,7 @@ function WorkExpSection({ employeeId, canEdit }: { employeeId: number; canEdit: 
         onImport={async (rows) => await importMut.mutateAsync({ id: employeeId, data: { rows } })}
         onImported={() => qc.invalidateQueries({ queryKey: getGetEmployeesIdWorkExperienceQueryKey(employeeId) })}
       />
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }
@@ -382,6 +387,7 @@ function DocumentsSection({ employeeId, canEdit }: { employeeId: number; canEdit
   const { data: docs = [] } = useGetEmployeesIdEmpDocuments(employeeId);
   const create = usePostEmployeesIdEmpDocuments({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdEmpDocumentsQueryKey(employeeId) }) } });
   const del = useDeleteEmpDocumentsId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdEmpDocumentsQueryKey(employeeId) }) } });
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
   const importMut = usePostEmployeesIdEmpDocumentsImport();
   const [importOpen, setImportOpen] = useState(false);
 
@@ -427,7 +433,7 @@ function DocumentsSection({ employeeId, canEdit }: { employeeId: number; canEdit
                   <Button size="icon" variant="ghost" className="h-7 w-7"><Download className="w-3.5 h-3.5" /></Button>
                 </a>
               )}
-              {canEdit && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del.mutate({ id: d.id })}><Trash2 className="w-3.5 h-3.5" /></Button>}
+              {canEdit && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setPendingConfirm({ title: "Delete Document", description: "This document record will be permanently deleted.", onConfirm: () => del.mutate({ id: d.id }) })}><Trash2 className="w-3.5 h-3.5" /></Button>}
             </div>
           </div>
         ))}
@@ -481,6 +487,7 @@ function DocumentsSection({ employeeId, canEdit }: { employeeId: number; canEdit
         onImport={async (rows) => await importMut.mutateAsync({ id: employeeId, data: { rows } })}
         onImported={() => qc.invalidateQueries({ queryKey: getGetEmployeesIdEmpDocumentsQueryKey(employeeId) })}
       />
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }
@@ -491,6 +498,7 @@ function SkillsSection({ employeeId, canEdit }: { employeeId: number; canEdit: b
   const create = usePostEmployeesIdSkills({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdSkillsQueryKey(employeeId) }) } });
   const patch = usePatchEmployeeSkillsId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdSkillsQueryKey(employeeId) }) } });
   const del = useDeleteEmployeeSkillsId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdSkillsQueryKey(employeeId) }) } });
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
   const importMut = usePostEmployeesIdSkillsImport();
   const [importOpen, setImportOpen] = useState(false);
 
@@ -532,7 +540,7 @@ function SkillsSection({ employeeId, canEdit }: { employeeId: number; canEdit: b
             {canEdit && (
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(r)}><Pencil className="w-3.5 h-3.5" /></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del.mutate({ id: r.id })}><Trash2 className="w-3.5 h-3.5" /></Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setPendingConfirm({ title: "Delete Skill", description: "This skill record will be permanently deleted.", onConfirm: () => del.mutate({ id: r.id }) })}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
             )}
           </div>
@@ -576,6 +584,7 @@ function SkillsSection({ employeeId, canEdit }: { employeeId: number; canEdit: b
         onImport={async (rows) => await importMut.mutateAsync({ id: employeeId, data: { rows } })}
         onImported={() => qc.invalidateQueries({ queryKey: getGetEmployeesIdSkillsQueryKey(employeeId) })}
       />
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }
@@ -586,6 +595,7 @@ function CertificationsSection({ employeeId, canEdit }: { employeeId: number; ca
   const create = usePostEmployeesIdCertifications({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdCertificationsQueryKey(employeeId) }) } });
   const patch = usePatchEmployeeCertificationsId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdCertificationsQueryKey(employeeId) }) } });
   const del = useDeleteEmployeeCertificationsId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdCertificationsQueryKey(employeeId) }) } });
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
   const importMut = usePostEmployeesIdCertificationsImport();
   const [importOpen, setImportOpen] = useState(false);
 
@@ -640,7 +650,7 @@ function CertificationsSection({ employeeId, canEdit }: { employeeId: number; ca
               {canEdit && (
                 <>
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(r)}><Pencil className="w-3.5 h-3.5" /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del.mutate({ id: r.id })}><Trash2 className="w-3.5 h-3.5" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setPendingConfirm({ title: "Delete Certification", description: "This certification record will be permanently deleted.", onConfirm: () => del.mutate({ id: r.id }) })}><Trash2 className="w-3.5 h-3.5" /></Button>
                 </>
               )}
             </div>
@@ -679,6 +689,7 @@ function CertificationsSection({ employeeId, canEdit }: { employeeId: number; ca
         onImport={async (rows) => await importMut.mutateAsync({ id: employeeId, data: { rows } })}
         onImported={() => qc.invalidateQueries({ queryKey: getGetEmployeesIdCertificationsQueryKey(employeeId) })}
       />
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }
@@ -689,6 +700,7 @@ function FamilySection({ employeeId, canEdit }: { employeeId: number; canEdit: b
   const create = usePostEmployeesIdFamilyMembers({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdFamilyMembersQueryKey(employeeId) }) } });
   const patch = usePatchEmployeeFamilyMembersId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdFamilyMembersQueryKey(employeeId) }) } });
   const del = useDeleteEmployeeFamilyMembersId({ mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getGetEmployeesIdFamilyMembersQueryKey(employeeId) }) } });
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
   const importMut = usePostEmployeesIdFamilyMembersImport();
   const [importOpen, setImportOpen] = useState(false);
 
@@ -738,7 +750,7 @@ function FamilySection({ employeeId, canEdit }: { employeeId: number; canEdit: b
             {canEdit && (
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(r)}><Pencil className="w-3.5 h-3.5" /></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del.mutate({ id: r.id })}><Trash2 className="w-3.5 h-3.5" /></Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setPendingConfirm({ title: "Delete Family Member", description: "This family member record will be permanently deleted.", onConfirm: () => del.mutate({ id: r.id }) })}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
             )}
           </div>
@@ -780,6 +792,7 @@ function FamilySection({ employeeId, canEdit }: { employeeId: number; canEdit: b
         onImport={async (rows) => await importMut.mutateAsync({ id: employeeId, data: { rows } })}
         onImported={() => qc.invalidateQueries({ queryKey: getGetEmployeesIdFamilyMembersQueryKey(employeeId) })}
       />
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }

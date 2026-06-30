@@ -113,7 +113,7 @@ export async function saveAttendanceSuspicionConfig(input: Partial<AttendanceSus
       .set({ value: merged, updatedAt: new Date() })
       .where(eq(systemSettingsTable.id, existing.id));
   } else {
-    await db.insert(systemSettingsTable).values({ tenantId: tenantId ?? null, category: CATEGORY, key: KEY, value: merged });
+    await db.insert(systemSettingsTable).values({ tenantId: tenantId!, category: CATEGORY, key: KEY, value: merged });
   }
   return merged;
 }

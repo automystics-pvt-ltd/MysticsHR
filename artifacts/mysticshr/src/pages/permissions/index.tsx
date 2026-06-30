@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Plus, ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, Shield } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -71,6 +72,7 @@ export default function PermissionsPage() {
   const [showAction, setShowAction] = useState<{ id: number; action: "Approved" | "Rejected" } | null>(null);
   const [actionRemarks, setActionRemarks] = useState("");
   const [overrideEmployeeId, setOverrideEmployeeId] = useState<string>("");
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   const [form, setForm] = useState({ permissionDate: "", startTime: "", endTime: "", reason: "" });
   const [overrideForm, setOverrideForm] = useState({ newLimitMinutes: "480", justification: "" });
@@ -119,12 +121,8 @@ export default function PermissionsPage() {
     }
   }
 
-  async function handleCancel(id: number) {
-    if (!confirm("Cancel this permission request?")) return;
-    try {
-      await cancelMutation.mutateAsync({ id });
-      invalidate();
-    } catch { alert("Failed to cancel"); }
+  function handleCancel(id: number) {
+    setPendingConfirm({ title: "Cancel Permission Request", description: "Are you sure you want to cancel this permission request?", onConfirm: async () => { try { await cancelMutation.mutateAsync({ id }); invalidate(); } catch { alert("Failed to cancel"); } } });
   }
 
   async function handleOverride() {
@@ -368,6 +366,7 @@ export default function PermissionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }

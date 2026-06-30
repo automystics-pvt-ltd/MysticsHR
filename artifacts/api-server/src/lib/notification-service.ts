@@ -102,11 +102,12 @@ export async function seedNotificationPreferencesForEmployee(employeeId: number,
     .from(notificationPreferencesTable)
     .where(eq(notificationPreferencesTable.employeeId, employeeId));
   const have = new Set(existing.map((r) => r.eventType));
-  const rows: Array<{ employeeId: number; eventType: string; emailEnabled: boolean; whatsappEnabled: boolean }> = [];
+  const rows: Array<{ tenantId: number; employeeId: number; eventType: string; emailEnabled: boolean; whatsappEnabled: boolean }> = [];
   for (const meta of NOTIFICATION_EVENT_TYPES) {
     if (have.has(meta.eventType)) continue;
     const d = defaults[meta.eventType];
     rows.push({
+      tenantId,
       employeeId,
       eventType: meta.eventType,
       emailEnabled: d ? d.emailEnabled : true,

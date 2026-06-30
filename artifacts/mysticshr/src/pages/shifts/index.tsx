@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Pencil, Trash2, Clock, CheckCircle, XCircle, Calendar } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Link } from "wouter";
 
@@ -183,6 +184,7 @@ export default function ShiftsPage() {
   const [tmplError, setTmplError] = useState("");
   const [swapAction, setSwapAction] = useState<{ id: number; type: "hod" | "hr" } | null>(null);
   const [actionRemarks, setActionRemarks] = useState("");
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; onConfirm: () => void } | null>(null);
 
   const blankTemplate: TemplateFormValue = { name: "", shiftType: "Fixed", startTime: "09:00", endTime: "18:00", gracePeriodMinutes: 5, breakDurationMinutes: 30, minWorkingHoursMinutes: 480, overtimeThresholdMinutes: 30, weeklyOff: ["Saturday", "Sunday"], notes: "", departmentId: null, shiftRatePerHour: "", nightDifferentialRate: "" };
 
@@ -219,10 +221,8 @@ export default function ShiftsPage() {
     }
   }
 
-  async function handleDeleteTemplate(id: number) {
-    if (!confirm("Delete this shift template?")) return;
-    await deleteTmpl.mutateAsync({ id });
-    await qc.invalidateQueries({ queryKey: getGetShiftsTemplatesQueryKey() });
+  function handleDeleteTemplate(id: number) {
+    setPendingConfirm({ title: "Delete Shift Template", description: "This shift template will be permanently deleted. Existing assignments will not be affected.", onConfirm: async () => { await deleteTmpl.mutateAsync({ id }); await qc.invalidateQueries({ queryKey: getGetShiftsTemplatesQueryKey() }); } });
   }
 
   async function handleSubmitSwap() {
@@ -576,6 +576,7 @@ export default function ShiftsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }

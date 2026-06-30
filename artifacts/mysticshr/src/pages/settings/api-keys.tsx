@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Copy, KeyRound, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -42,6 +43,7 @@ export default function ApiKeysPage() {
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<string[]>([]);
   const [expiresAt, setExpiresAt] = useState("");
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description?: string; confirmLabel?: string; onConfirm: () => void } | null>(null);
   const [creating, setCreating] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
 
@@ -105,19 +107,8 @@ export default function ApiKeysPage() {
     }
   }
 
-  async function handleRevoke(row: ApiKeyRow) {
-    if (!confirm(`Revoke key "${row.name}"? Calls using this key will start failing immediately.`)) return;
-    try {
-      const r = await fetch(`${BASE_URL}/api/api-keys/${row.id}/revoke`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!r.ok) throw new Error(await r.text());
-      toast({ title: "Key revoked" });
-      void load();
-    } catch (err: any) {
-      toast({ title: "Failed to revoke", description: String(err.message ?? err), variant: "destructive" });
-    }
+  function handleRevoke(row: ApiKeyRow) {
+    setPendingConfirm({ title: `Revoke "${row.name}"?`, description: "All API calls using this key will start failing immediately. This cannot be undone.", confirmLabel: "Revoke Key", onConfirm: async () => { try { const r = await fetch(`${BASE_URL}/api/api-keys/${row.id}/revoke`, { method: "POST", credentials: "include" }); if (!r.ok) throw new Error(await r.text()); toast({ title: "Key revoked" }); void load(); } catch (err: any) { toast({ title: "Failed to revoke", description: String(err.message ?? err), variant: "destructive" }); } } });
   }
 
   function copyToClipboard(text: string) {
@@ -298,6 +289,7 @@ export default function ApiKeysPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!pendingConfirm} onOpenChange={o => !o && setPendingConfirm(null)} title={pendingConfirm?.title ?? ""} description={pendingConfirm?.description} confirmLabel={pendingConfirm?.confirmLabel} onConfirm={() => { pendingConfirm?.onConfirm(); setPendingConfirm(null); }} />
     </div>
   );
 }
