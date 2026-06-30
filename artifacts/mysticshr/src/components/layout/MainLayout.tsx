@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -6,6 +7,50 @@ import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { CommandPalette } from "./CommandPalette";
 import { useCurrentHrmsUser } from "@/lib/useCurrentHrmsUser";
+
+function NavigationProgress() {
+  const [location] = useLocation();
+  const [state, setState] = useState<"idle" | "running" | "done">("idle");
+  const prevLocation = useRef(location);
+  const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (location === prevLocation.current) return;
+    prevLocation.current = location;
+
+    if (doneTimer.current) clearTimeout(doneTimer.current);
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+
+    setState("running");
+    doneTimer.current = setTimeout(() => {
+      setState("done");
+      idleTimer.current = setTimeout(() => setState("idle"), 350);
+    }, 120);
+
+    return () => {
+      if (doneTimer.current) clearTimeout(doneTimer.current);
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+    };
+  }, [location]);
+
+  if (state === "idle") return null;
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[9999] h-[2px] pointer-events-none overflow-hidden">
+      <div
+        className="h-full bg-primary shadow-[0_0_8px_1px] shadow-primary/60 transition-all"
+        style={{
+          width: state === "running" ? "75%" : "100%",
+          transitionDuration: state === "running" ? "200ms" : "150ms",
+          transitionTimingFunction: state === "running" ? "ease-out" : "ease-in",
+          opacity: state === "done" ? 0 : 1,
+          transitionProperty: "width, opacity",
+        }}
+      />
+    </div>
+  );
+}
 
 function LayoutSkeleton() {
   return (
@@ -116,6 +161,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-screen flex bg-background overflow-hidden">
+      <NavigationProgress />
       <Sidebar
         isOpen={sidebarOpen}
         setOpen={setSidebarOpen}

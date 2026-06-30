@@ -90,7 +90,48 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 function LoadingScreen() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background">
-      <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      <div className="flex flex-col items-center gap-3">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+        <p className="text-xs text-muted-foreground animate-pulse">Loading…</p>
+      </div>
+    </div>
+  );
+}
+
+function PageSkeleton() {
+  return (
+    <div className="flex flex-col gap-6 p-6 w-full animate-pulse">
+      <div className="flex items-center justify-between">
+        <div className="h-7 w-48 rounded-lg bg-muted/60" />
+        <div className="h-9 w-28 rounded-lg bg-muted/60" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1,2,3,4].map(i => (
+          <div key={i} className="rounded-xl border bg-card p-5 flex flex-col gap-3">
+            <div className="h-4 w-24 rounded bg-muted/60" />
+            <div className="h-8 w-16 rounded bg-muted/60" />
+            <div className="h-3 w-32 rounded bg-muted/40" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="border-b px-5 py-4">
+          <div className="h-5 w-36 rounded bg-muted/60" />
+        </div>
+        <div className="divide-y">
+          {[1,2,3,4,5,6].map(i => (
+            <div key={i} className="flex items-center gap-4 px-5 py-3.5">
+              <div className="h-8 w-8 rounded-full bg-muted/60 shrink-0" />
+              <div className="flex-1 flex gap-4">
+                <div className="h-4 w-32 rounded bg-muted/60" />
+                <div className="h-4 w-24 rounded bg-muted/40" />
+                <div className="h-4 w-20 rounded bg-muted/30 hidden sm:block" />
+              </div>
+              <div className="h-5 w-16 rounded-full bg-muted/40" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -138,7 +179,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isSignedIn, isLoading } = useAuth();
   if (isLoading) return <LoadingScreen />;
   if (!isSignedIn) return <Redirect to="/" />;
-  return <MainLayout>{children}</MainLayout>;
+  return (
+    <MainLayout>
+      <Suspense fallback={<PageSkeleton />}>
+        {children}
+      </Suspense>
+    </MainLayout>
+  );
 }
 
 function RoleProtectedRoute({
@@ -195,9 +242,8 @@ function NotFound() {
 
 function AppRoutes() {
   return (
-    <Suspense fallback={<LoadingScreen />}>
-      <Switch>
-        <Route path="/" component={HomeRedirect} />
+    <Switch>
+      <Route path="/" component={HomeRedirect} />
         {import.meta.env.DEV && (
           <Route path="/__test/payroll-chart">
             <Suspense fallback={null}>
@@ -720,7 +766,6 @@ function AppRoutes() {
 
         <Route component={NotFound} />
       </Switch>
-    </Suspense>
   );
 }
 
