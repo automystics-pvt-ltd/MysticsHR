@@ -244,6 +244,8 @@ router.get("/platform/tenants/:id", async (req, res) => {
       customMaxEmployees: tenantsTable.customMaxEmployees,
       customMaxBranches: tenantsTable.customMaxBranches,
       customMaxApiCalls: tenantsTable.customMaxApiCalls,
+      customPriceMonthly: tenantsTable.customPriceMonthly,
+      customPriceYearly: tenantsTable.customPriceYearly,
       enabledModules: tenantsTable.enabledModules,
       enabledFeatures: tenantsTable.enabledFeatures,
       createdAt: tenantsTable.createdAt,
@@ -266,7 +268,7 @@ router.patch("/platform/tenants/:id", async (req, res) => {
     const body = req.body as Record<string, unknown>;
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     const strFields = ["name","status","contactEmail","industry","website","country","notes"] as const;
-    const numFields = ["planId","customMaxUsers","customMaxEmployees","customMaxBranches","customMaxApiCalls"] as const;
+    const numFields = ["planId","customMaxUsers","customMaxEmployees","customMaxBranches","customMaxApiCalls","customPriceMonthly","customPriceYearly"] as const;
     const tsFields = ["trialEndsAt","subscriptionStartsAt","subscriptionEndsAt"] as const;
     for (const f of strFields) if (f in body) updates[f] = body[f] === null ? null : String(body[f]).trim();
     for (const f of numFields) if (f in body) updates[f] = body[f] === null ? null : Number(body[f]);

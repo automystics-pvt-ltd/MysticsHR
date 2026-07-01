@@ -162,6 +162,7 @@ export interface TenantDetail extends Tenant {
   planEnabledModules?: string[] | null; planEnabledFeatures?: string[] | null;
   customMaxUsers?: number | null; customMaxEmployees?: number | null;
   customMaxBranches?: number | null; customMaxApiCalls?: number | null;
+  customPriceMonthly?: number | null; customPriceYearly?: number | null;
   enabledModules?: string[] | null; enabledFeatures?: string[] | null;
   notes?: string | null; subscriptionStartsAt?: string | null;
   activeUserCount?: number;

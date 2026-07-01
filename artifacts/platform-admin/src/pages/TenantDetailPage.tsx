@@ -261,6 +261,145 @@ function OverviewTab({ tenant, plans, onRefresh }: {
   );
 }
 
+// ─── Custom Pricing Sub-component ─────────────────────────────────────────────
+function CustomPricingCard({ tenant, currentPlan }: { tenant: TenantDetail; currentPlan?: SubscriptionPlan }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const hasOverride = tenant.customPriceMonthly != null || tenant.customPriceYearly != null;
+
+  const [pricingForm, setPricingForm] = useState({
+    customPriceMonthly: tenant.customPriceMonthly != null ? String(Math.round(tenant.customPriceMonthly / 100)) : "",
+    customPriceYearly: tenant.customPriceYearly != null ? String(Math.round(tenant.customPriceYearly / 100)) : "",
+  });
+
+  const pricingMutation = useMutation({
+    mutationFn: (data: { customPriceMonthly: number | null; customPriceYearly: number | null }) =>
+      api.updateTenant(tenant.id, data),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["platform-tenant", tenant.id] });
+      toast({ title: "Custom pricing saved" });
+    },
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  function savePricing() {
+    const monthly = pricingForm.customPriceMonthly !== ""
+      ? Math.round(Number(pricingForm.customPriceMonthly) * 100)
+      : null;
+    const yearly = pricingForm.customPriceYearly !== ""
+      ? Math.round(Number(pricingForm.customPriceYearly) * 100)
+      : null;
+    pricingMutation.mutate({ customPriceMonthly: monthly, customPriceYearly: yearly });
+  }
+
+  function clearPricing() {
+    setPricingForm({ customPriceMonthly: "", customPriceYearly: "" });
+    pricingMutation.mutate({ customPriceMonthly: null, customPriceYearly: null });
+  }
+
+  const planMonthly = currentPlan ? (currentPlan.priceMonthly === 0 ? "Free" : fmtMoney(currentPlan.priceMonthly * 100)) : "—";
+  const planYearly = currentPlan ? (currentPlan.priceYearly === 0 ? "—" : fmtMoney(currentPlan.priceYearly * 100)) : "—";
+
+  return (
+    <Card className="bg-card border-card-border">
+      <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <DollarSign className="w-4 h-4" />
+              Custom Pricing Override
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Set a negotiated price for this customer. Overrides the standard plan price for all payment orders.
+            </p>
+          </div>
+          {hasOverride && (
+            <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-400 border-orange-500/20">
+              Custom pricing active
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="p-5 space-y-4">
+        {/* Standard plan pricing reference */}
+        {currentPlan && (
+          <div className="bg-muted/30 rounded-lg p-3 grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <p className="text-muted-foreground">Standard monthly (from plan)</p>
+              <p className="font-medium text-foreground mt-0.5">{planMonthly}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Standard yearly (from plan)</p>
+              <p className="font-medium text-foreground mt-0.5">{planYearly}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Custom Monthly Price (₹)</Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₹</span>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                className="pl-7"
+                placeholder={currentPlan ? String(Math.round(currentPlan.priceMonthly)) : "e.g. 2999"}
+                value={pricingForm.customPriceMonthly}
+                onChange={(e) => setPricingForm((f) => ({ ...f, customPriceMonthly: e.target.value }))}
+              />
+            </div>
+            {pricingForm.customPriceMonthly !== "" && (
+              <p className="text-xs text-orange-400">
+                Effective: {fmtMoney(Math.round(Number(pricingForm.customPriceMonthly) * 100))} / month
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Custom Yearly Price (₹)</Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₹</span>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                className="pl-7"
+                placeholder={currentPlan && currentPlan.priceYearly > 0 ? String(Math.round(currentPlan.priceYearly)) : "e.g. 29999"}
+                value={pricingForm.customPriceYearly}
+                onChange={(e) => setPricingForm((f) => ({ ...f, customPriceYearly: e.target.value }))}
+              />
+            </div>
+            {pricingForm.customPriceYearly !== "" && (
+              <p className="text-xs text-orange-400">
+                Effective: {fmtMoney(Math.round(Number(pricingForm.customPriceYearly) * 100))} / year
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <Button size="sm" className="h-7 text-xs" onClick={savePricing} disabled={pricingMutation.isPending}>
+            {pricingMutation.isPending ? "Saving…" : "Save Custom Price"}
+          </Button>
+          {hasOverride && (
+            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive"
+              onClick={clearPricing} disabled={pricingMutation.isPending}>
+              Clear Override
+            </Button>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Leave a field blank to fall back to the standard plan price for that billing cycle.
+          Enter whole numbers in INR (e.g. <code>2999</code> for ₹2,999/month).
+          GST (18%) is added on top of these prices at checkout.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Subscription Tab ──────────────────────────────────────────────────────────
 function SubscriptionTab({ tenant, plans }: { tenant: TenantDetail; plans: SubscriptionPlan[] }) {
   const qc = useQueryClient();
@@ -323,14 +462,31 @@ function SubscriptionTab({ tenant, plans }: { tenant: TenantDetail; plans: Subsc
           <CardContent className="p-5">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { label: "Monthly", value: currentPlan.priceMonthly === 0 ? "Free" : `$${(currentPlan.priceMonthly / 100).toFixed(0)}` },
-                { label: "Yearly", value: currentPlan.priceYearly === 0 ? "—" : `$${(currentPlan.priceYearly / 100).toFixed(0)}` },
+                {
+                  label: "Monthly",
+                  value: tenant.customPriceMonthly != null
+                    ? fmtMoney(tenant.customPriceMonthly)
+                    : (currentPlan.priceMonthly === 0 ? "Free" : fmtMoney(currentPlan.priceMonthly * 100)),
+                  custom: tenant.customPriceMonthly != null,
+                },
+                {
+                  label: "Yearly",
+                  value: tenant.customPriceYearly != null
+                    ? fmtMoney(tenant.customPriceYearly)
+                    : (currentPlan.priceYearly === 0 ? "—" : fmtMoney(currentPlan.priceYearly * 100)),
+                  custom: tenant.customPriceYearly != null,
+                },
                 { label: "Max Users", value: fmtLimit(currentPlan.maxUsers) },
                 { label: "Max Employees", value: fmtLimit(currentPlan.maxEmployees) },
-              ].map(({ label, value }) => (
+              ].map(({ label, value, custom }) => (
                 <div key={label}>
                   <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="text-sm font-semibold text-foreground mt-0.5">{value}</p>
+                  <p className="text-sm font-semibold text-foreground mt-0.5 flex items-center gap-1">
+                    {value}
+                    {custom && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 font-normal">custom</span>
+                    )}
+                  </p>
                 </div>
               ))}
             </div>
@@ -346,6 +502,9 @@ function SubscriptionTab({ tenant, plans }: { tenant: TenantDetail; plans: Subsc
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Assign Plan</Button>
         </div>
       )}
+
+      {/* Custom Pricing Override */}
+      <CustomPricingCard tenant={tenant} currentPlan={currentPlan} />
 
       {/* Billing Dates */}
       <Card className="bg-card border-card-border">

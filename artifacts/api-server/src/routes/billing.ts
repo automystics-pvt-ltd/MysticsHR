@@ -52,8 +52,15 @@ function generateInvoiceNumber(tenantId: number): string {
   return `INV-${yyyymm}-${tenantId}-${rand}`;
 }
 
-function planAmountCents(plan: { priceMonthly: number; priceYearly: number }, cycle: string): number {
-  return cycle === "yearly" ? plan.priceYearly * 100 : plan.priceMonthly * 100;
+function planAmountCents(
+  plan: { priceMonthly: number; priceYearly: number },
+  cycle: string,
+  tenant?: { customPriceMonthly?: number | null; customPriceYearly?: number | null } | null,
+): number {
+  if (cycle === "yearly") {
+    return tenant?.customPriceYearly ?? (plan.priceYearly * 100);
+  }
+  return tenant?.customPriceMonthly ?? (plan.priceMonthly * 100);
 }
 
 async function getOrCreateTenantWithPlan(tenantId: number) {
@@ -136,6 +143,8 @@ router.get("/billing/subscription", requireHrmsUser, async (req, res) => {
         billingAddress: tenant.billingAddress,
         razorpayCustomerId: tenant.razorpayCustomerId,
         stripeCustomerId: tenant.stripeCustomerId,
+        customPriceMonthly: tenant.customPriceMonthly ?? null,
+        customPriceYearly: tenant.customPriceYearly ?? null,
       },
       plan,
       subscriptionStatus: subscriptionStatus(tenant),
@@ -179,7 +188,7 @@ router.post("/billing/razorpay/create-order", requireHrmsUser, async (req, res) 
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
     if (!tenant) return void res.status(404).json({ error: "Tenant not found" });
 
-    const baseAmountCents = planAmountCents(plan, billingCycle);
+    const baseAmountCents = planAmountCents(plan, billingCycle, tenant);
     const taxCents = Math.round(baseAmountCents * GST_RATE);
     const totalCents = baseAmountCents + taxCents;
 

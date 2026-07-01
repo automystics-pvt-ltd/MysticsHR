@@ -23,6 +23,8 @@ export const tenantsTable = pgTable("tenants", {
   customMaxEmployees: integer("custom_max_employees"),
   customMaxBranches: integer("custom_max_branches"),
   customMaxApiCalls: integer("custom_max_api_calls"),
+  customPriceMonthly: integer("custom_price_monthly"),
+  customPriceYearly: integer("custom_price_yearly"),
   enabledModules: jsonb("enabled_modules"),
   enabledFeatures: jsonb("enabled_features"),
   razorpayCustomerId: text("razorpay_customer_id"),
