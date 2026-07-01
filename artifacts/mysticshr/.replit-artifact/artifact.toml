@@ -18,9 +18,15 @@ localPort = 19153
 run = "pnpm --filter @workspace/mysticshr run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/mysticshr", "run", "build" ]
 publicDir = "artifacts/mysticshr/dist/public"
 serve = "static"
+
+[services.production.build]
+args = [ "pnpm", "--filter", "@workspace/mysticshr", "run", "build" ]
+
+[services.production.build.env]
+NODE_ENV = "production"
+BASE_PATH = "/"
 
 [[services.production.rewrites]]
 from = "/*"
