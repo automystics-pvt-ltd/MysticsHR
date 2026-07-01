@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Switch } from "@/components/ui/switch";
 import { Plus, Pencil, Trash2, MapPin, Star } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { LocationSelector } from "@/components/LocationSelector";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -205,20 +206,14 @@ export default function BranchesPage() {
               <Label>Address</Label>
               <Input value={form.address} onChange={e => set("address", e.target.value)} placeholder="Street address" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label>City</Label>
-                <Input value={form.city} onChange={e => set("city", e.target.value)} placeholder="Mumbai" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>State</Label>
-                <Input value={form.state} onChange={e => set("state", e.target.value)} placeholder="Maharashtra" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Country</Label>
-                <Input value={form.country} onChange={e => set("country", e.target.value)} placeholder="India" />
-              </div>
-            </div>
+            <LocationSelector
+              country={form.country}
+              state={form.state}
+              city={form.city}
+              onCountryChange={v => set("country", v)}
+              onStateChange={v => set("state", v)}
+              onCityChange={v => set("city", v)}
+            />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Phone</Label>

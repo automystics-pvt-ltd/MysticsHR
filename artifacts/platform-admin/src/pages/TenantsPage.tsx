@@ -14,6 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Building2, Plus, ChevronRight, MoreHorizontal, Search } from "lucide-react";
+import { Country } from "country-state-city";
 
 const STATUS_TABS = ["all", "active", "trial", "suspended", "archived"] as const;
 type StatusTab = typeof STATUS_TABS[number];
@@ -34,7 +35,7 @@ const PLAN_STYLES: Record<string, string> = {
 };
 
 const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Manufacturing","Retail","Services","Government","Non-profit","Other"];
-const COUNTRIES = ["India","United States","United Kingdom","Singapore","UAE","Australia","Canada","Germany","France","Other"];
+const COUNTRIES = Country.getAllCountries().map((c) => c.name);
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });

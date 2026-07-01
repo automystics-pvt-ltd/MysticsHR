@@ -16,6 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { LocationSelector } from "@/components/LocationSelector";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -819,25 +820,18 @@ export default function BillingPage() {
               <Label htmlFor="bl1">Address Line 1</Label>
               <Input id="bl1" value={billingAddress.line1} onChange={e => setBillingAddress(a => ({ ...a, line1: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label>City</Label>
-                <Input value={billingAddress.city} onChange={e => setBillingAddress(a => ({ ...a, city: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>State</Label>
-                <Input value={billingAddress.state} onChange={e => setBillingAddress(a => ({ ...a, state: e.target.value }))} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label>PIN Code</Label>
-                <Input value={billingAddress.pincode} onChange={e => setBillingAddress(a => ({ ...a, pincode: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>Country</Label>
-                <Input value={billingAddress.country} onChange={e => setBillingAddress(a => ({ ...a, country: e.target.value }))} />
-              </div>
+            <LocationSelector
+              country={billingAddress.country}
+              state={billingAddress.state}
+              city={billingAddress.city}
+              onCountryChange={v => setBillingAddress(a => ({ ...a, country: v, state: "", city: "" }))}
+              onStateChange={v => setBillingAddress(a => ({ ...a, state: v, city: "" }))}
+              onCityChange={v => setBillingAddress(a => ({ ...a, city: v }))}
+              layout="stack"
+            />
+            <div className="space-y-1">
+              <Label>PIN Code</Label>
+              <Input value={billingAddress.pincode} onChange={e => setBillingAddress(a => ({ ...a, pincode: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>

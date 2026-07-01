@@ -23,6 +23,7 @@ import {
   Receipt, AlertTriangle, DollarSign, TrendingUp, Ban,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Country } from "country-state-city";
 
 const ALL_MODULES = [
   { id: "core", label: "Core HR", desc: "Employees, departments, designations", required: true },
@@ -72,7 +73,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 const INDUSTRIES = ["Technology","Finance","Healthcare","Education","Manufacturing","Retail","Services","Government","Non-profit","Other"];
-const COUNTRIES = ["India","United States","United Kingdom","Singapore","UAE","Australia","Canada","Germany","France","Other"];
+const COUNTRIES = Country.getAllCountries().map((c) => c.name);
 const STATUSES = ["active","trial","suspended","archived"];
 
 function fmtDate(iso?: string | null) {
