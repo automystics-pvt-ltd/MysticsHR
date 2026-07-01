@@ -7,6 +7,7 @@ import {
   subscriptionHistoryTable,
   tenantsTable,
   subscriptionPlansTable,
+  systemSettingsTable,
 } from "@workspace/db/schema";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import {
@@ -14,6 +15,7 @@ import {
   createRazorpayOrder,
   verifyRazorpaySignature,
   getRazorpayKeyId,
+  type RazorpayConfig,
 } from "../lib/razorpay-client";
 import { isStripeConfigured } from "../lib/stripe-client";
 import { logger } from "../lib/logger";
@@ -22,6 +24,26 @@ import PDFDocument from "pdfkit";
 const router = Router();
 
 const GST_RATE = 0.18;
+
+async function loadTenantRazorpayConfig(tenantId: number): Promise<RazorpayConfig | null> {
+  const rows = await db
+    .select()
+    .from(systemSettingsTable)
+    .where(
+      and(
+        eq(systemSettingsTable.tenantId, tenantId),
+        eq(systemSettingsTable.category, "payment_gateway"),
+      ),
+    );
+  const map: Record<string, string> = {};
+  for (const r of rows) map[r.key] = String(r.value ?? "");
+  const keyId = map["key_id"] || "";
+  const keySecret = map["key_secret"] || "";
+  if (keyId && keySecret) {
+    return { keyId, keySecret, webhookSecret: map["webhook_secret"] || undefined };
+  }
+  return null;
+}
 
 function generateInvoiceNumber(tenantId: number): string {
   const now = new Date();
@@ -120,7 +142,10 @@ router.get("/billing/subscription", requireHrmsUser, async (req, res) => {
       totalInvoices: invoiceCounts?.count ?? 0,
       recentInvoices,
       gatewayConfig: {
-        razorpay: isRazorpayConfigured() ? { keyId: getRazorpayKeyId() } : null,
+        razorpay: await (async () => {
+          const dbCfg = await loadTenantRazorpayConfig(tenantId);
+          return isRazorpayConfigured(dbCfg) ? { keyId: getRazorpayKeyId(dbCfg) } : null;
+        })(),
         stripe: isStripeConfigured() ? {} : null,
       },
     });
@@ -132,11 +157,12 @@ router.get("/billing/subscription", requireHrmsUser, async (req, res) => {
 
 router.post("/billing/razorpay/create-order", requireHrmsUser, async (req, res) => {
   try {
-    if (!isRazorpayConfigured()) {
+    const tenantId = req.hrmsUser!.tenantId;
+    const dbCfg = await loadTenantRazorpayConfig(tenantId);
+    if (!isRazorpayConfigured(dbCfg)) {
       return void res.status(503).json({ error: "Razorpay payment gateway is not configured." });
     }
 
-    const tenantId = req.hrmsUser!.tenantId;
     const { planId, billingCycle = "monthly" } = req.body as { planId: number; billingCycle?: string };
 
     const [plan] = await db
@@ -194,7 +220,7 @@ router.post("/billing/razorpay/create-order", requireHrmsUser, async (req, res) 
         invoiceId: String(invoice!.id),
         billingCycle,
       },
-    });
+    }, dbCfg);
 
     await db
       .update(tenantInvoicesTable)
@@ -219,7 +245,7 @@ router.post("/billing/razorpay/create-order", requireHrmsUser, async (req, res) 
       baseAmountCents,
       taxCents,
       currency: "INR",
-      keyId: getRazorpayKeyId(),
+      keyId: getRazorpayKeyId(dbCfg),
       prefill: {
         name: tenant.name,
         email: tenant.contactEmail ?? "",
@@ -233,11 +259,12 @@ router.post("/billing/razorpay/create-order", requireHrmsUser, async (req, res) 
 
 router.post("/billing/razorpay/verify-payment", requireHrmsUser, async (req, res) => {
   try {
-    if (!isRazorpayConfigured()) {
+    const tenantId = req.hrmsUser!.tenantId;
+    const dbCfg = await loadTenantRazorpayConfig(tenantId);
+    if (!isRazorpayConfigured(dbCfg)) {
       return void res.status(503).json({ error: "Razorpay not configured" });
     }
 
-    const tenantId = req.hrmsUser!.tenantId;
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, invoiceId, planId, billingCycle = "monthly" } = req.body as {
       razorpay_order_id: string;
       razorpay_payment_id: string;
@@ -247,7 +274,7 @@ router.post("/billing/razorpay/verify-payment", requireHrmsUser, async (req, res
       billingCycle?: string;
     };
 
-    const valid = verifyRazorpaySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
+    const valid = verifyRazorpaySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature, dbCfg);
     if (!valid) {
       return void res.status(400).json({ error: "Payment signature verification failed. Do not retry." });
     }

@@ -31,7 +31,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { Settings, Building2, Scale, Banknote, CalendarDays, ShieldCheck, Plus, Pencil, Trash2, Lock, FormInput, Ban, HardDrive, RefreshCw, Play, AlertTriangle, Mail, MessageSquare, Database, Server } from "lucide-react";
+import { Settings, Building2, Scale, Banknote, CalendarDays, ShieldCheck, Plus, Pencil, Trash2, Lock, FormInput, Ban, HardDrive, RefreshCw, Play, AlertTriangle, Mail, MessageSquare, Database, Server, CreditCard } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/hooks/use-toast";
@@ -1220,7 +1220,7 @@ const WA_FIELDS: { key: string; label: string; placeholder?: string }[] = [
 function CredentialCategoryCard({
   category, title, icon, fields,
 }: {
-  category: "email" | "whatsapp";
+  category: "email" | "whatsapp" | "payment_gateway";
   title: string;
   icon: React.ReactNode;
   fields: { key: string; label: string; placeholder?: string; type?: string }[];
@@ -1581,6 +1581,55 @@ function AttendanceSuspicionTab() {
   );
 }
 
+const RAZORPAY_FIELDS: { key: string; label: string; placeholder?: string; type?: string }[] = [
+  { key: "key_id", label: "Key ID", placeholder: "rzp_live_…  or  rzp_test_…" },
+  { key: "key_secret", label: "Key Secret", type: "password" },
+  { key: "webhook_secret", label: "Webhook Secret", type: "password" },
+];
+
+function PaymentGatewayTab() {
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <CreditCard className="w-4 h-4" />
+            Razorpay — Payment Gateway
+          </CardTitle>
+          <CardDescription>
+            Enter your Razorpay API credentials here. Once saved, the billing module will accept
+            subscription payments via Razorpay. Find these in your{" "}
+            <a
+              href="https://dashboard.razorpay.com/app/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-primary"
+            >
+              Razorpay Dashboard → Settings → API Keys
+            </a>
+            . The webhook secret is found under{" "}
+            <a
+              href="https://dashboard.razorpay.com/app/webhooks"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-primary"
+            >
+              Webhooks
+            </a>
+            .
+          </CardDescription>
+        </CardHeader>
+      </Card>
+      <CredentialCategoryCard
+        category="payment_gateway"
+        title="Razorpay Credentials"
+        icon={<CreditCard className="w-4 h-4" />}
+        fields={RAZORPAY_FIELDS}
+      />
+    </div>
+  );
+}
+
 function NotificationCredentialsTab() {
   return (
     <div className="space-y-6">
@@ -1624,6 +1673,7 @@ export default function SystemConfigPage() {
             <TabsTrigger value="leave-blackouts">Leave Blackouts</TabsTrigger>
             {canSeeAttendanceSuspicion && <TabsTrigger value="attendance-suspicion">Attendance Suspicion</TabsTrigger>}
             <TabsTrigger value="notification-defaults">Notification Defaults</TabsTrigger>
+            {isSuperAdmin && <TabsTrigger value="payment-gateway">Payment Gateway</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="credentials">Notification Credentials</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="storage-cleanup">Storage Cleanup</TabsTrigger>}
           </TabsList>
@@ -1641,6 +1691,9 @@ export default function SystemConfigPage() {
             <TabsContent value="attendance-suspicion" className="mt-4"><AttendanceSuspicionTab /></TabsContent>
           )}
           <TabsContent value="notification-defaults" className="mt-4"><NotificationDefaultsTab /></TabsContent>
+          {isSuperAdmin && (
+            <TabsContent value="payment-gateway" className="mt-4"><PaymentGatewayTab /></TabsContent>
+          )}
           {isSuperAdmin && (
             <TabsContent value="credentials" className="mt-4"><NotificationCredentialsTab /></TabsContent>
           )}

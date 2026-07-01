@@ -1,11 +1,30 @@
 import crypto from "node:crypto";
 import { logger } from "./logger";
 
-const KEY_ID = process.env["RAZORPAY_KEY_ID"];
-const KEY_SECRET = process.env["RAZORPAY_KEY_SECRET"];
+const ENV_KEY_ID = process.env["RAZORPAY_KEY_ID"];
+const ENV_KEY_SECRET = process.env["RAZORPAY_KEY_SECRET"];
+const ENV_WEBHOOK_SECRET = process.env["RAZORPAY_WEBHOOK_SECRET"];
 
-export function isRazorpayConfigured(): boolean {
-  return Boolean(KEY_ID && KEY_SECRET);
+export interface RazorpayConfig {
+  keyId: string;
+  keySecret: string;
+  webhookSecret?: string;
+}
+
+function resolveConfig(override?: RazorpayConfig | null): RazorpayConfig | null {
+  if (override?.keyId && override?.keySecret) return override;
+  if (ENV_KEY_ID && ENV_KEY_SECRET) {
+    return { keyId: ENV_KEY_ID, keySecret: ENV_KEY_SECRET, webhookSecret: ENV_WEBHOOK_SECRET };
+  }
+  return null;
+}
+
+export function isRazorpayConfigured(config?: RazorpayConfig | null): boolean {
+  return resolveConfig(config) !== null;
+}
+
+export function getRazorpayKeyId(config?: RazorpayConfig | null): string {
+  return resolveConfig(config)?.keyId ?? "";
 }
 
 interface RazorpayOrderOptions {
@@ -35,13 +54,10 @@ interface RazorpayCustomer {
 async function razorpayRequest<T>(
   method: string,
   path: string,
+  config: RazorpayConfig,
   body?: unknown,
 ): Promise<T> {
-  if (!KEY_ID || !KEY_SECRET) {
-    throw new Error("Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.");
-  }
-
-  const auth = Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString("base64");
+  const auth = Buffer.from(`${config.keyId}:${config.keySecret}`).toString("base64");
   const url = `https://api.razorpay.com/v1${path}`;
 
   const res = await fetch(url, {
@@ -62,8 +78,10 @@ async function razorpayRequest<T>(
   return res.json() as Promise<T>;
 }
 
-export async function createRazorpayOrder(opts: RazorpayOrderOptions): Promise<RazorpayOrder> {
-  return razorpayRequest<RazorpayOrder>("POST", "/orders", {
+export async function createRazorpayOrder(opts: RazorpayOrderOptions, configOverride?: RazorpayConfig | null): Promise<RazorpayOrder> {
+  const config = resolveConfig(configOverride);
+  if (!config) throw new Error("Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.");
+  return razorpayRequest<RazorpayOrder>("POST", "/orders", config, {
     amount: opts.amount,
     currency: opts.currency ?? "INR",
     receipt: opts.receipt ?? `inv_${Date.now()}`,
@@ -71,28 +89,29 @@ export async function createRazorpayOrder(opts: RazorpayOrderOptions): Promise<R
   });
 }
 
-export async function createRazorpayCustomer(name: string, email: string, contact?: string): Promise<RazorpayCustomer> {
-  return razorpayRequest<RazorpayCustomer>("POST", "/customers", { name, email, contact });
+export async function createRazorpayCustomer(name: string, email: string, contact?: string, configOverride?: RazorpayConfig | null): Promise<RazorpayCustomer> {
+  const config = resolveConfig(configOverride);
+  if (!config) throw new Error("Razorpay is not configured.");
+  return razorpayRequest<RazorpayCustomer>("POST", "/customers", config, { name, email, contact });
 }
 
-export async function fetchRazorpayPayment(paymentId: string): Promise<{ id: string; order_id: string; amount: number; status: string; method: string }> {
-  return razorpayRequest("GET", `/payments/${paymentId}`);
+export async function fetchRazorpayPayment(paymentId: string, configOverride?: RazorpayConfig | null): Promise<{ id: string; order_id: string; amount: number; status: string; method: string }> {
+  const config = resolveConfig(configOverride);
+  if (!config) throw new Error("Razorpay is not configured.");
+  return razorpayRequest("GET", `/payments/${paymentId}`, config);
 }
 
-export function verifyRazorpaySignature(orderId: string, paymentId: string, signature: string): boolean {
-  if (!KEY_SECRET) return false;
+export function verifyRazorpaySignature(orderId: string, paymentId: string, signature: string, configOverride?: RazorpayConfig | null): boolean {
+  const config = resolveConfig(configOverride);
+  if (!config) return false;
   const body = `${orderId}|${paymentId}`;
-  const expected = crypto.createHmac("sha256", KEY_SECRET).update(body).digest("hex");
+  const expected = crypto.createHmac("sha256", config.keySecret).update(body).digest("hex");
   return expected === signature;
 }
 
-export function verifyRazorpayWebhookSignature(rawBody: Buffer, signature: string): boolean {
-  const secret = process.env["RAZORPAY_WEBHOOK_SECRET"];
+export function verifyRazorpayWebhookSignature(rawBody: Buffer, signature: string, webhookSecretOverride?: string): boolean {
+  const secret = webhookSecretOverride || ENV_WEBHOOK_SECRET;
   if (!secret) return false;
   const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
   return expected === signature;
-}
-
-export function getRazorpayKeyId(): string {
-  return KEY_ID ?? "";
 }

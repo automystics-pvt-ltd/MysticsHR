@@ -13,7 +13,7 @@ const HR_ROLES = ["customer_admin", "hr_manager"] as const;
 const SUPER_ADMIN = ["customer_admin"] as const;
 
 // Sensitive categories: only super_admin may read/write
-const SENSITIVE_CATEGORIES = ["email", "whatsapp"] as const;
+const SENSITIVE_CATEGORIES = ["email", "whatsapp", "payment_gateway"] as const;
 
 // Known fields per credential category. Used to compute the source ("db" vs
 // "default") for every field, even when nothing has been saved yet — so the
@@ -21,6 +21,7 @@ const SENSITIVE_CATEGORIES = ["email", "whatsapp"] as const;
 const CREDENTIAL_FIELDS: Record<string, readonly string[]> = {
   email: ["host", "port", "secure", "username", "password", "from"],
   whatsapp: ["phone_number_id", "access_token"],
+  payment_gateway: ["key_id", "key_secret", "webhook_secret"],
 };
 
 // ─── System Settings ──────────────────────────────────────────────────────────
