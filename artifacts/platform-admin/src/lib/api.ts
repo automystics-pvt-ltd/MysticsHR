@@ -74,11 +74,17 @@ export const api = {
     apiFetch<PlatformAdmin>(`/platform/admins/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 
   // Audit logs
-  auditLogs: (params?: { limit?: number; offset?: number; tenantId?: number }) => {
+  auditLogs: (params?: { limit?: number; offset?: number; tenantId?: number; userId?: number; action?: string; dateFrom?: string; dateTo?: string; sortField?: string; sortDir?: string }) => {
     const qs = new URLSearchParams();
     if (params?.limit != null) qs.set("limit", String(params.limit));
     if (params?.offset != null) qs.set("offset", String(params.offset));
     if (params?.tenantId != null) qs.set("tenantId", String(params.tenantId));
+    if (params?.userId != null) qs.set("userId", String(params.userId));
+    if (params?.action) qs.set("action", params.action);
+    if (params?.dateFrom) qs.set("dateFrom", params.dateFrom);
+    if (params?.dateTo) qs.set("dateTo", params.dateTo);
+    if (params?.sortField) qs.set("sortField", params.sortField);
+    if (params?.sortDir) qs.set("sortDir", params.sortDir);
     return apiFetch<{ data: AuditLog[]; total: number; limit: number; offset: number }>(
       `/platform/audit-logs?${qs}`
     );
@@ -149,7 +155,7 @@ export interface Tenant {
   isActive: boolean; status: string;
   planId?: number | null; planName?: string | null; planType?: string | null;
   contactEmail?: string | null; industry?: string | null;
-  website?: string | null; country?: string | null;
+  website?: string | null; country?: string | null; notes?: string | null;
   billingCycle?: string; gracePeriodDays?: number;
   trialEndsAt?: string | null; subscriptionEndsAt?: string | null;
   userCount?: number; employeeCount?: number;
