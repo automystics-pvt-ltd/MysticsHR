@@ -52,3 +52,4 @@ Thumbs.db
 test-results/
 playwright-report/
 .playwright/
+.env.pm2

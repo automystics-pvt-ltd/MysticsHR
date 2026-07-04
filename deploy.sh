@@ -28,9 +28,20 @@ else
   pnpm --filter db push-force
 fi
 
+echo "==> Writing secrets to .env.pm2 (read by ecosystem.config.cjs)"
+# Capture secrets from the current shell into a local file that pm2 reads.
+# This file is gitignored — secrets never leave the server.
+cat > "$PROJECT_DIR/.env.pm2" << ENVEOF
+DATABASE_URL=${DATABASE_URL:-}
+JWT_SECRET=${JWT_SECRET:-}
+RESEND_API_KEY=${RESEND_API_KEY:-}
+APP_URL=${APP_URL:-https://mysticshr.automystics.tech}
+ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-https://mysticshr.automystics.tech}
+RESEND_FROM=${RESEND_FROM:-MysticsHR <noreply@automystics.tech>}
+ENVEOF
+chmod 600 "$PROJECT_DIR/.env.pm2"
+
 echo "==> Restarting API server (via pm2 ecosystem)"
-# ecosystem.config.cjs bakes in SERVE_SPA=true and all other env vars so
-# they survive pm2 restarts without relying on the calling shell's environment.
 mkdir -p /var/log/pm2
 pm2 reload ecosystem.config.cjs --update-env 2>/dev/null || \
   pm2 start ecosystem.config.cjs
