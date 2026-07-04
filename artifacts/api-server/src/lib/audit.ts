@@ -5,6 +5,7 @@ import type { HrmsUser } from "@workspace/db/schema";
 export async function logAudit(params: {
   user?: HrmsUser | null;
   tenantId?: number | null;
+  platformAdminEmail?: string;
   action: string;
   module: string;
   recordId?: string | number;
@@ -18,6 +19,7 @@ export async function logAudit(params: {
       tenantId: (params.tenantId ?? params.user?.tenantId) as number,
       userId: params.user?.id ?? null,
       userEmail: params.user?.email ?? null,
+      platformAdminEmail: params.platformAdminEmail ?? null,
       action: params.action,
       module: params.module,
       recordId: params.recordId !== undefined ? String(params.recordId) : null,

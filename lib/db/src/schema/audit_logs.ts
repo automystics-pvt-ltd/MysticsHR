@@ -15,6 +15,7 @@ export const auditLogsTable = pgTable("audit_logs", {
   previousValue: text("previous_value"),
   newValue: text("new_value"),
   ipAddress: text("ip_address"),
+  platformAdminEmail: text("platform_admin_email"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

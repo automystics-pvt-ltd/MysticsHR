@@ -407,6 +407,7 @@ function SubscriptionTab({ tenant, plans }: { tenant: TenantDetail; plans: Subsc
   const qc = useQueryClient();
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
+  const [changeReason, setChangeReason] = useState("");
   const [form, setForm] = useState({
     planId: tenant.planId ? String(tenant.planId) : "",
     trialEndsAt: tenant.trialEndsAt ? tenant.trialEndsAt.slice(0, 10) : "",
@@ -422,11 +423,13 @@ function SubscriptionTab({ tenant, plans }: { tenant: TenantDetail; plans: Subsc
       trialEndsAt: form.trialEndsAt || null,
       subscriptionStartsAt: form.subscriptionStartsAt || null,
       subscriptionEndsAt: form.subscriptionEndsAt || null,
+      changeReason: changeReason.trim() || undefined,
     }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["platform-tenant", tenant.id] });
       toast({ title: "Subscription updated" });
       setEditing(false);
+      setChangeReason("");
     },
     onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
@@ -453,7 +456,7 @@ function SubscriptionTab({ tenant, plans }: { tenant: TenantDetail; plans: Subsc
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(true)}>Change Plan</Button>
               ) : (
                 <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditing(false); setChangeReason(""); }}>Cancel</Button>
                   <Button size="sm" className="h-7 text-xs" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
                     {updateMutation.isPending ? "Saving…" : "Save"}
                   </Button>
@@ -550,6 +553,16 @@ function SubscriptionTab({ tenant, plans }: { tenant: TenantDetail; plans: Subsc
                     {plans.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name} ({p.type})</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="col-span-full space-y-1.5">
+                <Label className="text-xs">Reason for Change <span className="text-muted-foreground">(optional — recorded in audit log)</span></Label>
+                <textarea
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                  rows={2}
+                  placeholder="e.g. Customer requested upgrade via support ticket #1234"
+                  value={changeReason}
+                  onChange={(e) => setChangeReason(e.target.value)}
+                />
               </div>
             </div>
           )}

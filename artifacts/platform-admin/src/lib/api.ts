@@ -83,13 +83,15 @@ export const api = {
     apiFetch<PlatformAdmin>(`/platform/admins/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 
   // Audit logs
-  auditLogs: (params?: { limit?: number; offset?: number; tenantId?: number; userId?: number; action?: string; dateFrom?: string; dateTo?: string; sortField?: string; sortDir?: string }) => {
+  auditLogs: (params?: { limit?: number; offset?: number; tenantId?: number; userId?: number; action?: string; module?: string; platformAdminEmail?: string; dateFrom?: string; dateTo?: string; sortField?: string; sortDir?: string }) => {
     const qs = new URLSearchParams();
     if (params?.limit != null) qs.set("limit", String(params.limit));
     if (params?.offset != null) qs.set("offset", String(params.offset));
     if (params?.tenantId != null) qs.set("tenantId", String(params.tenantId));
     if (params?.userId != null) qs.set("userId", String(params.userId));
     if (params?.action) qs.set("action", params.action);
+    if (params?.module) qs.set("module", params.module);
+    if (params?.platformAdminEmail) qs.set("platformAdminEmail", params.platformAdminEmail);
     if (params?.dateFrom) qs.set("dateFrom", params.dateFrom);
     if (params?.dateTo) qs.set("dateTo", params.dateTo);
     if (params?.sortField) qs.set("sortField", params.sortField);
@@ -212,11 +214,19 @@ export interface Analytics {
 }
 
 export interface AuditLog {
-  id: number; tenantId: number; action: string;
-  entityType?: string; entityId?: number;
-  module?: string; userEmail?: string;
-  performedByUserId?: number; createdAt: string;
-  metadata?: Record<string, unknown>;
+  id: number;
+  tenantId: number;
+  userId: number | null;
+  userEmail: string | null;
+  platformAdminEmail: string | null;
+  action: string;
+  module: string | null;
+  recordId: string | null;
+  fieldName: string | null;
+  previousValue: string | null;
+  newValue: string | null;
+  ipAddress: string | null;
+  createdAt: string;
 }
 
 // ─── Billing Types ─────────────────────────────────────────────────────────────

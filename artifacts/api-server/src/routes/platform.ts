@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../lib/db";
+import { logAudit } from "../lib/audit";
 import {
   platformAdminsTable,
   tenantsTable,
@@ -11,7 +12,7 @@ import {
   tenantInvoicesTable,
   tenantPaymentsTable,
 } from "@workspace/db/schema";
-import { and, eq, sql, desc, ne, lt, lte, or, isNull } from "drizzle-orm";
+import { and, eq, sql, desc, asc, ne, lt, lte, gte, or, isNull, ilike } from "drizzle-orm";
 import {
   signPlatformToken,
   setPlatformAuthCookie,
@@ -294,6 +295,14 @@ router.post("/platform/tenants", async (req, res) => {
       subscriptionStartsAt: subscriptionStartsAt ? new Date(subscriptionStartsAt) : null,
       subscriptionEndsAt: subscriptionEndsAt ? new Date(subscriptionEndsAt) : null,
     }).returning();
+    void logAudit({
+      tenantId: tenant.id,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: "tenant.created",
+      module: "tenant",
+      recordId: tenant.id,
+      newValue: `name="${tenant.name}", slug="${tenant.slug}", status="${status}"`,
+    });
     res.status(201).json(tenant);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -366,9 +375,24 @@ router.patch("/platform/tenants/:id", async (req, res) => {
       updates.isActive = s === "active" || s === "trial";
     }
     if ("isActive" in body && !("status" in updates)) updates.isActive = Boolean(body.isActive);
+    const changeReason = typeof body.changeReason === "string" ? body.changeReason.trim() : undefined;
     const [updated] = await db.update(tenantsTable).set(updates as never)
       .where(eq(tenantsTable.id, id)).returning();
     if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    const isPlanChange = "planId" in body;
+    const isStatusChange = "status" in body;
+    void logAudit({
+      tenantId: id,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: isPlanChange ? "tenant.plan_changed" : isStatusChange ? "tenant.status_changed" : "tenant.updated",
+      module: isPlanChange ? "subscription" : "tenant",
+      recordId: id,
+      newValue: [
+        isPlanChange ? `planId=${String(body.planId ?? "none")}` : null,
+        isStatusChange ? `status=${String(body.status)}` : null,
+        changeReason ? `reason="${changeReason}"` : null,
+      ].filter(Boolean).join(", ") || JSON.stringify(Object.fromEntries(Object.keys(body).filter(k => k !== "changeReason").map(k => [k, body[k]]))),
+    });
     res.json(updated);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -379,8 +403,16 @@ router.delete("/platform/tenants/:id", async (req, res) => {
     if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [updated] = await db.update(tenantsTable)
       .set({ status: "archived", isActive: false, updatedAt: new Date() })
-      .where(eq(tenantsTable.id, id)).returning({ id: tenantsTable.id });
+      .where(eq(tenantsTable.id, id)).returning({ id: tenantsTable.id, name: tenantsTable.name });
     if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    void logAudit({
+      tenantId: id,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: "tenant.archived",
+      module: "tenant",
+      recordId: id,
+      newValue: `Tenant "${updated.name}" archived`,
+    });
     res.json({ ok: true, id: updated.id });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -428,6 +460,14 @@ router.patch("/platform/tenants/:id/config", async (req, res) => {
     const [updated] = await db.update(tenantsTable).set(updates as never)
       .where(eq(tenantsTable.id, id)).returning();
     if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    void logAudit({
+      tenantId: id,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: "tenant.config_updated",
+      module: "modules",
+      recordId: id,
+      newValue: `modules=${JSON.stringify(body.enabledModules ?? "inherited")}, features=${JSON.stringify(body.enabledFeatures ?? "inherited")}`,
+    });
     res.json(updated);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -444,6 +484,14 @@ router.patch("/platform/tenants/:id/theme", async (req, res) => {
       .where(eq(tenantsTable.id, id))
       .returning({ id: tenantsTable.id, themeConfig: tenantsTable.themeConfig });
     if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    void logAudit({
+      tenantId: id,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: "tenant.theme_updated",
+      module: "theme",
+      recordId: id,
+      newValue: `preset=${(themeConfig as Record<string, unknown>)?.preset ?? "unknown"}`,
+    });
     res.json({ ok: true, themeConfig: updated.themeConfig });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -534,6 +582,14 @@ router.post("/platform/tenants/:id/users", async (req, res) => {
       passwordHash, isActive: true,
     }).returning();
     const { passwordHash: _, ...safeUser } = created;
+    void logAudit({
+      tenantId,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: "tenant.user_created",
+      module: "users",
+      recordId: created.id,
+      newValue: `email="${normalizedEmail}", role="${role}"`,
+    });
     res.status(201).json(safeUser);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -551,6 +607,14 @@ router.patch("/platform/tenants/:tenantId/users/:userId", async (req, res) => {
       .where(and(eq(hrmsUsersTable.id, userId), eq(hrmsUsersTable.tenantId, tenantId))).returning();
     if (!updated) { res.status(404).json({ error: "User not found" }); return; }
     const { passwordHash: _, ...safeUser } = updated;
+    void logAudit({
+      tenantId,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: isActive !== undefined ? "tenant.user_toggled" : "tenant.user_role_changed",
+      module: "users",
+      recordId: userId,
+      newValue: isActive !== undefined ? `isActive=${String(isActive)}` : `role="${role ?? ""}"`,
+    });
     res.json(safeUser);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -575,6 +639,14 @@ router.post("/platform/tenants/:tenantId/users/:userId/reset-password", async (r
       .where(and(eq(hrmsUsersTable.id, userId), eq(hrmsUsersTable.tenantId, tenantId)))
       .returning({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name });
     if (!updated) { res.status(404).json({ error: "User not found" }); return; }
+    void logAudit({
+      tenantId,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: "tenant.user_password_reset",
+      module: "users",
+      recordId: userId,
+      newValue: `email="${updated.email}" (password reset by platform admin)`,
+    });
     res.json({ ok: true, newPassword: plain, user: updated });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -695,11 +767,35 @@ router.get("/platform/audit-logs", async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
     const tenantId = req.query.tenantId ? Number(req.query.tenantId) : undefined;
-    const where = tenantId ? eq(auditLogsTable.tenantId, tenantId) : undefined;
+    const userId = req.query.userId ? Number(req.query.userId) : undefined;
+    const action = req.query.action as string | undefined;
+    const module = req.query.module as string | undefined;
+    const platformAdminEmail = req.query.platformAdminEmail as string | undefined;
+    const dateFrom = req.query.dateFrom as string | undefined;
+    const dateTo = req.query.dateTo as string | undefined;
+    const sortField = (req.query.sortField as string) ?? "createdAt";
+    const sortDir = (req.query.sortDir as string) ?? "desc";
+
+    const conditions = [];
+    if (tenantId) conditions.push(eq(auditLogsTable.tenantId, tenantId));
+    if (userId) conditions.push(eq(auditLogsTable.userId, userId));
+    if (action) conditions.push(ilike(auditLogsTable.action, `%${action}%`));
+    if (module) conditions.push(ilike(auditLogsTable.module, `%${module}%`));
+    if (platformAdminEmail) conditions.push(ilike(auditLogsTable.platformAdminEmail, `%${platformAdminEmail}%`));
+    if (dateFrom) conditions.push(gte(auditLogsTable.createdAt, new Date(dateFrom)));
+    if (dateTo) conditions.push(lte(auditLogsTable.createdAt, new Date(`${dateTo}T23:59:59`)));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
     const [{ count }] = await db.select({ count: sql<number>`count(*)::int` })
       .from(auditLogsTable).where(where);
-    const logs = await db.select().from(auditLogsTable).where(where)
-      .orderBy(desc(auditLogsTable.createdAt)).limit(limit).offset(offset);
+
+    const orderCol = sortField === "tenantId" ? auditLogsTable.tenantId
+      : sortField === "id" ? auditLogsTable.id
+      : auditLogsTable.createdAt;
+    const orderFn = sortDir === "asc" ? asc : desc;
+
+    const logs = await db.select().from(auditLogsTable)
+      .where(where).orderBy(orderFn(orderCol)).limit(limit).offset(offset);
     res.json({ data: logs, total: count ?? 0, limit, offset });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
@@ -1185,6 +1281,17 @@ router.patch("/platform/tenants/:id/billing", async (req, res) => {
     const [updated] = await db.update(tenantsTable).set(updates as never)
       .where(eq(tenantsTable.id, id)).returning();
     if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    void logAudit({
+      tenantId: id,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: "tenant.billing_updated",
+      module: "billing",
+      recordId: id,
+      newValue: [
+        billingCycle ? `billingCycle="${billingCycle}"` : null,
+        gracePeriodDays != null ? `gracePeriodDays=${gracePeriodDays}` : null,
+      ].filter(Boolean).join(", "),
+    });
     res.json(updated);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
