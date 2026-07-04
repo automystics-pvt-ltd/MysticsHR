@@ -1,0 +1,28 @@
+┌────┬───────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name      │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+└────┴───────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+host metrics | cpu: 99.4% | ram usage: 25.5% | lo: ⇓ 0.001mb/s ⇑ 0.001mb/s | eth0: ⇓ 0.001mb/s ⇑ 0mb/s | disk: ⇓ 0mb/s ⇑ 0.046mb/s |
+ 378270[PM2][WARN] Applications mysticshr-api not running, starting...
+[PM2] App [mysticshr-api] launched (1 instances)
+┌────┬──────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name             │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼──────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ mysticshr-api    │ default     │ 0.0.0   │ fork    │ 878087   │ 0s     │ 0    │ online    │ 0%       │ 11.9mb   │ root     │ disabled │
+└────┴──────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+host metrics | cpu: 99.4% | ram usage: 25.5% | lo: ⇓ 0.001mb/s ⇑ 0.001mb/s | eth0: ⇓ 0.001mb/s ⇑ 0mb/s | disk: ⇓ 0mb/s ⇑ 0.046mb/s |
+[PM2] Saving current process list...
+[PM2] Successfully saved in /root/.pm2/dump.pm2
+┌────┬──────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name             │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼──────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ mysticshr-api    │ default     │ 0.0.0   │ fork    │ 878408   │ 0s     │ 4    │ online    │ 0%       │ 93.1mb   │ root     │ disabled │
+└────┴──────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+host metrics | cpu: 99.4% | ram usage: 25.5% | lo: ⇓ 0.001mb/s ⇑ 0.001mb/s | eth0: ⇓ 0.001mb/s ⇑ 0mb/s | disk: ⇓ 0mb/s ⇑ 0.046mb/s |
+[TAILING] Tailing last 6 lines for [mysticshr-api] process (change the value with --lines option)
+/var/log/pm2/mysticshr-api-error-0.log last 6 lines:
+/var/log/pm2/mysticshr-api-out-0.log last 6 lines:
+0|mysticsh | Dir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+0|mysticsh | {"level":30,"time":1783153467783,"pid":878330,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+0|mysticsh | {"level":30,"time":1783153467789,"pid":878330,"hostname":"srv1609330","port":8080,"msg":"Server listening"}
+0|mysticsh | {"level":30,"time":1783153467833,"pid":878330,"hostname":"srv1609330","msg":"[scheduler] started — runs every hour at :00 + notification jobs"}
+0|mysticsh | {"level":50,"time":1783153467837,"pid":878330,"hostname":"srv1609330","err":{"type":"Error","message":"listen EADDRINUSE: address already in use 0.0.0.0:8080","stack":"Error: listen EADDRINUSE: address already in use 0.0.0.0:8080\n    at Server.setupListenHandle [as _listen2] (node:net:2008:16)\n    at listenInCluster (node:net:2065:12)\n    at node:net:2274:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","code":"EADDRINUSE","errno":-98,"syscall":"listen","address":"0.0.0.0","port":8080},"msg":"Error listening on port"}
