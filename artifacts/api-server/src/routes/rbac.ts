@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { db } from "../lib/db";
-import { rolePermissionsTable } from "@workspace/db/schema";
+import { rolePermissionsTable, tenantsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import {
   MODULE_REGISTRY,
@@ -26,8 +26,26 @@ router.get("/rbac/actions", requireHrmsUser, (_req, res) => {
 
 router.get("/rbac/my-permissions", requireHrmsUser, async (req, res) => {
   try {
-    const map = await getPermissionsForUser(req.hrmsUser!.tenantId, req.hrmsUser!.role);
-    res.json(map);
+    const user = req.hrmsUser!;
+    const map = await getPermissionsForUser(user.tenantId, user.role);
+
+    // Enforce tenant-level module gating set by Platform Admin
+    const [tenant] = await db
+      .select({ enabledModules: tenantsTable.enabledModules })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.id, user.tenantId))
+      .limit(1);
+
+    const enabledModules = tenant?.enabledModules as string[] | null;
+    if (enabledModules && enabledModules.length > 0) {
+      const filtered: Record<string, string[]> = {};
+      for (const [key, actions] of Object.entries(map)) {
+        filtered[key] = enabledModules.includes(key) ? (actions as string[]) : [];
+      }
+      res.json(filtered);
+    } else {
+      res.json(map);
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

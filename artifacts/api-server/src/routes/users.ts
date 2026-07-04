@@ -186,8 +186,18 @@ router.post(
   },
 );
 
-router.get("/users/me", requireHrmsUser, (req, res) => {
-  res.json(safeUser(req.hrmsUser!));
+router.get("/users/me", requireHrmsUser, async (req, res) => {
+  const user = req.hrmsUser!;
+  let themeConfig: unknown = null;
+  if (user.tenantId) {
+    const [tenant] = await db
+      .select({ themeConfig: tenantsTable.themeConfig })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.id, user.tenantId))
+      .limit(1);
+    themeConfig = tenant?.themeConfig ?? null;
+  }
+  res.json({ ...safeUser(user), themeConfig });
 });
 
 router.get(

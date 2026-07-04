@@ -27,6 +27,7 @@ export const tenantsTable = pgTable("tenants", {
   customPriceYearly: integer("custom_price_yearly"),
   enabledModules: jsonb("enabled_modules"),
   enabledFeatures: jsonb("enabled_features"),
+  themeConfig: jsonb("theme_config"),
   razorpayCustomerId: text("razorpay_customer_id"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),

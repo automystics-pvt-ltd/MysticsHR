@@ -394,6 +394,7 @@ router.get("/platform/tenants/:id/config", async (req, res) => {
     const [row] = await db.select({
       enabledModules: tenantsTable.enabledModules,
       enabledFeatures: tenantsTable.enabledFeatures,
+      themeConfig: tenantsTable.themeConfig,
       customMaxUsers: tenantsTable.customMaxUsers,
       customMaxEmployees: tenantsTable.customMaxEmployees,
       customMaxBranches: tenantsTable.customMaxBranches,
@@ -428,6 +429,22 @@ router.patch("/platform/tenants/:id/config", async (req, res) => {
       .where(eq(tenantsTable.id, id)).returning();
     if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
     res.json(updated);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenant Theme ──────────────────────────────────────────────────────────────
+
+router.patch("/platform/tenants/:id/theme", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const { themeConfig } = req.body as { themeConfig: unknown };
+    const [updated] = await db.update(tenantsTable)
+      .set({ themeConfig: themeConfig as never, updatedAt: new Date() })
+      .where(eq(tenantsTable.id, id))
+      .returning({ id: tenantsTable.id, themeConfig: tenantsTable.themeConfig });
+    if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    res.json({ ok: true, themeConfig: updated.themeConfig });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

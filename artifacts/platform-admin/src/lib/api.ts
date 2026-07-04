@@ -56,6 +56,8 @@ export const api = {
   getTenantConfig: (id: number) => apiFetch<TenantConfig>(`/platform/tenants/${id}/config`),
   updateTenantConfig: (id: number, data: Partial<TenantConfig>) =>
     apiFetch<Tenant>(`/platform/tenants/${id}/config`, { method: "PATCH", body: JSON.stringify(data) }),
+  updateTenantTheme: (id: number, themeConfig: ThemeConfig) =>
+    apiFetch<{ ok: boolean; themeConfig: ThemeConfig }>(`/platform/tenants/${id}/theme`, { method: "PATCH", body: JSON.stringify({ themeConfig }) }),
 
   // Tenant Health
   getTenantHealth: (id: number) => apiFetch<TenantHealth>(`/platform/tenants/${id}/health`),
@@ -174,8 +176,13 @@ export interface TenantDetail extends Tenant {
   activeUserCount?: number;
 }
 
+export interface ThemeConfig {
+  preset: string;
+}
+
 export interface TenantConfig {
   enabledModules?: string[] | null; enabledFeatures?: string[] | null;
+  themeConfig?: ThemeConfig | null;
   customMaxUsers?: number | null; customMaxEmployees?: number | null;
   customMaxBranches?: number | null; customMaxApiCalls?: number | null;
   planEnabledModules?: string[] | null; planEnabledFeatures?: string[] | null;

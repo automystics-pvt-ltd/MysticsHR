@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, TenantDetail, SubscriptionPlan, Invoice, fmtMoney } from "@/lib/api";
+import { api, TenantDetail, SubscriptionPlan, Invoice, ThemeConfig, fmtMoney } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +21,7 @@ import {
   Activity, Building2, Globe, Mail, Briefcase, FileText,
   CheckCircle2, XCircle, Clock, Zap, GitBranch,
   Receipt, AlertTriangle, DollarSign, TrendingUp, Ban,
-  KeyRound, Copy, Check,
+  KeyRound, Copy, Check, Palette,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Country } from "country-state-city";
@@ -1526,6 +1526,115 @@ function BillingTab({ tenantId }: { tenantId: number }) {
   );
 }
 
+// ─── Theme Tab ────────────────────────────────────────────────────────────────
+
+const THEME_PRESETS: { key: string; name: string; primary: string; sidebar: string; hex: string }[] = [
+  { key: "violet",  name: "Violet",  hex: "#7C3AED", primary: "262 83% 58%", sidebar: "258 54% 7%" },
+  { key: "blue",    name: "Blue",    hex: "#2563EB", primary: "217 91% 60%", sidebar: "222 47% 7%" },
+  { key: "indigo",  name: "Indigo",  hex: "#4F46E5", primary: "239 84% 65%", sidebar: "236 48% 7%" },
+  { key: "teal",    name: "Teal",    hex: "#0D9488", primary: "174 76% 40%", sidebar: "174 50% 6%" },
+  { key: "emerald", name: "Emerald", hex: "#059669", primary: "152 76% 40%", sidebar: "152 45% 6%" },
+  { key: "rose",    name: "Rose",    hex: "#E11D48", primary: "347 77% 55%", sidebar: "345 40% 6%" },
+  { key: "amber",   name: "Amber",   hex: "#D97706", primary: "38 92% 50%",  sidebar: "25 45% 6%"  },
+  { key: "slate",   name: "Slate",   hex: "#475569", primary: "215 25% 55%", sidebar: "222 47% 6%" },
+];
+
+function ThemeTab({ tenant }: { tenant: TenantDetail }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: config, isLoading } = useQuery({
+    queryKey: ["platform-tenant-config", tenant.id],
+    queryFn: () => api.getTenantConfig(tenant.id),
+  });
+
+  const currentPreset = (config?.themeConfig as ThemeConfig | null | undefined)?.preset ?? "violet";
+  const [selected, setSelected] = useState<string | null>(null);
+  const activePreset = selected ?? currentPreset;
+
+  const saveMutation = useMutation({
+    mutationFn: (preset: string) => api.updateTenantTheme(tenant.id, { preset }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["platform-tenant-config", tenant.id] });
+      toast({ title: "Theme saved", description: "Tenant's app theme updated." });
+      setSelected(null);
+    },
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  if (isLoading) return <div className="text-sm text-muted-foreground py-6 text-center">Loading…</div>;
+
+  const preview = THEME_PRESETS.find((p) => p.key === activePreset) ?? THEME_PRESETS[0];
+
+  return (
+    <div className="space-y-6">
+      {/* Live preview strip */}
+      <Card className="bg-card border-card-border overflow-hidden">
+        <div className="flex h-16" style={{ backgroundColor: `hsl(${preview.sidebar})` }}>
+          <div className="w-36 h-full flex items-center px-4 gap-2">
+            <div className="w-5 h-5 rounded" style={{ backgroundColor: preview.hex }} />
+            <span className="text-xs font-semibold" style={{ color: `hsl(${preview.primary})` }}>{tenant.name}</span>
+          </div>
+          <div className="flex-1 flex items-center px-4 gap-3">
+            {["Dashboard","Employees","Payroll"].map((l) => (
+              <div key={l} className="text-xs px-2 py-1 rounded" style={{ backgroundColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)" }}>{l}</div>
+            ))}
+          </div>
+          <div className="flex items-center pr-4">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: preview.hex }}>
+              {tenant.name.charAt(0).toUpperCase()}
+            </div>
+          </div>
+        </div>
+        <CardContent className="px-5 py-3 border-t border-border flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: preview.hex }} />
+          <span className="text-xs text-muted-foreground">Live preview — <span className="font-medium text-foreground">{preview.name}</span> theme</span>
+        </CardContent>
+      </Card>
+
+      {/* Preset picker */}
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <CardTitle className="text-sm font-semibold">Choose a Theme Preset</CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {THEME_PRESETS.map((preset) => {
+            const isActive = activePreset === preset.key;
+            return (
+              <button
+                key={preset.key}
+                onClick={() => setSelected(preset.key)}
+                className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all cursor-pointer ${
+                  isActive
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border bg-muted/20 hover:border-primary/40"
+                }`}
+              >
+                <div className="flex gap-1.5">
+                  <div className="w-7 h-7 rounded-full shadow-sm border border-white/10" style={{ backgroundColor: preset.hex }} />
+                  <div className="w-7 h-7 rounded-full shadow-sm" style={{ backgroundColor: `hsl(${preset.sidebar})` }} />
+                </div>
+                <span className="text-xs font-medium text-foreground">{preset.name}</span>
+                {isActive && <span className="text-[10px] text-primary font-semibold">Active</span>}
+              </button>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button
+          onClick={() => saveMutation.mutate(activePreset)}
+          disabled={saveMutation.isPending || (selected === null && activePreset === currentPreset)}
+          className="h-9 px-6"
+        >
+          {saveMutation.isPending ? "Saving…" : "Apply Theme"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -1625,6 +1734,9 @@ export function TenantDetailPage() {
           <TabsTrigger value="billing" className="gap-1.5 text-xs">
             <Receipt className="w-3.5 h-3.5" />Billing
           </TabsTrigger>
+          <TabsTrigger value="theme" className="gap-1.5 text-xs">
+            <Palette className="w-3.5 h-3.5" />Theme
+          </TabsTrigger>
           <TabsTrigger value="health" className="gap-1.5 text-xs">
             <Activity className="w-3.5 h-3.5" />Health
           </TabsTrigger>
@@ -1644,6 +1756,9 @@ export function TenantDetailPage() {
         </TabsContent>
         <TabsContent value="billing" className="mt-5">
           <BillingTab tenantId={tenantId} />
+        </TabsContent>
+        <TabsContent value="theme" className="mt-5">
+          <ThemeTab tenant={tenant} />
         </TabsContent>
         <TabsContent value="health" className="mt-5">
           <HealthTab tenantId={tenantId} />
