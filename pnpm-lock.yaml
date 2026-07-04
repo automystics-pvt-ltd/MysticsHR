@@ -933,6 +933,9 @@ importers:
       drizzle-kit:
         specifier: ^0.31.9
         version: 0.31.9
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   scripts:
     devDependencies:
