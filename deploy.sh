@@ -15,22 +15,34 @@ git reset --hard "origin/$BRANCH"
 echo "==> Installing dependencies (pnpm)"
 pnpm install --frozen-lockfile
 
-echo "==> Regenerating API client from OpenAPI spec"
-pnpm --filter @workspace/api-spec run codegen
+echo "==> Building lib/db (schema types)"
+pnpm --filter @workspace/db run build
 
 echo "==> Building all packages and artifacts"
 pnpm -r build
 
-echo "==> Restarting services"
-# Adjust the names below to match how you run the api-server and web app.
-# Examples for the common process managers — uncomment whichever you use.
+echo "==> Syncing DB schema (drizzle-kit push)"
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo "  WARNING: DATABASE_URL not set — skipping DB schema sync"
+else
+  pnpm --filter db push-force
+fi
 
-# --- pm2 ---
-# pm2 restart mysticshr-api mysticshr-web
-# pm2 save
+echo "==> Restarting API server"
+# SERVE_SPA=true tells the API server to also serve the MysticsHR and
+# Platform Admin SPAs from their dist/ directories (VPS single-process mode).
+export SERVE_SPA=true
 
-# --- systemd ---
-# sudo systemctl restart mysticshr-api.service
-# sudo systemctl restart mysticshr-web.service
+pm2 restart mysticshr-api 2>/dev/null || \
+  pm2 start "node --enable-source-maps artifacts/api-server/dist/index.mjs" \
+    --name mysticshr-api \
+    --env production \
+    -e "/var/log/pm2/mysticshr-api-error.log" \
+    -o "/var/log/pm2/mysticshr-api-out.log"
+pm2 save
 
-echo "==> Done. Verify the api-server and web app are up."
+echo ""
+echo "==> Done."
+echo "    Health check:    curl http://localhost:8080/api/healthz"
+echo "    MysticsHR:       https://mysticshr.automystics.tech"
+echo "    Platform Admin:  https://mysticshr.automystics.tech/platform_admin/"
