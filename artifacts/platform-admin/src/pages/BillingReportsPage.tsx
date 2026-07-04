@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TrendingUp, DollarSign, CheckCircle2, AlertTriangle, Clock, RefreshCw } from "lucide-react";
+import { TrendingUp, IndianRupee, CheckCircle2, AlertTriangle, Clock, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const PLAN_COLORS: Record<string, string> = {
@@ -113,7 +113,7 @@ export function BillingReportsPage() {
                 label: "Total Invoiced",
                 value: fmtMoney(overall?.totalInvoiced ?? 0),
                 sub: `${overall?.invoiceCount ?? 0} invoices`,
-                icon: DollarSign, color: "text-foreground",
+                icon: IndianRupee, color: "text-foreground",
               },
               {
                 label: "Total Collected",

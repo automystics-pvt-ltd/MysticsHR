@@ -20,7 +20,7 @@ import {
   ChevronLeft, Plus, Users, BarChart2, Settings, CreditCard,
   Activity, Building2, Globe, Mail, Briefcase, FileText,
   CheckCircle2, XCircle, Clock, Zap, GitBranch,
-  Receipt, AlertTriangle, DollarSign, TrendingUp, Ban,
+  Receipt, AlertTriangle, IndianRupee, TrendingUp, Ban,
   KeyRound, Copy, Check, Palette,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -308,7 +308,7 @@ function CustomPricingCard({ tenant, currentPlan }: { tenant: TenantDetail; curr
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <DollarSign className="w-4 h-4" />
+              <IndianRupee className="w-4 h-4" />
               Custom Pricing Override
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -1216,7 +1216,7 @@ function BillingTab({ tenantId }: { tenantId: number }) {
               </div>
             ))
           : [
-              { label: "Total Invoiced", value: fmtMoney(stats?.totalInvoiced ?? 0), icon: DollarSign, color: "text-foreground" },
+              { label: "Total Invoiced", value: fmtMoney(stats?.totalInvoiced ?? 0), icon: IndianRupee, color: "text-foreground" },
               { label: "Total Paid", value: fmtMoney(stats?.totalPaid ?? 0), icon: CheckCircle2, color: "text-emerald-400" },
               { label: "Outstanding", value: fmtMoney(stats?.totalOutstanding ?? 0), icon: TrendingUp, color: "text-blue-400" },
               { label: "Overdue", value: `${fmtMoney(stats?.totalOverdue ?? 0)} (${stats?.overdueCount ?? 0})`, icon: AlertTriangle, color: (stats?.overdueCount ?? 0) > 0 ? "text-red-400" : "text-muted-foreground" },

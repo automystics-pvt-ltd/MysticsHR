@@ -51,7 +51,7 @@ const ALL_FEATURES = [
 
 function fmt$(cents: number) {
   if (cents === 0) return "Free";
-  return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 0 })}`;
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 }).format(cents / 100);
 }
 function fmtLimit(v: number) { return v === -1 ? "Unlimited" : v.toLocaleString(); }
 

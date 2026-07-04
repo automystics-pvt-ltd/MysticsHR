@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Receipt, Search, RefreshCw, AlertTriangle, CheckCircle2,
-  Clock, XCircle, DollarSign, TrendingUp, Ban,
+  Clock, XCircle, IndianRupee, TrendingUp, Ban,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -142,7 +142,7 @@ export function InvoicesPage() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: "Total Invoiced", value: fmtMoney(totalInvoiced), icon: DollarSign, color: "text-foreground" },
+          { label: "Total Invoiced", value: fmtMoney(totalInvoiced), icon: IndianRupee, color: "text-foreground" },
           { label: "Total Collected", value: fmtMoney(totalPaid), icon: CheckCircle2, color: "text-emerald-400" },
           { label: "Outstanding", value: fmtMoney(Math.max(0, totalInvoiced - totalPaid)), icon: TrendingUp, color: "text-blue-400" },
           { label: "Overdue", value: `${fmtMoney(totalOverdue)} (${overdueCount})`, icon: AlertTriangle, color: "text-red-400" },

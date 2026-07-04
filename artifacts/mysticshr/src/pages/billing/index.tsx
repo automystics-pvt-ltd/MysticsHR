@@ -602,14 +602,14 @@ export default function BillingPage() {
               {[1,2,3].map(i => <div key={i} className="h-16 bg-muted rounded-lg" />)}
             </div>
           )}
-          {!invoicesLoading && (invoiceData?.data.length ?? 0) === 0 && (
+          {!invoicesLoading && (invoiceData?.data?.length ?? 0) === 0 && (
             <div className="text-center py-16 text-muted-foreground">
               <Receipt className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="font-medium">No invoices yet</p>
               <p className="text-sm">Your invoices will appear here after your first payment.</p>
             </div>
           )}
-          {!invoicesLoading && (invoiceData?.data.length ?? 0) > 0 && (
+          {!invoicesLoading && (invoiceData?.data?.length ?? 0) > 0 && (
             <div className="rounded-xl border overflow-x-auto">
               <table className="w-full text-sm min-w-[540px]">
                 <thead className="bg-muted/50">
@@ -623,7 +623,7 @@ export default function BillingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {invoiceData!.data.map(inv => (
+                  {(invoiceData?.data ?? []).map(inv => (
                     <tr key={inv.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3">
                         <p className="font-medium text-foreground">{inv.invoiceNumber}</p>
