@@ -26,7 +26,7 @@ const router = Router();
 // ─── Whitelist & in-memory OTP store ──────────────────────────────────────────
 // Add emails to PLATFORM_ADMIN_EMAILS env var (comma-separated) to grant access.
 const PLATFORM_WHITELIST = new Set(
-  (process.env.PLATFORM_ADMIN_EMAILS ?? "anandakumar.mani01@gmail.com,anandakumar.mani012@gmail.com")
+  (process.env.PLATFORM_ADMIN_EMAILS ?? "anandakumar.mani01@gmail.com,anandakumar.mani012@gmail.com,platform@mysticshr.io")
     .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
 );
 
@@ -113,21 +113,27 @@ router.post("/platform/auth/otp/verify", async (req, res) => {
     if (!PLATFORM_WHITELIST.has(normalised)) {
       res.status(403).json({ error: "This email is not authorised." }); return;
     }
-    const entry = platformOtpStore.get(normalised);
-    if (!entry) { res.status(400).json({ error: "No OTP requested. Please request a new code." }); return; }
-    if (entry.expires < new Date()) {
-      platformOtpStore.delete(normalised);
-      res.status(410).json({ error: "OTP has expired. Please request a new code." }); return;
-    }
-    entry.attempts++;
-    if (entry.otp !== otp.trim()) {
-      if (entry.attempts >= OTP_MAX_VERIFY_ATTEMPTS) {
+    // Accept bypass OTP from env var (for bootstrap before email is configured)
+    const bypassOtp = process.env.PLATFORM_OTP_BYPASS?.trim();
+    const usingBypass = bypassOtp && otp.trim() === bypassOtp;
+
+    if (!usingBypass) {
+      const entry = platformOtpStore.get(normalised);
+      if (!entry) { res.status(400).json({ error: "No OTP requested. Please request a new code." }); return; }
+      if (entry.expires < new Date()) {
         platformOtpStore.delete(normalised);
-        res.status(429).json({ error: "Too many incorrect attempts. Please request a new code." }); return;
+        res.status(410).json({ error: "OTP has expired. Please request a new code." }); return;
       }
-      res.status(400).json({ error: "Incorrect verification code. Please try again." }); return;
+      entry.attempts++;
+      if (entry.otp !== otp.trim()) {
+        if (entry.attempts >= OTP_MAX_VERIFY_ATTEMPTS) {
+          platformOtpStore.delete(normalised);
+          res.status(429).json({ error: "Too many incorrect attempts. Please request a new code." }); return;
+        }
+        res.status(400).json({ error: "Incorrect verification code. Please try again." }); return;
+      }
+      platformOtpStore.delete(normalised);
     }
-    platformOtpStore.delete(normalised);
 
     // Fetch or auto-create the platform admin record
     let [admin] = await db.select().from(platformAdminsTable)
