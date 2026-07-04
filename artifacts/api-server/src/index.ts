@@ -20,10 +20,13 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-// In production (e.g. self-hosted VPS) the same Node process serves the
-// built React SPA so that one nginx vhost / one PM2 process is enough.
-// On Replit, each artifact has its own dev server so this branch is skipped.
-if (process.env.NODE_ENV === "production") {
+// SPA serving is only used when the API server is the sole process (e.g.
+// self-hosted VPS with PM2). On Replit, each artifact runs independently
+// and the routing layer handles path dispatch — so SPA files are not
+// co-located here. Set SERVE_SPA=true in the VPS environment to enable.
+const serveSpa = process.env.SERVE_SPA === "true";
+
+if (process.env.NODE_ENV === "production" && serveSpa) {
   // ── Platform Admin (/platform_admin) ────────────────────────────────────
   const adminCandidates = [
     path.resolve(process.cwd(), "artifacts/platform-admin/dist/public"),
