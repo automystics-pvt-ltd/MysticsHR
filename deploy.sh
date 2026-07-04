@@ -9,7 +9,7 @@ set -euo pipefail
 
 PROJECT_DIR="/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech"
 BRANCH="${BRANCH:-main}"
-PORT="${APP_PORT:-8080}"
+PORT="${APP_PORT:-8090}"
 PM2_APP="mysticshr-api"
 
 cd "$PROJECT_DIR"
