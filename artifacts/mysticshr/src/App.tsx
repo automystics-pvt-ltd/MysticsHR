@@ -269,7 +269,9 @@ function AppRoutes() {
             <LoginPage />
           </Suspense>
         </Route>
+        <Route path="/login/*?"><Redirect to="/sign-in" /></Route>
         <Route path="/sign-up/*?"><Redirect to="/sign-in" /></Route>
+        <Route path="/register/*?"><Redirect to="/sign-in" /></Route>
         <Route path="/logout" component={LogoutPage} />
 
         <Route path="/dashboard">

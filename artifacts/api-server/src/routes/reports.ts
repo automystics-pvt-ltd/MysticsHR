@@ -931,7 +931,7 @@ router.get("/reports/:type/preview", requireHrmsUser, requireRole(...MANAGER_ROL
       const v = queryRecord[k];
       if (v) params.set(k, v);
     }
-    const reportRes = await fetch(`http://localhost:${process.env.PORT ?? 8080}/api/reports/${type}?${params.toString()}`, {
+    const reportRes = await fetch(`http://127.0.0.1:${process.env.PORT ?? 8080}/api/reports/${type}?${params.toString()}`, {
       headers: { authorization: req.headers.authorization ?? "", cookie: req.headers.cookie ?? "" },
     });
     if (!reportRes.ok) { res.status(reportRes.status).json({ error: "Failed to fetch report data" }); return; }
@@ -982,7 +982,7 @@ router.get("/reports/:type/export", requireHrmsUser, requireRole(...MANAGER_ROLE
       const v = queryRecord[k];
       if (v) exportParams.set(k, v);
     }
-    const reportRes = await fetch(`http://localhost:${process.env.PORT ?? 8080}/api/reports/${type}?${exportParams.toString()}`, {
+    const reportRes = await fetch(`http://127.0.0.1:${process.env.PORT ?? 8080}/api/reports/${type}?${exportParams.toString()}`, {
       headers: { authorization: req.headers.authorization ?? "", cookie: req.headers.cookie ?? "" },
     });
     if (!reportRes.ok) { res.status(reportRes.status).json({ error: "Failed to fetch report data" }); return; }
