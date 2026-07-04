@@ -673,8 +673,11 @@ export default function LoginPage() {
                       {!plansLoading && plans.length === 0 && (
                         <div className="text-center py-6">
                           <p className="text-sm text-muted-foreground">No plans configured yet. You can select a plan later.</p>
-                          <Button type="button" className="mt-4 w-full" onClick={() => { setSelectedPlanId(null); setStep(3); }}>
-                            Continue with free trial
+                          {/* type="submit" so the form's onSubmit (handleSignupStep3) is called —
+                              the previous type="button" with setStep(3) skipped the API call
+                              entirely, leaving registrationId=null and no OTP ever sent. */}
+                          <Button type="submit" className="mt-4 w-full" disabled={signupSubmitting}>
+                            {signupSubmitting ? "Setting up…" : "Continue with free trial"}
                           </Button>
                         </div>
                       )}
