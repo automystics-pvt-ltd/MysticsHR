@@ -29,7 +29,7 @@ git reset --hard "origin/$BRANCH"
 
 # ── 2. Install dependencies ───────────────────────────────────────────────────
 step 2 "Installing dependencies"
-pnpm install --frozen-lockfile
+pnpm install --no-frozen-lockfile
 
 # ── 3. DB migrations (idempotent SQL — no prompts, no drizzle push) ──────────
 step 3 "Applying DB migrations"
