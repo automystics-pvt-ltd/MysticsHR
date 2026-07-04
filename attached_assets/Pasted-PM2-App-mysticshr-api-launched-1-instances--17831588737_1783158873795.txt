@@ -1,0 +1,30 @@
+PM2] App [mysticshr-api] launched (1 instances)
+┌────┬───────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name                  │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 11 │ erp-automystics       │ default     │ N/A     │ fork    │ 916605   │ 78m    │ 0    │ online    │ 0%       │ 116.4mb  │ root     │ disabled │
+│ 1  │ fitro360              │ default     │ 1.0.0   │ fork    │ 916539   │ 78m    │ 0    │ online    │ 0%       │ 105.4mb  │ root     │ disabled │
+│ 2  │ kalvicore-api         │ default     │ 0.0.0   │ fork    │ 916540   │ 78m    │ 0    │ online    │ 0%       │ 110.8mb  │ root     │ disabled │
+│ 13 │ mmwear-erp            │ default     │ 0.0.0   │ fork    │ 916618   │ 78m    │ 0    │ online    │ 0%       │ 293.6mb  │ root     │ disabled │
+│ 14 │ mystics-audit         │ default     │ 0.0.0   │ fork    │ 916633   │ 78m    │ 0    │ online    │ 0%       │ 155.6mb  │ root     │ disabled │
+│ 5  │ mysticscivil-api      │ default     │ N/A     │ fork    │ 916559   │ 78m    │ 0    │ online    │ 0%       │ 223.9mb  │ root     │ disabled │
+│ 19 │ mysticshr-api         │ default     │ 0.0.0   │ fork    │ 1323003  │ 0s     │ 0    │ online    │ 0%       │ 11.8mb   │ root     │ disabled │
+│ 12 │ mysticsinventory      │ default     │ N/A     │ fork    │ 1322960  │ 0s     │ 9105 │ online    │ 100%     │ 66.4mb   │ root     │ disabled │
+│ 3  │ people-connect-api    │ default     │ 0.0.0   │ fork    │ 916546   │ 78m    │ 0    │ online    │ 0%       │ 195.7mb  │ root     │ disabled │
+│ 6  │ solarnexus-api        │ default     │ 0.0.0   │ fork    │ 916560   │ 78m    │ 0    │ online    │ 0%       │ 131.6mb  │ root     │ disabled │
+│ 4  │ tkprabhu-api          │ default     │ 0.0.0   │ fork    │ 916552   │ 78m    │ 0    │ online    │ 0%       │ 195.0mb  │ root     │ disabled │
+│ 8  │ ungalrajeev-api       │ default     │ N/A     │ fork    │ 1322985  │ 0s     │ 3631 │ online    │ 50%      │ 50.5mb   │ root     │ disabled │
+│ 7  │ ungaludan-sarath      │ default     │ 0.0.0   │ fork    │ 916564   │ 78m    │ 0    │ online    │ 0%       │ 198.1mb  │ root     │ disabled │
+│ 9  │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 916585   │ 78m    │ 0    │ online    │ 0%       │ 116.9mb  │ root     │ disabled │
+│ 10 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 1322760  │ 2s     │ 1751 │ online    │ 0%       │ 0b       │ root     │ disabled │
+└────┴───────────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+host metrics | cpu: 99.5% | ram usage: 25.8% | disk: ⇓ 0mb/s ⇑ 0.032mb/s |
+[PM2] Saving current process list...
+[PM2] Successfully saved in /root/.pm2/dump.pm2
+[TAILING] Tailing last 3 lines for [mysticshr-api] process (change the value with --lines option)
+/var/log/pm2/mysticshr-api-error-19.log last 3 lines:
+/var/log/pm2/mysticshr-api-out-19.log last 3 lines:
+19|mystics | hour at :00 + notification jobs"}
+19|mystics | {"level":50,"time":1783158844850,"pid":1323443,"hostname":"srv1609330","err":{"type":"Error","message":"listen EADDRINUSE: address already in use 0.0.0.0:8080","stack":"Error: listen EADDRINUSE: address already in use 0.0.0.0:8080\n    at Server.setupListenHandle [as _listen2] (node:net:2008:16)\n    at listenInCluster (node:net:2065:12)\n    at node:net:2274:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","code":"EADDRINUSE","errno":-98,"syscall":"listen","address":"0.0.0.0","port":8080},"msg":"Error listening on port"}
+
+HTTP:000
