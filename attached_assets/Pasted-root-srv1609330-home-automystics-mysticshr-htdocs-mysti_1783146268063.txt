@@ -1,0 +1,28 @@
+root@srv1609330:/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech# pm2 logs mysticshr-api --lines 20 --nostream
+
+>>>> In-memory PM2 is out-of-date, do:
+>>>> $ pm2 update
+In memory PM2 version: 7.0.1
+Local PM2 version: 7.0.3
+
+[TAILING] Tailing last 20 lines for [mysticshr-api] process (change the value with --lines option)
+/var/log/pm2/mysticshr-api-error-59.log last 20 lines:
+/var/log/pm2/mysticshr-api-out-59.log last 20 lines:
+59|mystics | ocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+59|mystics | {"level":30,"time":1783146229001,"pid":286798,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+59|mystics | {"level":30,"time":1783146231018,"pid":286930,"hostname":"srv1609330","adminDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+59|mystics | {"level":30,"time":1783146231020,"pid":286930,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+59|mystics | {"level":30,"time":1783146233046,"pid":287089,"hostname":"srv1609330","adminDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+59|mystics | {"level":30,"time":1783146233047,"pid":287089,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+59|mystics | {"level":30,"time":1783146235208,"pid":287226,"hostname":"srv1609330","adminDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+59|mystics | {"level":30,"time":1783146235210,"pid":287226,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+59|mystics | {"level":30,"time":1783146237296,"pid":287399,"hostname":"srv1609330","adminDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+59|mystics | {"level":30,"time":1783146237297,"pid":287399,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+59|mystics | {"level":30,"time":1783146239221,"pid":287553,"hostname":"srv1609330","adminDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+59|mystics | {"level":30,"time":1783146239222,"pid":287553,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+59|mystics | {"level":30,"time":1783146241377,"pid":287681,"hostname":"srv1609330","adminDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+59|mystics | {"level":30,"time":1783146241379,"pid":287681,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+59|mystics | {"level":30,"time":1783146243650,"pid":287832,"hostname":"srv1609330","adminDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+59|mystics | {"level":30,"time":1783146243652,"pid":287832,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+59|mystics | {"level":30,"time":1783146245855,"pid":288001,"hostname":"srv1609330","adminDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+59|mystics | {"level":30,"time":1783146245857,"pid":288001,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}

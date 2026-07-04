@@ -1,0 +1,26 @@
+>>>> In-memory PM2 is out-of-date, do:
+>>>> $ pm2 update
+In memory PM2 version: 7.0.1
+Local PM2 version: 7.0.3
+
+┌────┬───────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name                  │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 37 │ erp-automystics       │ default     │ N/A     │ fork    │ 2032488  │ 41h    │ 104… │ online    │ 0%       │ 117.2mb  │ root     │ disabled │
+│ 0  │ fitro360              │ default     │ 1.0.0   │ fork    │ 265038   │ 2D     │ 33   │ online    │ 0%       │ 116.5mb  │ root     │ disabled │
+│ 1  │ kalvicore-api         │ default     │ 0.0.0   │ fork    │ 265045   │ 2D     │ 33   │ online    │ 0%       │ 118.7mb  │ root     │ disabled │
+│ 54 │ mmwear-erp            │ default     │ 0.0.0   │ fork    │ 498211   │ 2D     │ 57   │ online    │ 0%       │ 399.7mb  │ root     │ disabled │
+│ 58 │ mystics-audit         │ default     │ 0.0.0   │ fork    │ 2258451  │ 40h    │ 110  │ online    │ 0%       │ 164.7mb  │ root     │ disabled │
+│ 18 │ mysticscivil-api      │ default     │ N/A     │ fork    │ 265145   │ 2D     │ 17   │ online    │ 0%       │ 266.2mb  │ root     │ disabled │
+│ 59 │ mysticshr-api         │ default     │ 0.0.0   │ cluster │ 291238   │ 1s     │ 162  │ online    │ 0%       │ 294.7mb  │ root     │ disabled │
+│ 39 │ mysticsinventory      │ default     │ N/A     │ fork    │ 0        │ 0      │ 5003 │ errored   │ 0%       │ 0b       │ root     │ disabled │
+│ 4  │ people-connect-api    │ default     │ 0.0.0   │ fork    │ 265083   │ 2D     │ 34   │ online    │ 0%       │ 204.8mb  │ root     │ disabled │
+│ 23 │ solarnexus-api        │ default     │ 0.0.0   │ fork    │ 265185   │ 2D     │ 17   │ online    │ 0%       │ 135.3mb  │ root     │ disabled │
+│ 6  │ tkprabhu-api          │ default     │ 0.0.0   │ fork    │ 265091   │ 2D     │ 55   │ online    │ 0%       │ 204.2mb  │ root     │ disabled │
+│ 32 │ ungalrajeev-api       │ default     │ N/A     │ fork    │ 291336   │ 0s     │ 331… │ online    │ 100%     │ 87.2mb   │ root     │ disabled │
+│ 25 │ ungaludan-sarath      │ default     │ 0.0.0   │ fork    │ 265166   │ 2D     │ 15   │ online    │ 0%       │ 204.7mb  │ root     │ disabled │
+│ 33 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 291284   │ 1s     │ 435… │ online    │ 0%       │ 116.9mb  │ root     │ disabled │
+│ 34 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 2032494  │ 41h    │ 238… │ online    │ 0%       │ 117.2mb  │ root     │ disabled │
+└────┴───────────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+LISTEN 0      511                *:8080             *:*    users:(("node",pid=378270,fd=22))                                                                                                              
+root@srv1609330:/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech# 
