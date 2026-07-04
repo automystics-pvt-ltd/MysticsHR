@@ -1,0 +1,53 @@
+error: cannot pull with rebase: You have unstaged changes.
+error: additionally, your index contains uncommitted changes.
+error: Please commit or stash them.
+
+> @workspace/api-server@0.0.0 build /home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/api-server
+> node ./build.mjs
+
+
+  dist/index.mjs                       7.7mb ⚠️
+  dist/pino-worker.mjs               153.5kb
+  dist/pino-file.mjs                 142.1kb
+  dist/pino-pretty.mjs               114.6kb
+  dist/thread-stream-worker.mjs        7.3kb
+  dist/index.mjs.map                  12.3mb
+  dist/pino-worker.mjs.map           256.9kb
+  dist/pino-file.mjs.map             229.1kb
+  dist/pino-pretty.mjs.map           203.9kb
+  dist/thread-stream-worker.mjs.map   12.0kb
+
+⚡ Done in 2179ms
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [mysticshr-api](ids: [ 21 ])
+[PM2] [mysticshr-api](21) ✓
+┌────┬───────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name                  │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 11 │ erp-automystics       │ default     │ N/A     │ fork    │ 916605   │ 2h     │ 0    │ online    │ 0%       │ 116.4mb  │ root     │ disabled │
+│ 1  │ fitro360              │ default     │ 1.0.0   │ fork    │ 916539   │ 2h     │ 0    │ online    │ 0%       │ 107.5mb  │ root     │ disabled │
+│ 2  │ kalvicore-api         │ default     │ 0.0.0   │ fork    │ 916540   │ 2h     │ 0    │ online    │ 0%       │ 111.4mb  │ root     │ disabled │
+│ 13 │ mmwear-erp            │ default     │ 0.0.0   │ fork    │ 916618   │ 2h     │ 0    │ online    │ 0%       │ 327.1mb  │ root     │ disabled │
+│ 14 │ mystics-audit         │ default     │ 0.0.0   │ fork    │ 916633   │ 2h     │ 0    │ online    │ 0%       │ 156.5mb  │ root     │ disabled │
+│ 5  │ mysticscivil-api      │ default     │ N/A     │ fork    │ 916559   │ 2h     │ 0    │ online    │ 0%       │ 223.9mb  │ root     │ disabled │
+│ 21 │ mysticshr-api         │ default     │ 0.0.0   │ fork    │ 1645193  │ 0s     │ 1    │ online    │ 0%       │ 11.0mb   │ root     │ disabled │
+│ 12 │ mysticsinventory      │ default     │ N/A     │ fork    │ 1645169  │ 0s     │ 174… │ online    │ 0%       │ 65.2mb   │ root     │ disabled │
+│ 3  │ people-connect-api    │ default     │ 0.0.0   │ fork    │ 916546   │ 2h     │ 0    │ online    │ 4%       │ 196.5mb  │ root     │ disabled │
+│ 6  │ solarnexus-api        │ default     │ 0.0.0   │ fork    │ 916560   │ 2h     │ 0    │ online    │ 0%       │ 132.1mb  │ root     │ disabled │
+│ 4  │ tkprabhu-api          │ default     │ 0.0.0   │ fork    │ 916552   │ 2h     │ 0    │ online    │ 0%       │ 195.7mb  │ root     │ disabled │
+│ 8  │ ungalrajeev-api       │ default     │ N/A     │ fork    │ 1645136  │ 0s     │ 6876 │ online    │ 84%      │ 100.7mb  │ root     │ disabled │
+│ 7  │ ungaludan-sarath      │ default     │ 0.0.0   │ fork    │ 916564   │ 2h     │ 0    │ online    │ 0%       │ 202.0mb  │ root     │ disabled │
+│ 9  │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 916585   │ 2h     │ 0    │ online    │ 0%       │ 116.9mb  │ root     │ disabled │
+│ 10 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 1644971  │ 2s     │ 3263 │ online    │ 0%       │ 116.8mb  │ root     │ disabled │
+└────┴───────────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+host metrics | cpu: 98.4% | ram usage: 27.3% | lo: ⇓ 0.001mb/s ⇑ 0.001mb/s | disk: ⇓ 0mb/s ⇑ 0.032mb/s |
+[TAILING] Tailing last 3 lines for [mysticshr-api] process (change the value with --lines option)
+/var/log/pm2/mysticshr-api-out-21.log last 3 lines:
+21|mystics | {"level":30,"time":1783162020720,"pid":1645193,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+21|mystics | {"level":30,"time":1783162020739,"pid":1645193,"hostname":"srv1609330","port":8090,"msg":"Server listening"}
+21|mystics | {"level":30,"time":1783162020895,"pid":1645193,"hostname":"srv1609330","msg":"[scheduler] started — runs every hour at :00 + notification jobs"}
+
+/var/log/pm2/mysticshr-api-error-21.log last 3 lines:
+21|mystics |     routine: 'ExecConstraints'
+21|mystics |   }
+21|mystics | }
