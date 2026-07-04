@@ -28,17 +28,12 @@ else
   pnpm --filter db push-force
 fi
 
-echo "==> Restarting API server"
-# SERVE_SPA=true tells the API server to also serve the MysticsHR and
-# Platform Admin SPAs from their dist/ directories (VPS single-process mode).
-export SERVE_SPA=true
-
-pm2 restart mysticshr-api 2>/dev/null || \
-  pm2 start "node --enable-source-maps artifacts/api-server/dist/index.mjs" \
-    --name mysticshr-api \
-    --env production \
-    -e "/var/log/pm2/mysticshr-api-error.log" \
-    -o "/var/log/pm2/mysticshr-api-out.log"
+echo "==> Restarting API server (via pm2 ecosystem)"
+# ecosystem.config.cjs bakes in SERVE_SPA=true and all other env vars so
+# they survive pm2 restarts without relying on the calling shell's environment.
+mkdir -p /var/log/pm2
+pm2 reload ecosystem.config.cjs --update-env 2>/dev/null || \
+  pm2 start ecosystem.config.cjs
 pm2 save
 
 echo ""
