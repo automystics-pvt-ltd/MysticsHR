@@ -17,6 +17,21 @@ localPort = 19215
 [services.development]
 run = "pnpm --filter @workspace/platform-admin run dev"
 
+[services.production]
+publicDir = "artifacts/platform-admin/dist/public"
+serve = "static"
+
+[services.production.build]
+args = [ "pnpm", "--filter", "@workspace/platform-admin", "run", "build" ]
+
+[services.production.build.env]
+NODE_ENV = "production"
+BASE_PATH = "/platform_admin/"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
 [services.env]
 PORT = "19215"
 BASE_PATH = "/platform_admin/"
