@@ -1,7 +1,1 @@
-- [RBAC module visibility fix](rbac-module-visibility.md) — modules missing from MODULE_REGISTRY are silently hidden from nav; add to both client + server registries.
-- [API client dist d.ts files](api-client-dist-types.md) — both `lib/api-client-react/src/generated/api.schemas.ts` AND `lib/api-client-react/dist/generated/api.schemas.d.ts` must be updated together or TS resolves stale types.
-- [Attendance suspicion config](attendance-suspicion-config.md) — requireGps toggle persists in system_settings; clock-in endpoint enforces it server-side; schema in both src and dist d.ts must match.
-- [Approval notifications pattern](approval-notifications.md) — notifyUser() at submit + notifyEmployee() at approve/reject; fire-and-forget .catch(()=>{}) before res.json()
-- [NotificationBell fetch pattern](notification-bell-fetch.md) — TanStack Query with inline apiFetch (BASE_URL+/api, credentials:include); polls /notifications + /unread-count every 30s; mark-read on click
-- [Seed.ts tenantId pattern](seed-tenantid-pattern.md) — every DB insert in seed.ts needs tenantId; narrowed to number after null-guard at top of seed(); billing.ts Stripe URLs need `?? ""` and `customerId!`
-- [Toast system — Sonner only](toast-system.md) — @radix-ui/react-toast ToastProvider crashes (React bundling conflict); use-toast.ts is a shim routing all useToast()/toast() calls to Sonner; SonnerToaster mounted in App.tsx.
+- [Circular Vite chunk crash](circular-vite-chunk.md) — vendor/vendor-react circular dep causes React init-order crash in production; never split react into its own chunk.

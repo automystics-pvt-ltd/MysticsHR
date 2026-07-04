@@ -69,9 +69,11 @@ export default defineConfig({
             if (id.includes("@tanstack")) {
               return "vendor-query";
             }
-            if (id.includes("react") || id.includes("wouter")) {
-              return "vendor-react";
-            }
+            // NOTE: Do NOT create a separate "vendor-react" chunk.
+            // react-dom depends on scheduler, and many other packages
+            // (react-day-picker, wouter, etc.) import react — so any
+            // react-only chunk creates a circular chunk dependency with
+            // the catch-all vendor chunk, causing runtime init-order bugs.
             return "vendor";
           }
         },

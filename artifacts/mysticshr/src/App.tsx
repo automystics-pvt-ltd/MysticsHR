@@ -83,8 +83,14 @@ const ExpensePage = lazy(() => import("@/pages/expense/index"));
 const ShiftChangePage = lazy(() => import("@/pages/shift-change/index"));
 const ApprovalsHubPage = lazy(() => import("@/pages/approvals/index"));
 
-const PayrollChartHarnessLazy = lazy(() => import("./pages/__test__/payroll-chart-harness"));
-const PayrollReportsHarnessLazy = lazy(() => import("./pages/__test__/payroll-reports-harness"));
+// Dev-only test harnesses — conditional lazy() so production builds don't
+// emit the chunks at all (module-level lazy() is always bundled otherwise).
+const PayrollChartHarnessLazy = import.meta.env.DEV
+  ? lazy(() => import("./pages/__test__/payroll-chart-harness"))
+  : null;
+const PayrollReportsHarnessLazy = import.meta.env.DEV
+  ? lazy(() => import("./pages/__test__/payroll-reports-harness"))
+  : null;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -245,14 +251,14 @@ function AppRoutes() {
   return (
     <Switch>
       <Route path="/" component={HomeRedirect} />
-        {import.meta.env.DEV && (
+        {import.meta.env.DEV && PayrollChartHarnessLazy && (
           <Route path="/__test/payroll-chart">
             <Suspense fallback={null}>
               <PayrollChartHarnessLazy />
             </Suspense>
           </Route>
         )}
-        {import.meta.env.DEV && (
+        {import.meta.env.DEV && PayrollReportsHarnessLazy && (
           <Route path="/__test/payroll-reports">
             <Suspense fallback={null}>
               <PayrollReportsHarnessLazy />
