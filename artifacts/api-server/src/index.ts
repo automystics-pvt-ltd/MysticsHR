@@ -24,7 +24,7 @@ if (Number.isNaN(port) || port <= 0) {
 // built React SPA so that one nginx vhost / one PM2 process is enough.
 // On Replit, each artifact has its own dev server so this branch is skipped.
 if (process.env.NODE_ENV === "production") {
-  // ── Platform Admin (/admin) ──────────────────────────────────────────────
+  // ── Platform Admin (/platform_admin) ────────────────────────────────────
   const adminCandidates = [
     path.resolve(process.cwd(), "artifacts/platform-admin/dist/public"),
     path.resolve(process.cwd(), "../platform-admin/dist/public"),
@@ -33,13 +33,13 @@ if (process.env.NODE_ENV === "production") {
   const adminDir = adminCandidates.find((p) => existsSync(path.join(p, "index.html")));
 
   if (adminDir) {
-    logger.info({ adminDir }, "Serving Platform Admin SPA at /admin");
-    app.use("/admin", express.static(adminDir, { maxAge: "1h", index: false }));
-    app.get(/^\/admin(\/.*)?$/, (_req, res) => {
+    logger.info({ adminDir }, "Serving Platform Admin SPA at /platform_admin");
+    app.use("/platform_admin", express.static(adminDir, { maxAge: "1h", index: false }));
+    app.get(/^\/platform_admin(\/.*)?$/, (_req, res) => {
       res.sendFile(path.join(adminDir, "index.html"));
     });
   } else {
-    logger.warn({ tried: adminCandidates }, "Platform Admin dist not found; /admin will return 404");
+    logger.warn({ tried: adminCandidates }, "Platform Admin dist not found; /platform_admin will return 404");
   }
 
   // ── MysticsHR SPA (everything else) ─────────────────────────────────────

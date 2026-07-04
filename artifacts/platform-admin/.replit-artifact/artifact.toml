@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/admin/"
+previewPath = "/platform_admin/"
 title = "Platform Admin"
 version = "1.0.0"
 id = "artifacts/platform-admin"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/admin/" ]
+paths = [ "/platform_admin/" ]
 localPort = 19215
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "19215"
-BASE_PATH = "/admin/"
+BASE_PATH = "/platform_admin/"
