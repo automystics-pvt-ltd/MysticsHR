@@ -37,7 +37,8 @@ router.get("/rbac/my-permissions", requireHrmsUser, async (req, res) => {
       .limit(1);
 
     const enabledModules = tenant?.enabledModules as string[] | null;
-    if (enabledModules && enabledModules.length > 0) {
+    // customer_admin always gets full access regardless of plan module gating
+    if (user.role !== "customer_admin" && enabledModules && enabledModules.length > 0) {
       const filtered: Record<string, string[]> = {};
       for (const [key, actions] of Object.entries(map)) {
         filtered[key] = enabledModules.includes(key) ? (actions as string[]) : [];
