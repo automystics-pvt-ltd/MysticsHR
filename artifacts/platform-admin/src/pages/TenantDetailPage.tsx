@@ -21,6 +21,7 @@ import {
   Activity, Building2, Globe, Mail, Briefcase, FileText,
   CheckCircle2, XCircle, Clock, Zap, GitBranch,
   Receipt, AlertTriangle, DollarSign, TrendingUp, Ban,
+  KeyRound, Copy, Check,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Country } from "country-state-city";
@@ -712,6 +713,12 @@ function UsersTab({ tenantId }: { tenantId: number }) {
   const [userForm, setUserForm] = useState({ email: "", name: "", password: "", role: "customer_admin" });
   const [userError, setUserError] = useState<string | null>(null);
 
+  // Reset password state
+  const [resetUser, setResetUser] = useState<{ id: number; name: string; email: string } | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetResult, setResetResult] = useState<string | null>(null);
+  const [copiedPw, setCopiedPw] = useState(false);
+
   const { data: users, isLoading } = useQuery({
     queryKey: ["platform-tenant-users", tenantId],
     queryFn: () => api.listTenantUsers(tenantId),
@@ -736,6 +743,38 @@ function UsersTab({ tenantId }: { tenantId: number }) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["platform-tenant-users", tenantId] }),
     onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ userId, newPassword }: { userId: number; newPassword?: string }) =>
+      api.resetTenantUserPassword(tenantId, userId, newPassword || undefined),
+    onSuccess: (data) => {
+      setResetResult(data.newPassword);
+      setResetNewPassword("");
+    },
+    onError: (e: Error) => toast({ title: "Reset failed", description: e.message, variant: "destructive" }),
+  });
+
+  function openResetDialog(u: { id: number; name: string; email: string }) {
+    setResetUser(u);
+    setResetNewPassword("");
+    setResetResult(null);
+    setCopiedPw(false);
+  }
+
+  function closeResetDialog() {
+    setResetUser(null);
+    setResetNewPassword("");
+    setResetResult(null);
+    setCopiedPw(false);
+    resetPasswordMutation.reset();
+  }
+
+  function copyPassword(pw: string) {
+    void navigator.clipboard.writeText(pw).then(() => {
+      setCopiedPw(true);
+      setTimeout(() => setCopiedPw(false), 2000);
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -777,10 +816,16 @@ function UsersTab({ tenantId }: { tenantId: number }) {
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{fmtDate(u.createdAt)}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => toggleUserMutation.mutate({ userId: u.id, isActive: !u.isActive })}>
-                    {u.isActive ? "Deactivate" : "Activate"}
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => toggleUserMutation.mutate({ userId: u.id, isActive: !u.isActive })}>
+                      {u.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-amber-500"
+                      onClick={() => openResetDialog(u)}>
+                      <KeyRound className="w-3.5 h-3.5 mr-1" />Reset pw
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -791,6 +836,7 @@ function UsersTab({ tenantId }: { tenantId: number }) {
         )}
       </div>
 
+      {/* ── Create User Dialog ─────────────────────────────────────────────── */}
       <Dialog open={createOpen} onOpenChange={(o) => { if (!o) setCreateOpen(false); }}>
         <DialogContent className="bg-card border-card-border sm:max-w-md">
           <DialogHeader><DialogTitle>Add User</DialogTitle></DialogHeader>
@@ -829,6 +875,84 @@ function UsersTab({ tenantId }: { tenantId: number }) {
               disabled={!userForm.email || !userForm.name || userForm.password.length < 8 || createMutation.isPending}>
               {createMutation.isPending ? "Creating…" : "Create User"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reset Password Dialog ──────────────────────────────────────────── */}
+      <Dialog open={!!resetUser} onOpenChange={(o) => { if (!o) closeResetDialog(); }}>
+        <DialogContent className="bg-card border-card-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-amber-500" />
+              Reset Password
+            </DialogTitle>
+          </DialogHeader>
+
+          {resetResult ? (
+            /* Show generated / set password */
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                Password for <span className="font-medium text-foreground">{resetUser?.name}</span> has been reset.
+                Share this with the user — it will not be shown again.
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-muted/60 border border-border rounded-md px-3 py-2 text-sm font-mono tracking-wider text-foreground select-all">
+                  {resetResult}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  onClick={() => copyPassword(resetResult)}
+                >
+                  {copiedPw ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedPw ? "Copied" : "Copy"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* Form to reset */
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                Resetting password for <span className="font-medium text-foreground">{resetUser?.name}</span> ({resetUser?.email}).
+                Leave blank to auto-generate a secure password.
+              </p>
+              <div className="space-y-1.5">
+                <Label>New password <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  type="text"
+                  placeholder="Auto-generate if empty"
+                  value={resetNewPassword}
+                  onChange={(e) => setResetNewPassword(e.target.value)}
+                  autoComplete="off"
+                />
+                {resetNewPassword && resetNewPassword.length < 8 && (
+                  <p className="text-xs text-destructive">Minimum 8 characters</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={closeResetDialog}>
+              {resetResult ? "Close" : "Cancel"}
+            </Button>
+            {!resetResult && (
+              <Button
+                onClick={() => resetPasswordMutation.mutate({
+                  userId: resetUser!.id,
+                  newPassword: resetNewPassword || undefined,
+                })}
+                disabled={
+                  resetPasswordMutation.isPending ||
+                  (resetNewPassword.length > 0 && resetNewPassword.length < 8)
+                }
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                {resetPasswordMutation.isPending ? "Resetting…" : "Reset Password"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

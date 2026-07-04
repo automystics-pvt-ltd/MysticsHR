@@ -1,1 +1,1 @@
-- [Circular Vite chunk crash](circular-vite-chunk.md) — vendor/vendor-react circular dep causes React init-order crash in production; never split react into its own chunk.
+- [Platform Admin OTP auth](platform-admin-otp.md) — whitelist-only OTP login (no passwords); in-memory OTP store; auto-creates admin record on first verify.

@@ -21,23 +21,108 @@ import {
 
 const router = Router();
 
+// ─── Whitelist & in-memory OTP store ──────────────────────────────────────────
+// Add emails to PLATFORM_ADMIN_EMAILS env var (comma-separated) to grant access.
+const PLATFORM_WHITELIST = new Set(
+  (process.env.PLATFORM_ADMIN_EMAILS ?? "anandakumar.mani01@gmail.com,anandakumar.mani012@gmail.com")
+    .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
+);
+
+interface OtpEntry { otp: string; expires: Date; attempts: number }
+const platformOtpStore = new Map<string, OtpEntry>();
+const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const OTP_MAX_VERIFY_ATTEMPTS = 5;
+
+function genOtp(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function sendPlatformOtpEmail(to: string, otp: string): Promise<void> {
+  console.log(`[Platform OTP] Code for ${to}: ${otp}`);
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) { console.warn("[Platform OTP] RESEND_API_KEY not set — OTP logged above only"); return; }
+  const from = process.env.RESEND_FROM ?? "MysticsHR Platform <onboarding@resend.dev>";
+  try {
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from, to: [to],
+        subject: "Your MysticsHR Platform Admin Login Code",
+        html: `<div style="font-family:sans-serif;max-width:420px;margin:auto;padding:32px">
+          <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">Platform Admin Login</h2>
+          <p style="color:#555;font-size:14px;margin-bottom:24px">Your one-time verification code:</p>
+          <div style="font-size:40px;font-weight:700;letter-spacing:10px;text-align:center;padding:20px 24px;background:#f4f4f5;border-radius:10px;margin-bottom:24px">${otp}</div>
+          <p style="color:#888;font-size:12px">Expires in 10 minutes. Never share this code.</p>
+        </div>`,
+      }),
+    });
+    if (!resp.ok) console.error("[Platform OTP] Resend error:", resp.status, await resp.text().catch(() => ""));
+  } catch (e) { console.error("[Platform OTP] Resend fetch failed:", e); }
+}
+
 function safePlatformAdmin(admin: typeof platformAdminsTable.$inferSelect) {
   const { passwordHash: _, ...rest } = admin;
   return rest;
 }
 
-// ─── Platform Auth ─────────────────────────────────────────────────────────────
+// ─── Platform Auth — OTP-based (whitelist only) ────────────────────────────────
 
-router.post("/platform/auth/login", async (req, res) => {
+/** Step 1: request a 6-digit OTP sent to a whitelisted email. */
+router.post("/platform/auth/otp/request", async (req, res) => {
   try {
-    const { email, password } = req.body as { email?: string; password?: string };
-    if (!email || !password) { res.status(400).json({ error: "email and password are required" }); return; }
-    const [admin] = await db.select().from(platformAdminsTable)
-      .where(eq(platformAdminsTable.email, email.toLowerCase().trim())).limit(1);
-    if (!admin) { res.status(401).json({ error: "Invalid email or password" }); return; }
-    const valid = await bcrypt.compare(password, admin.passwordHash);
-    if (!valid) { res.status(401).json({ error: "Invalid email or password" }); return; }
-    if (!admin.isActive) { res.status(403).json({ error: "Platform admin account is deactivated" }); return; }
+    const { email } = req.body as { email?: string };
+    if (!email) { res.status(400).json({ error: "email is required" }); return; }
+    const normalised = email.toLowerCase().trim();
+    if (!PLATFORM_WHITELIST.has(normalised)) {
+      res.status(403).json({ error: "This email is not authorised to access Platform Admin." });
+      return;
+    }
+    const otp = genOtp();
+    platformOtpStore.set(normalised, { otp, expires: new Date(Date.now() + OTP_EXPIRY_MS), attempts: 0 });
+    await sendPlatformOtpEmail(normalised, otp);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+/** Step 2: verify the OTP and issue a session cookie. Auto-creates admin record on first login. */
+router.post("/platform/auth/otp/verify", async (req, res) => {
+  try {
+    const { email, otp } = req.body as { email?: string; otp?: string };
+    if (!email || !otp) { res.status(400).json({ error: "email and otp are required" }); return; }
+    const normalised = email.toLowerCase().trim();
+    if (!PLATFORM_WHITELIST.has(normalised)) {
+      res.status(403).json({ error: "This email is not authorised." }); return;
+    }
+    const entry = platformOtpStore.get(normalised);
+    if (!entry) { res.status(400).json({ error: "No OTP requested. Please request a new code." }); return; }
+    if (entry.expires < new Date()) {
+      platformOtpStore.delete(normalised);
+      res.status(410).json({ error: "OTP has expired. Please request a new code." }); return;
+    }
+    entry.attempts++;
+    if (entry.otp !== otp.trim()) {
+      if (entry.attempts >= OTP_MAX_VERIFY_ATTEMPTS) {
+        platformOtpStore.delete(normalised);
+        res.status(429).json({ error: "Too many incorrect attempts. Please request a new code." }); return;
+      }
+      res.status(400).json({ error: "Incorrect verification code. Please try again." }); return;
+    }
+    platformOtpStore.delete(normalised);
+
+    // Fetch or auto-create the platform admin record
+    let [admin] = await db.select().from(platformAdminsTable)
+      .where(eq(platformAdminsTable.email, normalised)).limit(1);
+    if (!admin) {
+      const name = normalised.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      // Placeholder hash (random — password login disabled)
+      const placeholderHash = await bcrypt.hash(crypto.randomUUID(), 12);
+      [admin] = await db.insert(platformAdminsTable)
+        .values({ email: normalised, name, passwordHash: placeholderHash, isActive: true })
+        .returning();
+    }
+    if (!admin.isActive) { res.status(403).json({ error: "Platform admin account is deactivated." }); return; }
+
     const token = signPlatformToken({ platformAdminId: admin.id, email: admin.email });
     setPlatformAuthCookie(res, token);
     res.json({ admin: safePlatformAdmin(admin) });
@@ -450,6 +535,30 @@ router.patch("/platform/tenants/:tenantId/users/:userId", async (req, res) => {
     if (!updated) { res.status(404).json({ error: "User not found" }); return; }
     const { passwordHash: _, ...safeUser } = updated;
     res.json(safeUser);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenant User — Reset Password ─────────────────────────────────────────────
+
+router.post("/platform/tenants/:tenantId/users/:userId/reset-password", async (req, res) => {
+  try {
+    const tenantId = Number.parseInt(req.params.tenantId, 10);
+    const userId = Number.parseInt(req.params.userId, 10);
+    if (!Number.isFinite(tenantId) || !Number.isFinite(userId)) {
+      res.status(400).json({ error: "Invalid id" }); return;
+    }
+    const { newPassword } = req.body as { newPassword?: string };
+    const CHARS = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789@#$!";
+    const plain = newPassword?.trim() ||
+      Array.from({ length: 12 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join("");
+    if (plain.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
+    const passwordHash = await bcrypt.hash(plain, 12);
+    const [updated] = await db.update(hrmsUsersTable)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(and(eq(hrmsUsersTable.id, userId), eq(hrmsUsersTable.tenantId, tenantId)))
+      .returning({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name });
+    if (!updated) { res.status(404).json({ error: "User not found" }); return; }
+    res.json({ ok: true, newPassword: plain, user: updated });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

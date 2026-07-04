@@ -18,10 +18,12 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  // Auth
+  // Auth — OTP-based (whitelisted emails only)
   platformMe: () => apiFetch<{ admin: PlatformAdmin }>("/platform/auth/me"),
-  platformLogin: (email: string, password: string) =>
-    apiFetch<{ admin: PlatformAdmin }>("/platform/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  platformRequestOtp: (email: string) =>
+    apiFetch<{ ok: boolean }>("/platform/auth/otp/request", { method: "POST", body: JSON.stringify({ email }) }),
+  platformVerifyOtp: (email: string, otp: string) =>
+    apiFetch<{ admin: PlatformAdmin }>("/platform/auth/otp/verify", { method: "POST", body: JSON.stringify({ email, otp }) }),
   platformLogout: () => apiFetch<{ ok: boolean }>("/platform/auth/logout", { method: "POST" }),
 
   // Analytics
@@ -65,6 +67,11 @@ export const api = {
     apiFetch<HrmsUser>(`/platform/tenants/${tenantId}/users`, { method: "POST", body: JSON.stringify(data) }),
   updateTenantUser: (tenantId: number, userId: number, data: { isActive?: boolean; role?: string }) =>
     apiFetch<HrmsUser>(`/platform/tenants/${tenantId}/users/${userId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  resetTenantUserPassword: (tenantId: number, userId: number, newPassword?: string) =>
+    apiFetch<{ ok: boolean; newPassword: string; user: { id: number; email: string; name: string } }>(
+      `/platform/tenants/${tenantId}/users/${userId}/reset-password`,
+      { method: "POST", body: JSON.stringify(newPassword ? { newPassword } : {}) }
+    ),
 
   // Platform admins
   listAdmins: () => apiFetch<{ data: PlatformAdmin[]; total: number }>("/platform/admins"),
@@ -92,13 +99,11 @@ export const api = {
 
   // ─── Billing ───────────────────────────────────────────────────────────────
 
-  // Tenant invoices
   listTenantInvoices: (tenantId: number) =>
     apiFetch<{ data: Invoice[]; total: number }>(`/platform/tenants/${tenantId}/invoices`),
   createTenantInvoice: (tenantId: number, data: CreateInvoiceInput) =>
     apiFetch<Invoice>(`/platform/tenants/${tenantId}/invoices`, { method: "POST", body: JSON.stringify(data) }),
 
-  // Platform-wide invoices
   listInvoices: (params?: { status?: string; tenantId?: number }) => {
     const qs = new URLSearchParams();
     if (params?.status && params.status !== "all") qs.set("status", params.status);
@@ -107,7 +112,6 @@ export const api = {
     return apiFetch<{ data: Invoice[]; total: number }>(`/platform/invoices${q ? `?${q}` : ""}`);
   },
 
-  // Invoice operations
   getInvoice: (id: number) => apiFetch<InvoiceDetail>(`/platform/invoices/${id}`),
   updateInvoice: (id: number, data: Partial<Invoice>) =>
     apiFetch<Invoice>(`/platform/invoices/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
@@ -116,18 +120,14 @@ export const api = {
   voidInvoice: (id: number) =>
     apiFetch<{ ok: boolean }>(`/platform/invoices/${id}`, { method: "DELETE" }),
 
-  // Tenant billing summary
   getTenantBillingSummary: (tenantId: number) =>
     apiFetch<BillingSummary>(`/platform/tenants/${tenantId}/billing-summary`),
 
-  // Billing reports
   getBillingReports: () => apiFetch<BillingReport>("/platform/billing/reports"),
 
-  // Enforce subscriptions
   enforceSubscriptions: () =>
     apiFetch<EnforceResult>("/platform/billing/enforce-subscriptions", { method: "POST" }),
 
-  // Update tenant billing settings
   updateTenantBilling: (id: number, data: { billingCycle?: string; gracePeriodDays?: number }) =>
     apiFetch<Tenant>(`/platform/tenants/${id}/billing`, { method: "PATCH", body: JSON.stringify(data) }),
 };
@@ -227,7 +227,7 @@ export interface Invoice {
   billingPeriodStart?: string | null;
   billingPeriodEnd?: string | null;
   dueDate?: string | null;
-  status: string; // pending | paid | overdue | void | cancelled
+  status: string;
   issuedAt: string;
   paidAt?: string | null;
   paymentMethod?: string | null;
