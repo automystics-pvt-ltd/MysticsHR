@@ -1,0 +1,113 @@
+
++ mfa_backup_codes column will be created
+--- all columns conflicts in hrms_users table resolved ---
+
+error: invalid input value for enum hrms_role: "super_admin"
+    at /home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Object.query (/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:80623:26)
+    at async pgPush (/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:84485:13)
+    at async Object.handler (/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:93943:9)
+    at async run (/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:93189:7) {
+  length: 103,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'enum.c',
+  line: '129',
+  routine: 'enum_in'
+}
+root@srv1609330:/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech# # Step 4 — Restart pm2 with the new env
+cd /home/automystics-mysticshr/htdocs/mysticshr.automystics.tech
+pm2 delete mysticshr-api
+pm2 start ecosystem.config.cjs
+sleep 5
+pm2 status | grep mysticshr
+curl http://localhost:8080/api/healthz
+
+>>>> In-memory PM2 is out-of-date, do:
+>>>> $ pm2 update
+In memory PM2 version: 7.0.1
+Local PM2 version: 7.0.3
+
+[PM2] Applying action deleteProcessId on app [mysticshr-api](ids: [ 59 ])
+[PM2] [mysticshr-api](59) ✓
+┌────┬───────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name                  │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 37 │ erp-automystics       │ default     │ N/A     │ fork    │ 2032488  │ 41h    │ 104… │ online    │ 0%       │ 117.2mb  │ root     │ disabled │
+│ 0  │ fitro360              │ default     │ 1.0.0   │ fork    │ 265038   │ 2D     │ 33   │ online    │ 0%       │ 116.5mb  │ root     │ disabled │
+│ 1  │ kalvicore-api         │ default     │ 0.0.0   │ fork    │ 265045   │ 2D     │ 33   │ online    │ 0%       │ 118.7mb  │ root     │ disabled │
+│ 54 │ mmwear-erp            │ default     │ 0.0.0   │ fork    │ 498211   │ 2D     │ 57   │ online    │ 0%       │ 399.7mb  │ root     │ disabled │
+│ 58 │ mystics-audit         │ default     │ 0.0.0   │ fork    │ 2258451  │ 40h    │ 110  │ online    │ 0%       │ 164.9mb  │ root     │ disabled │
+│ 18 │ mysticscivil-api      │ default     │ N/A     │ fork    │ 265145   │ 2D     │ 17   │ online    │ 0%       │ 266.2mb  │ root     │ disabled │
+│ 39 │ mysticsinventory      │ default     │ N/A     │ fork    │ 0        │ 0      │ 5003 │ errored   │ 0%       │ 0b       │ root     │ disabled │
+│ 4  │ people-connect-api    │ default     │ 0.0.0   │ fork    │ 265083   │ 2D     │ 34   │ online    │ 0%       │ 204.8mb  │ root     │ disabled │
+│ 23 │ solarnexus-api        │ default     │ 0.0.0   │ fork    │ 265185   │ 2D     │ 17   │ online    │ 0%       │ 135.3mb  │ root     │ disabled │
+│ 6  │ tkprabhu-api          │ default     │ 0.0.0   │ fork    │ 265091   │ 2D     │ 55   │ online    │ 0%       │ 204.2mb  │ root     │ disabled │
+│ 32 │ ungalrajeev-api       │ default     │ N/A     │ fork    │ 362511   │ 0s     │ 332… │ online    │ 111.8%   │ 114.1mb  │ root     │ disabled │
+│ 25 │ ungaludan-sarath      │ default     │ 0.0.0   │ fork    │ 265166   │ 2D     │ 15   │ online    │ 0%       │ 204.7mb  │ root     │ disabled │
+│ 33 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 362512   │ 0s     │ 436… │ online    │ 76.5%    │ 107.2mb  │ root     │ disabled │
+│ 34 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 2032494  │ 41h    │ 238… │ online    │ 0%       │ 117.2mb  │ root     │ disabled │
+└────┴───────────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+
+>>>> In-memory PM2 is out-of-date, do:
+>>>> $ pm2 update
+In memory PM2 version: 7.0.1
+Local PM2 version: 7.0.3
+
+[PM2][WARN] Applications mysticshr-api not running, starting...
+[PM2] App [mysticshr-api] launched (1 instances)
+┌────┬───────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name                  │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 37 │ erp-automystics       │ default     │ N/A     │ fork    │ 2032488  │ 41h    │ 104… │ online    │ 0%       │ 117.2mb  │ root     │ disabled │
+│ 0  │ fitro360              │ default     │ 1.0.0   │ fork    │ 265038   │ 2D     │ 33   │ online    │ 0%       │ 116.5mb  │ root     │ disabled │
+│ 1  │ kalvicore-api         │ default     │ 0.0.0   │ fork    │ 265045   │ 2D     │ 33   │ online    │ 0%       │ 118.7mb  │ root     │ disabled │
+│ 54 │ mmwear-erp            │ default     │ 0.0.0   │ fork    │ 498211   │ 2D     │ 57   │ online    │ 0%       │ 399.7mb  │ root     │ disabled │
+│ 58 │ mystics-audit         │ default     │ 0.0.0   │ fork    │ 2258451  │ 40h    │ 110  │ online    │ 0%       │ 164.9mb  │ root     │ disabled │
+│ 18 │ mysticscivil-api      │ default     │ N/A     │ fork    │ 265145   │ 2D     │ 17   │ online    │ 0%       │ 266.2mb  │ root     │ disabled │
+│ 60 │ mysticshr-api         │ default     │ 0.0.0   │ cluster │ 362612   │ 0s     │ 0    │ online    │ 0%       │ 47.2mb   │ root     │ disabled │
+│ 39 │ mysticsinventory      │ default     │ N/A     │ fork    │ 0        │ 0      │ 5003 │ errored   │ 0%       │ 0b       │ root     │ disabled │
+│ 4  │ people-connect-api    │ default     │ 0.0.0   │ fork    │ 265083   │ 2D     │ 34   │ online    │ 0%       │ 204.8mb  │ root     │ disabled │
+│ 23 │ solarnexus-api        │ default     │ 0.0.0   │ fork    │ 265185   │ 2D     │ 17   │ online    │ 0%       │ 135.3mb  │ root     │ disabled │
+│ 6  │ tkprabhu-api          │ default     │ 0.0.0   │ fork    │ 265091   │ 2D     │ 55   │ online    │ 0%       │ 204.2mb  │ root     │ disabled │
+│ 32 │ ungalrajeev-api       │ default     │ N/A     │ fork    │ 362606   │ 0s     │ 332… │ online    │ 100%     │ 50.0mb   │ root     │ disabled │
+│ 25 │ ungaludan-sarath      │ default     │ 0.0.0   │ fork    │ 265166   │ 2D     │ 15   │ online    │ 0%       │ 204.7mb  │ root     │ disabled │
+│ 33 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 362512   │ 1s     │ 436… │ online    │ 0%       │ 116.9mb  │ root     │ disabled │
+│ 34 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 2032494  │ 41h    │ 238… │ online    │ 0%       │ 117.2mb  │ root     │ disabled │
+└────┴───────────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+│ 60 │ mysticshr-api         │ default     │ 0.0.0   │ cluster │ 362895   │ 1s     │ 2    │ online    │ 100%     │ 263.0mb  │ root     │ disabled │
+{"status":"ok"}root@srv1609330:/home/automystics-mysticshr/htdocs/mysticshr.aut# Step 5 — Check what port nginx is proxying to for mysticshro for mysticshr
+grep -r "proxy_pass\|mysticshr\|automystics.tech" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | head -20
+/etc/nginx/sites-enabled/mysticsinv.automystics.tech.conf:  ssl_certificate_key /etc/nginx/ssl-certificates/mysticsinv.automystics.tech.key;
+/etc/nginx/sites-enabled/mysticsinv.automystics.tech.conf:  ssl_certificate /etc/nginx/ssl-certificates/mysticsinv.automystics.tech.crt;
+/etc/nginx/sites-enabled/mysticsinv.automystics.tech.conf:  server_name mysticsinv.automystics.tech;
+/etc/nginx/sites-enabled/mysticsinv.automystics.tech.conf:  root /home/automystics-mysticsinv/htdocs/mysticsinv.automystics.tech/MysticsInventory/artifacts/inventory/dist/public;
+/etc/nginx/sites-enabled/mysticsinv.automystics.tech.conf:    proxy_pass http://127.0.0.1:6000;
+/etc/nginx/sites-enabled/mysticsinv.automystics.tech.conf:    proxy_pass_request_headers on;
+/etc/nginx/sites-enabled/solarnexus.automystics.tech.conf:  ssl_certificate_key /etc/nginx/ssl-certificates/solarnexus.automystics.tech.key;
+/etc/nginx/sites-enabled/solarnexus.automystics.tech.conf:  ssl_certificate /etc/nginx/ssl-certificates/solarnexus.automystics.tech.crt;
+/etc/nginx/sites-enabled/solarnexus.automystics.tech.conf:  server_name solarnexus.automystics.tech;
+/etc/nginx/sites-enabled/solarnexus.automystics.tech.conf:  root /home/automystics-solarnexus/htdocs/solarnexus.automystics.tech/app/artifacts/trb246-dashboard/dist/public;
+/etc/nginx/sites-enabled/solarnexus.automystics.tech.conf:    proxy_pass http://127.0.0.1:9000/api/;
+/etc/nginx/sites-enabled/solarnexus.automystics.tech.conf:    proxy_pass_request_headers on;
+/etc/nginx/sites-enabled/mysticsaudit.automystics.tech.conf:  ssl_certificate_key /etc/nginx/ssl-certificates/mysticsaudit.automystics.tech.key;
+/etc/nginx/sites-enabled/mysticsaudit.automystics.tech.conf:  ssl_certificate /etc/nginx/ssl-certificates/mysticsaudit.automystics.tech.crt;
+/etc/nginx/sites-enabled/mysticsaudit.automystics.tech.conf:  server_name mysticsaudit.automystics.tech;
+/etc/nginx/sites-enabled/mysticsaudit.automystics.tech.conf:  root /home/automystics-mysticsaudit/htdocs/mysticsaudit.automystics.tech;
+/etc/nginx/sites-enabled/mysticsaudit.automystics.tech.conf:    proxy_pass http://127.0.0.1:3500/;
+/etc/nginx/sites-enabled/mysticsaudit.automystics.tech.conf:    proxy_pass_request_headers on;
+/etc/nginx/sites-enabled/ungalrajeev.tamilagavetrikalagam.com.conf:    proxy_pass http://127.0.0.1:6500/;
+/etc/nginx/sites-enabled/ungalrajeev.tamilagavetrikalagam.com.conf:    proxy_pass_request_headers on;
+root@srv1609330:/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech# 
