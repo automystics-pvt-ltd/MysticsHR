@@ -13,7 +13,7 @@ git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
 echo "==> Installing dependencies (pnpm)"
-pnpm install --frozen-lockfile
+pnpm install --no-frozen-lockfile
 
 echo "==> Building lib/db (schema types)"
 pnpm --filter @workspace/db run build
