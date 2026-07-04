@@ -32,6 +32,7 @@ module.exports = {
       interpreter_args: "--enable-source-maps",
       cwd: "/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech",
       instances: 1,
+      exec_mode: "fork",
       autorestart: true,
       watch: false,
       max_memory_restart: "1G",
