@@ -1,0 +1,56 @@
+kill -9 962172 && echo "zombie killed"
+
+# Verify ecosystem has port 8090 (from git pull)
+grep "PORT" ecosystem.config.cjs
+
+# Give mysticshr-api a moment, then check
+sleep 10
+pm2 status | grep mysticshr
+pm2 logs mysticshr-api --lines 5 --nostream
+curl -s -o /dev/null -w "HTTP:%{http_code}\n" http://localhost:8090/
+zombie killed
+        PORT: "8080",
+│ 17 │ mysticshr-api         │ default     │ 0.0.0   │ fork    │ 1288848  │ 12s    │ 96   │ online    │ 0%       │ 322.7mb  │ root     │ disabled │
+[TAILING] Tailing last 5 lines for [mysticshr-api] process (change the value with --lines option)
+/var/log/pm2/mysticshr-api-out-17.log last 5 lines:
+17|mystics | de:net:2008:16)\n    at listenInCluster (node:net:2065:12)\n    at node:net:2274:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","code":"EADDRINUSE","errno":-98,"syscall":"listen","address":"0.0.0.0","port":8080},"msg":"Error listening on port"}
+17|mystics | {"level":30,"time":1783158447556,"pid":1288848,"hostname":"srv1609330","adminDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin/dist/public","msg":"Serving Platform Admin SPA at /platform_admin"}
+17|mystics | {"level":30,"time":1783158447557,"pid":1288848,"hostname":"srv1609330","spaDir":"/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr/dist/public","msg":"Serving MysticsHR SPA in production"}
+17|mystics | {"level":30,"time":1783158447562,"pid":1288848,"hostname":"srv1609330","port":8080,"msg":"Server listening"}
+17|mystics | {"level":30,"time":1783158447758,"pid":1288848,"hostname":"srv1609330","msg":"[scheduler] started — runs every hour at :00 + notification jobs"}
+
+/var/log/pm2/mysticshr-api-error-17.log last 5 lines:
+17|mystics |     file: 'execMain.c',
+17|mystics |     line: '2057',
+17|mystics |     routine: 'ExecConstraints'
+17|mystics |   }
+17|mystics | }
+
+HTTP:000
+root@srv1609330:/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech# sed -i 's/"PORT": "8080"/"PORT": "8090"/' ecosystem.config.cjs
+pm2 restart mysticshr-api && sleep 8
+curl -s -o /dev/null -w "HTTP:%{http_code}\n" http://localhost:8090/
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [mysticshr-api](ids: [ 17 ])
+[PM2] [mysticshr-api](17) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 11 │ erp-automystics    │ fork     │ 0    │ online    │ 0%       │ 116.4mb  │
+│ 1  │ fitro360           │ fork     │ 0    │ online    │ 0%       │ 104.2mb  │
+│ 2  │ kalvicore-api      │ fork     │ 0    │ online    │ 0%       │ 110.8mb  │
+│ 13 │ mmwear-erp         │ fork     │ 0    │ online    │ 0%       │ 293.6mb  │
+│ 14 │ mystics-audit      │ fork     │ 0    │ online    │ 0%       │ 155.6mb  │
+│ 5  │ mysticscivil-api   │ fork     │ 0    │ online    │ 0%       │ 223.9mb  │
+│ 17 │ mysticshr-api      │ fork     │ 97   │ online    │ 0%       │ 14.1mb   │
+│ 12 │ mysticsinventory   │ fork     │ 8399 │ online    │ 0%       │ 61.7mb   │
+│ 3  │ people-connect-api │ fork     │ 0    │ online    │ 0%       │ 195.7mb  │
+│ 6  │ solarnexus-api     │ fork     │ 0    │ online    │ 3.7%     │ 131.6mb  │
+│ 4  │ tkprabhu-api       │ fork     │ 0    │ online    │ 0%       │ 194.9mb  │
+│ 8  │ ungalrajeev-api    │ fork     │ 3351 │ online    │ 0%       │ 49.9mb   │
+│ 7  │ ungaludan-sarath   │ fork     │ 0    │ online    │ 0%       │ 197.7mb  │
+│ 9  │ ungalvignesh-api   │ fork     │ 0    │ online    │ 0%       │ 116.9mb  │
+│ 10 │ ungalvignesh-api   │ fork     │ 1616 │ online    │ 0%       │ 117.1mb  │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+host metrics | cpu: 99.6% | ram usage: 25.4% | lo: ⇓ 0.001mb/s ⇑ 0.001mb/s |
+HTTP:000
