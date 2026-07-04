@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# MysticsHR VPS deploy script — safe, idempotent, fully verified.
-# Usage:
-#   export DATABASE_URL="postgres://..."
-#   export JWT_SECRET="..."
-#   export RESEND_API_KEY="..."   # optional but recommended
+# MysticsHR — smooth VPS deploy script
+# • Only ever touches the "mysticshr-api" pm2 process — nothing else.
+# • DB migrations are plain SQL (IF NOT EXISTS) — zero interactive prompts.
+# • Uses pm2 restart/update-env when already running; pm2 start on first run.
+#
+# Usage (secrets come from the existing .env.pm2 on VPS — no need to export):
 #   bash deploy.sh
+#
+# Or to override a secret for this run:
+#   DATABASE_URL="postgres://..." bash deploy.sh
+
 set -euo pipefail
 
 PROJECT_DIR="/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech"
@@ -14,118 +19,111 @@ PM2_APP="mysticshr-api"
 
 cd "$PROJECT_DIR"
 
-# ── 1. Pull latest code ───────────────────────────────────────────────────────
-echo ""
-echo "▶ [1/8] Pulling latest from origin/$BRANCH"
+step() { echo ""; echo "▶ [$1/$TOTAL] $2"; }
+TOTAL=7
+
+# ── 1. Pull ───────────────────────────────────────────────────────────────────
+step 1 "Pulling latest from origin/$BRANCH"
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
 # ── 2. Install dependencies ───────────────────────────────────────────────────
-echo ""
-echo "▶ [2/8] Installing dependencies"
-pnpm install --no-frozen-lockfile
+step 2 "Installing dependencies"
+pnpm install --frozen-lockfile
 
-# ── 3. Build shared db package ────────────────────────────────────────────────
-echo ""
-echo "▶ [3/8] Building shared DB types"
-pnpm --filter @workspace/db run build
+# ── 3. DB migrations (idempotent SQL — no prompts, no drizzle push) ──────────
+step 3 "Applying DB migrations"
 
-# ── 4. Build SPAs (must set PORT + BASE_PATH — Vite requires them) ───────────
-echo ""
-echo "▶ [4/8] Building MysticsHR SPA  (BASE_PATH=/)"
-PORT=5173 BASE_PATH=/ pnpm --filter @workspace/mysticshr run build
+# Load DATABASE_URL from .env.pm2 if not already in the environment
+if [ -z "${DATABASE_URL:-}" ] && [ -f "$PROJECT_DIR/.env.pm2" ]; then
+  DATABASE_URL=$(grep -E '^DATABASE_URL=' "$PROJECT_DIR/.env.pm2" | head -1 | cut -d= -f2-)
+fi
 
-echo ""
-echo "▶ [5/8] Building Platform Admin SPA  (BASE_PATH=/platform_admin/)"
-PORT=5174 BASE_PATH=/platform_admin/ pnpm --filter @workspace/platform-admin run build
-
-# ── 5. Build API server ───────────────────────────────────────────────────────
-echo ""
-echo "▶ [6/8] Building API server"
-pnpm --filter @workspace/api-server run build
-
-# ── 6. Validate required secrets ─────────────────────────────────────────────
-echo ""
-echo "▶ [7/8] Validating environment variables"
-MISSING=()
-[ -z "${DATABASE_URL:-}" ] && MISSING+=("DATABASE_URL")
-[ -z "${JWT_SECRET:-}"   ] && MISSING+=("JWT_SECRET")
-if [ ${#MISSING[@]} -gt 0 ]; then
-  echo ""
-  echo "  ERROR: missing required environment variables:"
-  for v in "${MISSING[@]}"; do echo "    - $v"; done
-  echo ""
-  echo "  Set them in your shell before running deploy.sh:"
-  echo "    export DATABASE_URL='postgres://...'"
-  echo "    export JWT_SECRET='\$(openssl rand -hex 64)'"
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo "  ERROR: DATABASE_URL not set and not found in .env.pm2"
+  echo "  Add it to .env.pm2:  DATABASE_URL=postgres://user:pass@host/db"
   exit 1
 fi
 
-# Push DB schema (additive only — safe on live DB)
-pnpm --filter db push-force
+psql "$DATABASE_URL" <<'SQL'
+-- platform_settings (Email Settings page)
+CREATE TABLE IF NOT EXISTS platform_settings (
+  id          serial PRIMARY KEY,
+  category    text NOT NULL,
+  key         text NOT NULL,
+  value       text,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
 
-# Write secrets file (chmod 600, gitignored)
-cat > "$PROJECT_DIR/.env.pm2" << ENVEOF
-DATABASE_URL=${DATABASE_URL}
-JWT_SECRET=${JWT_SECRET}
-RESEND_API_KEY=${RESEND_API_KEY:-}
-APP_URL=${APP_URL:-https://mysticshr.automystics.tech}
-ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-https://mysticshr.automystics.tech}
-RESEND_FROM=${RESEND_FROM:-MysticsHR <noreply@automystics.tech>}
-PLATFORM_ADMIN_EMAILS=${PLATFORM_ADMIN_EMAILS:-anandakumar.mani01@gmail.com,anandakumar.mani012@gmail.com}
-ENVEOF
-chmod 600 "$PROJECT_DIR/.env.pm2"
+-- enabled_screens column (Screen-level plan access control)
+ALTER TABLE subscription_plans
+  ADD COLUMN IF NOT EXISTS enabled_screens jsonb NOT NULL DEFAULT '[]'::jsonb;
+SQL
 
-# ── 7. Restart pm2 safely (no port conflict) ──────────────────────────────────
-echo ""
-echo "▶ [8/8] Restarting pm2 process"
+echo "  ✓ DB schema up to date"
+
+# ── 4. Build shared DB types ──────────────────────────────────────────────────
+step 4 "Building shared DB types"
+pnpm --filter @workspace/db run build
+
+# ── 5. Build SPAs ─────────────────────────────────────────────────────────────
+step 5 "Building SPAs"
+echo "  → MysticsHR SPA (BASE_PATH=/)"
+PORT=5173 BASE_PATH=/ pnpm --filter @workspace/mysticshr run build
+
+echo "  → Platform Admin SPA (BASE_PATH=/platform_admin/)"
+PORT=5174 BASE_PATH=/platform_admin/ pnpm --filter @workspace/platform-admin run build
+
+# ── 6. Build API server ───────────────────────────────────────────────────────
+step 6 "Building API server"
+pnpm --filter @workspace/api-server run build
+
+# ── 7. Restart ONLY mysticshr-api ─────────────────────────────────────────────
+step 7 "Restarting $PM2_APP"
 mkdir -p /var/log/pm2
 
-# Stop the existing process cleanly before freeing the port
-pm2 stop "$PM2_APP" 2>/dev/null || true
-pm2 delete "$PM2_APP" 2>/dev/null || true
+if pm2 describe "$PM2_APP" &>/dev/null; then
+  # Already running — reload config + env, zero downtime
+  pm2 restart "$PM2_APP" --update-env
+else
+  # First run — start only this app from the ecosystem file
+  pm2 start ecosystem.config.cjs --only "$PM2_APP"
+fi
 
-# Free the port from ANY process (stale zombie, old cluster worker, etc.)
-fuser -k "${PORT}/tcp" 2>/dev/null || true
-sleep 2
+pm2 save --force
 
-# Start fresh — always from the ecosystem file (fork mode, reads .env.pm2)
-pm2 start ecosystem.config.cjs
-pm2 save
-
-# ── 8. Verify ────────────────────────────────────────────────────────────────
+# ── Health check ──────────────────────────────────────────────────────────────
 echo ""
 echo "  Waiting for server to be ready..."
-sleep 6
+sleep 5
 
 STATUS=$(pm2 jlist 2>/dev/null | python3 -c "
 import sys, json
 apps = json.load(sys.stdin)
 app = next((a for a in apps if a['name'] == '${PM2_APP}'), None)
-if app:
-    print(app['pm2_env']['status'])
+print(app['pm2_env']['status'] if app else 'not_found')
 " 2>/dev/null || echo "unknown")
 
 if [ "$STATUS" != "online" ]; then
   echo ""
-  echo "  ❌ pm2 process is '$STATUS' — check logs:"
-  echo "     pm2 logs $PM2_APP --lines 20 --nostream"
+  echo "  ❌  pm2 status: $STATUS"
+  echo "      Check logs:  pm2 logs $PM2_APP --lines 30 --nostream"
   exit 1
 fi
 
-HTTP=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/api/healthz" 2>/dev/null || echo "000")
+HTTP=$(curl -sf -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/api/healthz" 2>/dev/null || echo "000")
 if [ "$HTTP" != "200" ]; then
   echo ""
-  echo "  ❌ Health check returned HTTP $HTTP — check logs:"
-  echo "     pm2 logs $PM2_APP --lines 20 --nostream"
+  echo "  ❌  Health check returned HTTP $HTTP"
+  echo "      Check logs:  pm2 logs $PM2_APP --lines 30 --nostream"
   exit 1
 fi
 
 echo ""
-echo "  ✅ Deployed successfully!"
+echo "  ✅  Deployed successfully!"
 echo ""
-echo "  Health:          http://localhost:${PORT}/api/healthz  →  $HTTP"
+echo "  Health:          http://localhost:${PORT}/api/healthz  →  HTTP $HTTP"
 echo "  MysticsHR:       https://mysticshr.automystics.tech"
 echo "  Platform Admin:  https://mysticshr.automystics.tech/platform_admin/"
 echo ""
-pm2 status | grep "$PM2_APP" || true
+pm2 status | grep -E "($PM2_APP|name)" || true
