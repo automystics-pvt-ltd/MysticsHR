@@ -1,0 +1,26 @@
+[PM2] App [mysticshr-api] launched (1 instances)
+┌────┬───────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name                  │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 11 │ erp-automystics       │ default     │ N/A     │ fork    │ 916605   │ 68m    │ 0    │ online    │ 0%       │ 116.4mb  │ root     │ disabled │
+│ 1  │ fitro360              │ default     │ 1.0.0   │ fork    │ 916539   │ 68m    │ 0    │ online    │ 0%       │ 104.2mb  │ root     │ disabled │
+│ 2  │ kalvicore-api         │ default     │ 0.0.0   │ fork    │ 916540   │ 68m    │ 0    │ online    │ 0%       │ 110.6mb  │ root     │ disabled │
+│ 13 │ mmwear-erp            │ default     │ 0.0.0   │ fork    │ 916618   │ 68m    │ 0    │ online    │ 0%       │ 293.6mb  │ root     │ disabled │
+│ 14 │ mystics-audit         │ default     │ 0.0.0   │ fork    │ 916633   │ 68m    │ 0    │ online    │ 0%       │ 155.4mb  │ root     │ disabled │
+│ 5  │ mysticscivil-api      │ default     │ N/A     │ fork    │ 916559   │ 68m    │ 0    │ online    │ 0%       │ 223.9mb  │ root     │ disabled │
+│ 17 │ mysticshr-api         │ default     │ 0.0.0   │ fork    │ 1268634  │ 0s     │ 0    │ online    │ 0%       │ 26.9mb   │ root     │ disabled │
+│ 12 │ mysticsinventory      │ default     │ N/A     │ fork    │ 1268626  │ 0s     │ 7880 │ online    │ 80%      │ 62.3mb   │ root     │ disabled │
+│ 3  │ people-connect-api    │ default     │ 0.0.0   │ fork    │ 916546   │ 68m    │ 0    │ online    │ 0%       │ 195.7mb  │ root     │ disabled │
+│ 6  │ solarnexus-api        │ default     │ 0.0.0   │ fork    │ 916560   │ 68m    │ 0    │ online    │ 0%       │ 131.3mb  │ root     │ disabled │
+│ 4  │ tkprabhu-api          │ default     │ 0.0.0   │ fork    │ 916552   │ 68m    │ 0    │ online    │ 0%       │ 194.7mb  │ root     │ disabled │
+│ 8  │ ungalrajeev-api       │ default     │ N/A     │ fork    │ 1268588  │ 0s     │ 3146 │ online    │ 60%      │ 94.4mb   │ root     │ disabled │
+│ 7  │ ungaludan-sarath      │ default     │ 0.0.0   │ fork    │ 916564   │ 68m    │ 0    │ online    │ 0%       │ 197.7mb  │ root     │ disabled │
+│ 9  │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 916585   │ 68m    │ 0    │ online    │ 0%       │ 116.9mb  │ root     │ disabled │
+│ 10 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 1268559  │ 0s     │ 1516 │ online    │ 60%      │ 105.4mb  │ root     │ disabled │
+└────┴───────────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+host metrics | cpu: 98.4% | ram usage: 25.7% | lo: ⇓ 0.004mb/s ⇑ 0.004mb/s | eth0: ⇓ 0.001mb/s ⇑ 0.001mb/s | disk: ⇓ 0mb/s ⇑ 0.055mb/s |
+[PM2] Saving current process list...
+[PM2] Successfully saved in /root/.pm2/dump.pm2
+HTTP:000
+root@srv1609330:/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech# ss -tlnp | grep 8080 | awk '{print $NF}'
+users:(("node",pid=962172,fd=22))
