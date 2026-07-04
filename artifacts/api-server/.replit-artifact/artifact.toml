@@ -26,6 +26,9 @@ args = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 [services.production.run.env]
 PORT = "8080"
 NODE_ENV = "production"
+APP_URL = "https://mysticshr.automystics.tech"
+ALLOWED_ORIGIN = "https://mysticshr.automystics.tech"
+RESEND_FROM = "MysticsHR <noreply@automystics.tech>"
 
 [services.production.health.startup]
 path = "/api/healthz"
