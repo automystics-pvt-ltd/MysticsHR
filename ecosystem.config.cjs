@@ -40,9 +40,9 @@ module.exports = {
       out_file:   "/var/log/pm2/mysticshr-api-out.log",
       env: {
         NODE_ENV: "production",
-        PORT: "8090",
         SERVE_SPA: "true",
         ...fileEnv,
+        PORT: "8090",
       },
     },
   ],
