@@ -12,6 +12,7 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   maxApiCalls: integer("max_api_calls").notNull().default(10000),
   enabledModules: jsonb("enabled_modules").notNull().default([]),
   enabledFeatures: jsonb("enabled_features").notNull().default([]),
+  enabledScreens: jsonb("enabled_screens").notNull().default([]),
   description: text("description"),
   offerText: text("offer_text"),
   badgeText: text("badge_text"),

@@ -160,7 +160,7 @@ export interface SubscriptionPlan {
   id: number; name: string; type: string;
   priceMonthly: number; priceYearly: number;
   maxUsers: number; maxEmployees: number; maxBranches: number; maxApiCalls: number;
-  enabledModules: string[]; enabledFeatures: string[];
+  enabledModules: string[]; enabledFeatures: string[]; enabledScreens: string[];
   description?: string; isActive: boolean;
   offerText?: string; badgeText?: string; isFeatured: boolean; sortOrder: number;
   tenantCount?: number;

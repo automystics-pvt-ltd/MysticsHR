@@ -182,6 +182,7 @@ router.get("/platform/subscription-plans", async (_req, res) => {
       maxApiCalls: subscriptionPlansTable.maxApiCalls,
       enabledModules: subscriptionPlansTable.enabledModules,
       enabledFeatures: subscriptionPlansTable.enabledFeatures,
+      enabledScreens: subscriptionPlansTable.enabledScreens,
       description: subscriptionPlansTable.description,
       isActive: subscriptionPlansTable.isActive,
       createdAt: subscriptionPlansTable.createdAt,
@@ -197,18 +198,18 @@ router.post("/platform/subscription-plans", async (req, res) => {
     const {
       name, type = "starter", priceMonthly = 0, priceYearly = 0,
       maxUsers = 10, maxEmployees = 50, maxBranches = 1, maxApiCalls = 10000,
-      enabledModules = [], enabledFeatures = [], description,
+      enabledModules = [], enabledFeatures = [], enabledScreens = [], description,
       offerText, badgeText, isFeatured = false, sortOrder = 0,
     } = req.body as {
       name?: string; type?: string; priceMonthly?: number; priceYearly?: number;
       maxUsers?: number; maxEmployees?: number; maxBranches?: number; maxApiCalls?: number;
-      enabledModules?: string[]; enabledFeatures?: string[]; description?: string;
+      enabledModules?: string[]; enabledFeatures?: string[]; enabledScreens?: string[]; description?: string;
       offerText?: string; badgeText?: string; isFeatured?: boolean; sortOrder?: number;
     };
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
     const [plan] = await db.insert(subscriptionPlansTable).values({
       name: name.trim(), type, priceMonthly, priceYearly, maxUsers, maxEmployees,
-      maxBranches, maxApiCalls, enabledModules, enabledFeatures, description,
+      maxBranches, maxApiCalls, enabledModules, enabledFeatures, enabledScreens, description,
       offerText, badgeText, isFeatured, sortOrder,
     }).returning();
     res.status(201).json(plan);
@@ -230,7 +231,7 @@ router.patch("/platform/subscription-plans/:id", async (req, res) => {
   try {
     const id = Number.parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-    const allowed = ["name","type","priceMonthly","priceYearly","maxUsers","maxEmployees","maxBranches","maxApiCalls","enabledModules","enabledFeatures","description","isActive","offerText","badgeText","isFeatured","sortOrder"] as const;
+    const allowed = ["name","type","priceMonthly","priceYearly","maxUsers","maxEmployees","maxBranches","maxApiCalls","enabledModules","enabledFeatures","enabledScreens","description","isActive","offerText","badgeText","isFeatured","sortOrder"] as const;
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     const body = req.body as Record<string, unknown>;
     for (const key of allowed) if (key in body) updates[key] = body[key];

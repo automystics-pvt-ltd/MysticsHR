@@ -151,7 +151,7 @@ function PlanCard({
         )}
       </div>
       {billingCycle === "yearly" && saving > 0 && (
-        <span className="text-xs text-emerald-600 font-medium -mt-2">Save {saving}% yearly (₹{(price / 100).toLocaleString("en-IN")}/yr billed)</span>
+        <span className="text-xs text-emerald-600 font-medium -mt-2">Save {saving}% yearly (₹{price.toLocaleString("en-IN")}/yr billed)</span>
       )}
 
       <div className="space-y-1.5 text-xs text-muted-foreground">
