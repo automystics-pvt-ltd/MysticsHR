@@ -134,6 +134,12 @@ export const api = {
 
   updateTenantBilling: (id: number, data: { billingCycle?: string; gracePeriodDays?: number }) =>
     apiFetch<Tenant>(`/platform/tenants/${id}/billing`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  getEmailSettings: () => apiFetch<EmailSettings>("/platform/settings/email"),
+  updateEmailSettings: (data: { resendApiKey?: string; fromAddress?: string }) =>
+    apiFetch<{ ok: boolean }>("/platform/settings/email", { method: "PUT", body: JSON.stringify(data) }),
+  testEmailSettings: (to: string) =>
+    apiFetch<{ ok: boolean }>("/platform/settings/email/test", { method: "POST", body: JSON.stringify({ to }) }),
 };
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -141,6 +147,13 @@ export const api = {
 export interface PlatformAdmin {
   id: number; email: string; name: string; isActive: boolean;
   createdAt: string; updatedAt: string;
+}
+
+export interface EmailSettings {
+  resendApiKey: string;
+  resendApiKeySet: boolean;
+  fromAddress: string;
+  fallbackToEnv: boolean;
 }
 
 export interface SubscriptionPlan {

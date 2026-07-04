@@ -14,6 +14,7 @@ import { SubscriptionPlansPage } from "@/pages/SubscriptionPlansPage";
 import { AnalyticsPage } from "@/pages/AnalyticsPage";
 import { InvoicesPage } from "@/pages/InvoicesPage";
 import { BillingReportsPage } from "@/pages/BillingReportsPage";
+import { SettingsPage } from "@/pages/SettingsPage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/admins"><ProtectedRoute><AdminsPage /></ProtectedRoute></Route>
       <Route path="/analytics"><ProtectedRoute><AnalyticsPage /></ProtectedRoute></Route>
       <Route path="/audit-logs"><ProtectedRoute><AuditLogsPage /></ProtectedRoute></Route>
+      <Route path="/settings"><ProtectedRoute><SettingsPage /></ProtectedRoute></Route>
       <Route path="/">
         {isLoading ? null : isSignedIn ? <Redirect to="/dashboard" /> : <Redirect to="/login" />}
       </Route>

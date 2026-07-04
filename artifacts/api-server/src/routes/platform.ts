@@ -11,6 +11,7 @@ import {
   subscriptionPlansTable,
   tenantInvoicesTable,
   tenantPaymentsTable,
+  platformSettingsTable,
 } from "@workspace/db/schema";
 import { and, eq, sql, desc, asc, ne, lt, lte, gte, or, isNull, ilike } from "drizzle-orm";
 import {
@@ -38,11 +39,28 @@ function genOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+// ─── Email settings helper (DB-first, env fallback) ──────────────────────────
+async function getEmailSettings(): Promise<{ apiKey: string | null; from: string }> {
+  try {
+    const rows = await db.select().from(platformSettingsTable)
+      .where(eq(platformSettingsTable.category, "email"));
+    const map = Object.fromEntries(rows.map((r) => [r.key, r.value ?? ""]));
+    return {
+      apiKey: map["resend_api_key"] || process.env.RESEND_API_KEY || null,
+      from: map["from_address"] || process.env.RESEND_FROM || "MysticsHR Platform <onboarding@resend.dev>",
+    };
+  } catch {
+    return {
+      apiKey: process.env.RESEND_API_KEY || null,
+      from: process.env.RESEND_FROM || "MysticsHR Platform <onboarding@resend.dev>",
+    };
+  }
+}
+
 async function sendPlatformOtpEmail(to: string, otp: string): Promise<void> {
   console.log(`[Platform OTP] Code for ${to}: ${otp}`);
-  const apiKey = process.env.RESEND_API_KEY;
+  const { apiKey, from } = await getEmailSettings();
   if (!apiKey) { console.warn("[Platform OTP] RESEND_API_KEY not set — OTP logged above only"); return; }
-  const from = process.env.RESEND_FROM ?? "MysticsHR Platform <onboarding@resend.dev>";
   try {
     const resp = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -1293,6 +1311,80 @@ router.patch("/platform/tenants/:id/billing", async (req, res) => {
       ].filter(Boolean).join(", "),
     });
     res.json(updated);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Platform Settings (Email Configuration) ──────────────────────────────────
+
+router.get("/platform/settings/email", requirePlatformAdmin, async (_req, res) => {
+  try {
+    const rows = await db.select().from(platformSettingsTable)
+      .where(eq(platformSettingsTable.category, "email"));
+    const map = Object.fromEntries(rows.map((r) => [r.key, r.value ?? ""]));
+    const rawKey = map["resend_api_key"] || "";
+    const maskedKey = rawKey.length > 8
+      ? rawKey.slice(0, 5) + "•".repeat(Math.max(0, rawKey.length - 8)) + rawKey.slice(-3)
+      : rawKey ? "•".repeat(rawKey.length) : "";
+    res.json({
+      resendApiKey: maskedKey,
+      resendApiKeySet: rawKey.length > 0,
+      fromAddress: map["from_address"] || process.env.RESEND_FROM || "",
+      fallbackToEnv: !rawKey && !!process.env.RESEND_API_KEY,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.put("/platform/settings/email", requirePlatformAdmin, async (req, res) => {
+  try {
+    const { resendApiKey, fromAddress } = req.body as { resendApiKey?: string; fromAddress?: string };
+    const upsert = async (key: string, value: string) => {
+      const existing = await db.select({ id: platformSettingsTable.id })
+        .from(platformSettingsTable)
+        .where(and(eq(platformSettingsTable.category, "email"), eq(platformSettingsTable.key, key)))
+        .limit(1);
+      if (existing.length > 0) {
+        await db.update(platformSettingsTable)
+          .set({ value, updatedAt: new Date() })
+          .where(and(eq(platformSettingsTable.category, "email"), eq(platformSettingsTable.key, key)));
+      } else {
+        await db.insert(platformSettingsTable).values({ category: "email", key, value });
+      }
+    };
+    if (resendApiKey !== undefined && resendApiKey.trim() !== "") {
+      await upsert("resend_api_key", resendApiKey.trim());
+    }
+    if (fromAddress !== undefined) {
+      await upsert("from_address", fromAddress.trim());
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/platform/settings/email/test", requirePlatformAdmin, async (req, res) => {
+  try {
+    const { to } = req.body as { to?: string };
+    if (!to) { res.status(400).json({ error: "to is required" }); return; }
+    const { apiKey, from } = await getEmailSettings();
+    if (!apiKey) { res.status(400).json({ error: "No Resend API key configured" }); return; }
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from, to: [to],
+        subject: "MysticsHR — Email Configuration Test",
+        html: `<div style="font-family:sans-serif;max-width:420px;margin:auto;padding:32px">
+          <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">✅ Email Configuration Working</h2>
+          <p style="color:#555;font-size:14px">This test email confirms your MysticsHR Platform email settings are configured correctly.</p>
+          <p style="color:#888;font-size:12px;margin-top:24px">Sent from: ${from}</p>
+        </div>`,
+      }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      res.status(502).json({ error: `Resend error ${resp.status}: ${body}` });
+      return;
+    }
+    res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

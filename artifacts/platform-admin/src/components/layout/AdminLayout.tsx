@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { usePlatformAuth } from "@/contexts/PlatformAuthContext";
 import {
   LayoutDashboard, Building2, ShieldCheck, ScrollText,
-  LogOut, CreditCard, BarChart3, Receipt, TrendingUp,
+  LogOut, CreditCard, BarChart3, Receipt, TrendingUp, Settings,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -28,6 +28,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/admins", icon: ShieldCheck, label: "Platform Admins" },
       { href: "/audit-logs", icon: ScrollText, label: "Audit Logs" },
+      { href: "/settings", icon: Settings, label: "Settings" },
     ],
   },
 ];

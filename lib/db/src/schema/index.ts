@@ -46,3 +46,4 @@ export * from "./password_reset_tokens";
 export * from "./wfh_requests";
 export * from "./expense_claims";
 export * from "./shift_change_requests";
+export * from "./platform_settings";
