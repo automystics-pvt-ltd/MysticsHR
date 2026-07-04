@@ -8,6 +8,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { useCurrentHrmsUser, type HrmsRole, hasRole } from "@/lib/useCurrentHrmsUser";
 import { useMyPermissions } from "@/lib/useMyPermissions";
 import { Toaster as SonnerToaster } from "sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const LandingPage = lazy(() => import("@/pages/landing"));
 const LoginPage = lazy(() => import("@/pages/login"));
@@ -782,10 +783,12 @@ function App() {
   return (
     <WouterRouter base={basePath}>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <AppRoutes />
-          <SonnerToaster richColors closeButton position="top-right" />
-        </AuthProvider>
+        <TooltipProvider>
+          <AuthProvider>
+            <AppRoutes />
+            <SonnerToaster richColors closeButton position="top-right" />
+          </AuthProvider>
+        </TooltipProvider>
       </QueryClientProvider>
     </WouterRouter>
   );
