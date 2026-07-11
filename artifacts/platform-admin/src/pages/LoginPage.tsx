@@ -4,14 +4,18 @@ import { usePlatformAuth } from "@/contexts/PlatformAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ShieldCheck, AlertCircle, Mail, ArrowLeft } from "lucide-react";
+import { ShieldCheck, AlertCircle, Mail, Lock, ArrowLeft, Eye, EyeOff } from "lucide-react";
+
+type Mode = "credential" | "otp-email" | "otp-code";
 
 export function LoginPage() {
-  const { requestOtp, verifyOtp } = usePlatformAuth();
+  const { loginWithCredentials, requestOtp, verifyOtp } = usePlatformAuth();
   const [, navigate] = useLocation();
 
-  const [step, setStep] = useState<"email" | "otp">("email");
+  const [mode, setMode] = useState<Mode>("credential");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,7 +23,21 @@ export function LoginPage() {
 
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
-  // ── Step 1: send OTP ────────────────────────────────────────────────────────
+  // ── Credential login ─────────────────────────────────────────────────────────
+  async function handleCredentialLogin(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const result = await loginWithCredentials(email.trim(), password);
+    setLoading(false);
+    if (result.ok) {
+      navigate("/dashboard");
+    } else {
+      setError(result.error ?? "Login failed");
+    }
+  }
+
+  // ── OTP: Step 1 — request code ───────────────────────────────────────────────
   async function handleRequestOtp(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -27,7 +45,7 @@ export function LoginPage() {
     const result = await requestOtp(email.trim());
     setLoading(false);
     if (result.ok) {
-      setStep("otp");
+      setMode("otp-code");
       setOtp(["", "", "", "", "", ""]);
       startResendCountdown();
       setTimeout(() => otpRefs.current[0]?.focus(), 80);
@@ -36,7 +54,7 @@ export function LoginPage() {
     }
   }
 
-  // ── Step 2: verify OTP ──────────────────────────────────────────────────────
+  // ── OTP: Step 2 — verify code ────────────────────────────────────────────────
   async function handleVerifyOtp(e: FormEvent) {
     e.preventDefault();
     const code = otp.join("");
@@ -79,7 +97,7 @@ export function LoginPage() {
     }, 1000);
   }
 
-  // ── OTP digit input helpers ─────────────────────────────────────────────────
+  // ── OTP digit helpers ────────────────────────────────────────────────────────
   function handleOtpChange(index: number, value: string) {
     const digit = value.replace(/\D/g, "").slice(-1);
     const next = [...otp];
@@ -103,7 +121,26 @@ export function LoginPage() {
     }
   }
 
+  function switchToOtp() {
+    setError(null);
+    setOtp(["", "", "", "", "", ""]);
+    setMode("otp-email");
+  }
+
+  function switchToCredential() {
+    setError(null);
+    setOtp(["", "", "", "", "", ""]);
+    setMode("credential");
+  }
+
   const otpCode = otp.join("");
+
+  const subheading =
+    mode === "credential"
+      ? "Sign in with your email and password"
+      : mode === "otp-email"
+      ? "Sign in with a one-time code"
+      : `Code sent to ${email}`;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -114,20 +151,96 @@ export function LoginPage() {
             <ShieldCheck className="w-6 h-6 text-primary" />
           </div>
           <h1 className="text-xl font-semibold text-foreground">Platform Admin</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {step === "email" ? "Sign in with your whitelisted email" : `Code sent to ${email}`}
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">{subheading}</p>
         </div>
 
         <div className="bg-card border border-card-border rounded-xl p-6 shadow-lg">
-          {step === "email" ? (
-            <form onSubmit={(e) => void handleRequestOtp(e)} className="space-y-4">
+
+          {/* ── Credential login form ── */}
+          {mode === "credential" && (
+            <form onSubmit={(e) => void handleCredentialLogin(e)} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-sm font-medium">Email address</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="email"
+                    type="email"
+                    placeholder="admin@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    className="pl-9 bg-input border-border"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    className="pl-9 pr-9 bg-input border-border"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2.5">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {error}
+                </div>
+              )}
+
+              <Button type="submit" className="w-full mt-1" disabled={loading || !email.trim() || !password}>
+                {loading ? "Signing in…" : "Sign in"}
+              </Button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={switchToOtp}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Use a one-time code instead
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* ── OTP: email entry ── */}
+          {mode === "otp-email" && (
+            <form onSubmit={(e) => void handleRequestOtp(e)} className="space-y-4">
+              <button
+                type="button"
+                onClick={switchToCredential}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Back to password login
+              </button>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="otp-email" className="text-sm font-medium">Email address</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="otp-email"
                     type="email"
                     placeholder="admin@example.com"
                     value={email}
@@ -146,16 +259,18 @@ export function LoginPage() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full mt-2" disabled={loading || !email.trim()}>
+              <Button type="submit" className="w-full mt-1" disabled={loading || !email.trim()}>
                 {loading ? "Sending code…" : "Send verification code"}
               </Button>
             </form>
-          ) : (
+          )}
+
+          {/* ── OTP: code entry ── */}
+          {mode === "otp-code" && (
             <form onSubmit={(e) => void handleVerifyOtp(e)} className="space-y-5">
-              {/* Back */}
               <button
                 type="button"
-                onClick={() => { setStep("email"); setError(null); setOtp(["", "", "", "", "", ""]); }}
+                onClick={() => { setMode("otp-email"); setError(null); setOtp(["", "", "", "", "", ""]); }}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" /> Change email
@@ -163,7 +278,6 @@ export function LoginPage() {
 
               <div className="space-y-3">
                 <Label className="text-sm font-medium">6-digit verification code</Label>
-                {/* OTP boxes */}
                 <div className="flex gap-2 justify-between">
                   {otp.map((digit, i) => (
                     <input

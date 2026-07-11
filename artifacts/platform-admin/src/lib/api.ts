@@ -24,6 +24,8 @@ export const api = {
     apiFetch<{ ok: boolean }>("/platform/auth/otp/request", { method: "POST", body: JSON.stringify({ email }) }),
   platformVerifyOtp: (email: string, otp: string) =>
     apiFetch<{ admin: PlatformAdmin }>("/platform/auth/otp/verify", { method: "POST", body: JSON.stringify({ email, otp }) }),
+  platformLoginCredential: (email: string, password: string) =>
+    apiFetch<{ admin: PlatformAdmin }>("/platform/auth/credential", { method: "POST", body: JSON.stringify({ email, password }) }),
   platformLogout: () => apiFetch<{ ok: boolean }>("/platform/auth/logout", { method: "POST" }),
 
   // Analytics

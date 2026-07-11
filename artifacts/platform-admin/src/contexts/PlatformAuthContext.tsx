@@ -5,6 +5,7 @@ interface PlatformAuthContextValue {
   isSignedIn: boolean;
   isLoading: boolean;
   admin: PlatformAdmin | null;
+  loginWithCredentials: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   requestOtp: (email: string) => Promise<{ ok: boolean; error?: string }>;
   verifyOtp: (email: string, otp: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -21,6 +22,17 @@ export function PlatformAuthProvider({ children }: { children: ReactNode }) {
       .then((res) => setAdmin(res.admin))
       .catch(() => setAdmin(null))
       .finally(() => setIsLoading(false));
+  }, []);
+
+  const loginWithCredentials = useCallback(async (email: string, password: string) => {
+    try {
+      const res = await api.platformLoginCredential(email, password);
+      setAdmin(res.admin);
+      return { ok: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Login failed";
+      return { ok: false, error: msg };
+    }
   }, []);
 
   const requestOtp = useCallback(async (email: string) => {
@@ -51,7 +63,7 @@ export function PlatformAuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <PlatformAuthContext.Provider
-      value={{ isSignedIn: !!admin, isLoading, admin, requestOtp, verifyOtp, logout }}
+      value={{ isSignedIn: !!admin, isLoading, admin, loginWithCredentials, requestOtp, verifyOtp, logout }}
     >
       {children}
     </PlatformAuthContext.Provider>

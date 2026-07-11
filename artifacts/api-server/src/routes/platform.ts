@@ -154,6 +154,36 @@ router.post("/platform/auth/otp/verify", async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
+/** Credential login: email + password for platform admins who have a password set. */
+router.post("/platform/auth/credential", async (req, res) => {
+  try {
+    const { email, password } = req.body as { email?: string; password?: string };
+    if (!email || !password) {
+      res.status(400).json({ error: "email and password are required" });
+      return;
+    }
+    const normalised = email.toLowerCase().trim();
+    const [admin] = await db.select().from(platformAdminsTable)
+      .where(eq(platformAdminsTable.email, normalised)).limit(1);
+    if (!admin) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
+    }
+    if (!admin.isActive) {
+      res.status(403).json({ error: "Platform admin account is deactivated." });
+      return;
+    }
+    const match = await bcrypt.compare(password, admin.passwordHash);
+    if (!match) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
+    }
+    const token = signPlatformToken({ platformAdminId: admin.id, email: admin.email });
+    setPlatformAuthCookie(res, token);
+    res.json({ admin: safePlatformAdmin(admin) });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
 router.post("/platform/auth/logout", (_req, res) => {
   clearPlatformAuthCookie(res);
   res.json({ ok: true });
