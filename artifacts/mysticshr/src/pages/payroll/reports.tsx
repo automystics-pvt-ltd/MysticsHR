@@ -69,8 +69,8 @@ function downloadServerCSV(url: string, filename: string) {
 }
 
 function buildApiBase() {
-  const base = import.meta.env.BASE_URL ?? "/mysticshr/";
-  return base.endsWith("/") ? `${base}api` : `${base}/api`;
+  const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+  return `${base}/api`;
 }
 
 function ReportTable({ report, type }: { report: StatutoryReportData; type: ReportType }) {

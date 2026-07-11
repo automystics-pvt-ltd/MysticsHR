@@ -95,7 +95,8 @@ function exportToCsv(data: object[], filename: string) {
 
 async function exportReport(reportType: string, format: "xlsx" | "pdf", filters: Record<string, string>) {
   const params = new URLSearchParams({ format, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) });
-  const url = `/api/reports/${reportType}/export?${params.toString()}`;
+  const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+  const url = `${base}/api/reports/${reportType}/export?${params.toString()}`;
   const resp = await fetch(url, { credentials: "include" });
   if (!resp.ok) { alert("Export failed. Please try again."); return; }
   if (format === "pdf") {
@@ -341,7 +342,8 @@ function ReportCatalog() {
       const params = new URLSearchParams(
         Object.entries(currentFilters).filter(([, v]) => v) as [string, string][]
       );
-      const resp = await fetch(`/api/reports/${reportType}/preview?${params.toString()}`, { credentials: "include" });
+      const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+      const resp = await fetch(`${base}/api/reports/${reportType}/preview?${params.toString()}`, { credentials: "include" });
       if (!resp.ok) {
         setPreviewState((s) => ({ ...s, loading: false, error: `Preview failed (${resp.status}). Try again or use Download.` }));
         return;

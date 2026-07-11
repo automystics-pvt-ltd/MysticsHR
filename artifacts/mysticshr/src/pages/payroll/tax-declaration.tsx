@@ -55,8 +55,8 @@ function fyStartYear(fy: string): number {
 }
 
 function buildApiBase() {
-  const base = import.meta.env.BASE_URL ?? "/mysticshr/";
-  return base.endsWith("/") ? `${base}api` : `${base}/api`;
+  const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+  return `${base}/api`;
 }
 
 export default function TaxDeclarationPage() {
