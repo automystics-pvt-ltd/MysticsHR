@@ -8,8 +8,13 @@ import {
   departmentsTable,
   auditLogsTable,
   employeeCertificationsTable,
+  leaveApplicationsTable,
+  helpdeskTicketsTable,
+  wfhRequestsTable,
+  expenseClaimsTable,
+  attendanceRegularizationsTable,
 } from "@workspace/db/schema";
-import { eq, and, sql, desc, asc, isNull, isNotNull, lte } from "drizzle-orm";
+import { eq, and, sql, desc, asc, isNull, isNotNull, lte, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -52,11 +57,71 @@ router.get("/dashboard/kpis", requireHrmsUser, async (req, res) => {
       .from(employeesTable)
       .where(and(notDeleted, eq(employeesTable.status, "On Leave of Absence")));
 
+    const [noticePeriodRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(employeesTable)
+      .where(and(notDeleted, eq(employeesTable.status, "Notice Period")));
+
+    const [deptRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(departmentsTable)
+      .where(and(isNull(departmentsTable.deletedAt), eq(departmentsTable.isActive, true), eq(departmentsTable.tenantId, tenantId)));
+
+    const [pendingLeaveRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(leaveApplicationsTable)
+      .where(and(
+        eq(leaveApplicationsTable.tenantId, tenantId),
+        inArray(leaveApplicationsTable.status, ["Pending", "HOD Approved"])
+      ));
+
+    const [pendingWfhRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(wfhRequestsTable)
+      .where(and(eq(wfhRequestsTable.tenantId, tenantId), eq(wfhRequestsTable.status, "Pending")));
+
+    const [pendingExpenseRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(expenseClaimsTable)
+      .where(and(eq(expenseClaimsTable.tenantId, tenantId), eq(expenseClaimsTable.status, "Submitted")));
+
+    const [pendingRegRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(attendanceRegularizationsTable)
+      .where(and(eq(attendanceRegularizationsTable.tenantId, tenantId), eq(attendanceRegularizationsTable.status, "Pending")));
+
+    const [openTicketsRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(helpdeskTicketsTable)
+      .where(and(eq(helpdeskTicketsTable.tenantId, tenantId), eq(helpdeskTicketsTable.status, "Open")));
+
+    const today30 = new Date();
+    today30.setDate(today30.getDate() + 30);
+    const [certsExpiringRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(employeeCertificationsTable)
+      .innerJoin(employeesTable, and(eq(employeeCertificationsTable.employeeId, employeesTable.id), isNull(employeesTable.deletedAt)))
+      .where(and(
+        eq(employeeCertificationsTable.tenantId, tenantId),
+        isNotNull(employeeCertificationsTable.expiryDate),
+        lte(employeeCertificationsTable.expiryDate, sql`(CURRENT_DATE + '30 days'::interval)::date`)
+      ));
+
     const totalHeadcount = headcountRow?.count ?? 0;
     const activeEmployees = activeRow?.count ?? 0;
     const newJoinersThisMonth = newJoinersRow?.count ?? 0;
     const separated = separatedRow?.count ?? 0;
     const onLeaveToday = onLeaveRow?.count ?? 0;
+    const noticePeriodCount = noticePeriodRow?.count ?? 0;
+    const departmentCount = deptRow?.count ?? 0;
+    const pendingLeaveCount = pendingLeaveRow?.count ?? 0;
+    const pendingWfhCount = pendingWfhRow?.count ?? 0;
+    const pendingExpenseCount = pendingExpenseRow?.count ?? 0;
+    const pendingRegCount = pendingRegRow?.count ?? 0;
+    const openTicketsCount = openTicketsRow?.count ?? 0;
+    const certsExpiringCount = certsExpiringRow?.count ?? 0;
+
+    const pendingApprovals = pendingLeaveCount + pendingWfhCount + pendingExpenseCount + pendingRegCount;
 
     const attritionRate =
       totalHeadcount > 0
@@ -69,7 +134,15 @@ router.get("/dashboard/kpis", requireHrmsUser, async (req, res) => {
       attritionRate,
       attendanceRateToday: totalHeadcount > 0 ? parseFloat(((activeEmployees / totalHeadcount) * 100).toFixed(2)) : 0,
       openPositions: 0,
-      pendingApprovals: 0,
+      pendingApprovals,
+      pendingLeaveCount,
+      pendingWfhCount,
+      pendingExpenseCount,
+      pendingRegCount,
+      noticePeriodCount,
+      departmentCount,
+      openTicketsCount,
+      certsExpiringCount,
       activeEmployees,
       onLeaveToday,
     });

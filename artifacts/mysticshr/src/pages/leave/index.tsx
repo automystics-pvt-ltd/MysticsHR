@@ -182,7 +182,7 @@ export default function LeavePage() {
     <div className="space-y-6">
       <PageHeader
         title="Leave Management"
-        description="Apply for leave and track your applications"
+        description={isHr ? "View and manage all employee leave applications" : "Apply for leave and track your applications"}
         actions={
           <>
             {isHr && (

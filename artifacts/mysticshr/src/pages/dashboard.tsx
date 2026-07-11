@@ -418,7 +418,7 @@ function StatusAgingPanel({ kpis, loading }: { kpis: Record<string, number> | un
             <Award className="w-4 h-4 text-violet-500" />
             <span className="text-sm font-semibold text-gray-700">Compliance Status</span>
           </div>
-          <span className="text-xs text-violet-600 font-semibold">May 2025</span>
+          <span className="text-xs text-violet-600 font-semibold">{format(new Date(), "MMM yyyy")}</span>
         </div>
         <div className="grid grid-cols-3 gap-2 text-xs">
           <div className="text-center p-2 bg-gray-50 rounded-lg">
@@ -605,12 +605,12 @@ function EmployeeView({ firstName, greeting }: { firstName: string; greeting: st
         </div>
         <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
           {[
-            { icon: Calendar,    label: "My Leave",     href: "/ess",      iconBg: "bg-green-100",  iconColor: "text-green-600" },
-            { icon: FileText,    label: "My Payslip",   href: "/ess",      iconBg: "bg-violet-100", iconColor: "text-violet-600" },
-            { icon: CheckSquare, label: "Approvals",    href: "/ess",      iconBg: "bg-amber-100",  iconColor: "text-amber-600" },
-            { icon: Clock,       label: "Attendance",   href: "/ess",      iconBg: "bg-blue-100",   iconColor: "text-blue-600" },
-            { icon: Headphones,  label: "Helpdesk",     href: "/helpdesk", iconBg: "bg-red-100",    iconColor: "text-red-600" },
-            { icon: FileText,    label: "Documents",    href: "/ess",      iconBg: "bg-teal-100",   iconColor: "text-teal-600" },
+            { icon: Calendar,    label: "My Leave",      href: "/leave",              iconBg: "bg-green-100",  iconColor: "text-green-600" },
+            { icon: FileText,    label: "My Payslip",    href: "/payroll/payslips",   iconBg: "bg-violet-100", iconColor: "text-violet-600" },
+            { icon: CheckSquare, label: "My Attendance", href: "/my-attendance",      iconBg: "bg-amber-100",  iconColor: "text-amber-600" },
+            { icon: Clock,       label: "WFH Request",   href: "/wfh",                iconBg: "bg-blue-100",   iconColor: "text-blue-600" },
+            { icon: Headphones,  label: "Helpdesk",      href: "/helpdesk",           iconBg: "bg-red-100",    iconColor: "text-red-600" },
+            { icon: FileText,    label: "Documents",     href: "/documents",          iconBg: "bg-teal-100",   iconColor: "text-teal-600" },
           ].map((a) => (
             <Link key={a.label} href={a.href}>
               <div className="flex items-center gap-3 p-3.5 bg-white rounded-xl border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all cursor-pointer">
@@ -756,6 +756,33 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* ── Today's Priorities (HR only) ── */}
+      {isHrAdmin && (kpis?.pendingApprovals ?? 0) > 0 && (
+        <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-200 flex items-center justify-center shrink-0">
+              <ClipboardList className="w-4 h-4 text-amber-700" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-amber-800">
+                {kpis?.pendingApprovals} item{(kpis?.pendingApprovals ?? 0) !== 1 ? "s" : ""} need your attention
+              </p>
+              <p className="text-xs text-amber-600 flex flex-wrap gap-2 mt-0.5">
+                {(kpis?.pendingLeaveCount ?? 0) > 0 && <span>{kpis?.pendingLeaveCount} leave</span>}
+                {(kpis?.pendingWfhCount ?? 0) > 0 && <span>· {kpis?.pendingWfhCount} WFH</span>}
+                {(kpis?.pendingExpenseCount ?? 0) > 0 && <span>· {kpis?.pendingExpenseCount} expense</span>}
+                {(kpis?.pendingRegCount ?? 0) > 0 && <span>· {kpis?.pendingRegCount} regularization</span>}
+              </p>
+            </div>
+          </div>
+          <Link href="/approvals">
+            <button className="shrink-0 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+              Review Now →
+            </button>
+          </Link>
+        </div>
+      )}
+
       {/* ── Secondary Quick Stats ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <QuickStatCard
@@ -763,7 +790,7 @@ export default function DashboardPage() {
           iconBg="bg-green-100"
           iconColor="text-green-600"
           label="Pending Leaves"
-          value={0}
+          value={kpis?.pendingLeaveCount ?? 0}
           href="/approvals"
           loading={kpisLoading}
         />
@@ -771,8 +798,8 @@ export default function DashboardPage() {
           icon={ClipboardList}
           iconBg="bg-violet-100"
           iconColor="text-violet-600"
-          label="Pending Approvals"
-          value={0}
+          label="All Pending"
+          value={kpis?.pendingApprovals ?? 0}
           href="/approvals"
           loading={kpisLoading}
         />
@@ -781,7 +808,7 @@ export default function DashboardPage() {
           iconBg="bg-amber-100"
           iconColor="text-amber-600"
           label="Notice Period"
-          value={0}
+          value={kpis?.noticePeriodCount ?? 0}
           href="/employees"
           loading={kpisLoading}
         />
@@ -799,7 +826,7 @@ export default function DashboardPage() {
           iconBg="bg-blue-100"
           iconColor="text-blue-600"
           label="Departments"
-          value={0}
+          value={kpis?.departmentCount ?? 0}
           href="/departments"
           loading={kpisLoading}
         />
@@ -808,7 +835,7 @@ export default function DashboardPage() {
           iconBg="bg-orange-100"
           iconColor="text-orange-600"
           label="Certs Expiring"
-          value={0}
+          value={kpis?.certsExpiringCount ?? 0}
           href="/employees"
           loading={kpisLoading}
         />
