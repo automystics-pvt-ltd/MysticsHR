@@ -64,7 +64,11 @@ function sheetToRows(wb: XLSX.WorkBook, sheetName: string): Record<string, strin
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
   return rows.map(row =>
     Object.fromEntries(
-      Object.entries(row).map(([k, v]) => [k, String(v ?? "")])
+      Object.entries(row).map(([k, v]) => [
+        // Strip trailing " *" used to mark required columns in the template header
+        k.replace(/\s*\*+\s*$/, "").trim(),
+        String(v ?? ""),
+      ])
     )
   );
 }
