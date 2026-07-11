@@ -13,6 +13,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 const LandingPage = lazy(() => import("@/pages/landing"));
 const LoginPage = lazy(() => import("@/pages/login"));
 const MfaVerifyPage = lazy(() => import("@/pages/mfa-verify"));
+const SetupPasswordPage = lazy(() => import("@/pages/setup-password"));
 const SecuritySettingsPage = lazy(() => import("@/pages/settings/security"));
 const DashboardPage = lazy(() => import("@/pages/dashboard"));
 
@@ -266,6 +267,11 @@ function AppRoutes() {
             </Suspense>
           </Route>
         )}
+        <Route path="/setup-password">
+          <Suspense fallback={<LoadingScreen />}>
+            <SetupPasswordPage />
+          </Suspense>
+        </Route>
         <Route path="/sign-in/mfa">
           <Suspense fallback={<LoadingScreen />}>
             <MfaVerifyPage />
