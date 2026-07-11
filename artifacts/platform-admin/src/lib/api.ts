@@ -342,6 +342,63 @@ export interface EnforceResult {
   suspendedIds: number[];
 }
 
+// ─── DB Admin ──────────────────────────────────────────────────────────────────
+
+export interface DbTable {
+  table_name: string;
+  row_count: number;
+  column_count: number;
+  size_bytes: number;
+}
+
+export interface DbColumn {
+  column_name: string;
+  data_type: string;
+  udt_name: string;
+  is_nullable: string;
+  column_default: string | null;
+  character_maximum_length: number | null;
+}
+
+export interface DbSchema {
+  columns: DbColumn[];
+  indexes: { indexname: string; indexdef: string }[];
+  constraints: { constraint_name: string; constraint_type: string; column_name: string; foreign_table?: string; foreign_column?: string }[];
+}
+
+export interface DbRowsResponse {
+  data: Record<string, unknown>[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+export interface DbAuditEntry {
+  id: number;
+  admin_id: number;
+  admin_email: string;
+  action: string;
+  table_name: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface IntegrityCheck {
+  name: string;
+  status: "ok" | "warn" | "error";
+  message: string;
+  count?: number;
+}
+
+export interface DbStats {
+  db_size: string;
+  db_size_bytes: number;
+  table_count: number;
+  active_connections: number;
+  cache_hit_pct: number;
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 export function fmtMoney(cents: number, currency = "INR"): string {

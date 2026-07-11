@@ -58,6 +58,29 @@ CREATE TABLE IF NOT EXISTS platform_settings (
 -- enabled_screens column (Screen-level plan access control)
 ALTER TABLE subscription_plans
   ADD COLUMN IF NOT EXISTS enabled_screens jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+-- DB Admin: audit log of all DB admin operations
+CREATE TABLE IF NOT EXISTS platform_db_audit_log (
+  id          serial PRIMARY KEY,
+  admin_id    integer NOT NULL,
+  admin_email text NOT NULL,
+  action      text NOT NULL,
+  table_name  text NOT NULL,
+  details     jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- DB Admin: soft-archive store
+CREATE TABLE IF NOT EXISTS platform_db_archives (
+  id          serial PRIMARY KEY,
+  table_name  text NOT NULL,
+  record_id   text NOT NULL,
+  data        jsonb NOT NULL,
+  reason      text NOT NULL DEFAULT '',
+  admin_id    integer NOT NULL,
+  admin_email text NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
 SQL
 
 echo "  ✓ DB schema up to date"

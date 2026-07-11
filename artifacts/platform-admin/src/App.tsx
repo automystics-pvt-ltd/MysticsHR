@@ -15,6 +15,7 @@ import { AnalyticsPage } from "@/pages/AnalyticsPage";
 import { InvoicesPage } from "@/pages/InvoicesPage";
 import { BillingReportsPage } from "@/pages/BillingReportsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { DbAdminPage } from "@/pages/DbAdminPage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/analytics"><ProtectedRoute><AnalyticsPage /></ProtectedRoute></Route>
       <Route path="/audit-logs"><ProtectedRoute><AuditLogsPage /></ProtectedRoute></Route>
       <Route path="/settings"><ProtectedRoute><SettingsPage /></ProtectedRoute></Route>
+      <Route path="/db-admin"><ProtectedRoute><DbAdminPage /></ProtectedRoute></Route>
       <Route path="/">
         {isLoading ? null : isSignedIn ? <Redirect to="/dashboard" /> : <Redirect to="/login" />}
       </Route>
