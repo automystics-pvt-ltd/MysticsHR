@@ -26,48 +26,27 @@ const STATUSES = ["Pre-Joining", "Active", "On Leave of Absence", "Suspended", "
 const GENDERS = ["Male", "Female", "Other"] as const;
 
 interface FormState {
-  employeeId: string;
   firstName: string;
   lastName: string;
   email: string;
+  employeeId: string;
   phone: string;
   dateOfBirth: string;
   gender: string;
+  location: string;
   departmentId: string;
   designationId: string;
+  managerId: string;
+  branchId: string;
+  defaultShiftTemplateId: string;
   employmentType: typeof EMPLOYMENT_TYPES[number];
   status: typeof STATUSES[number];
   dateOfJoining: string;
   ctc: string;
-  managerId: string;
-  location: string;
-  branchId: string;
-  defaultShiftTemplateId: string;
   notes: string;
 }
 
 const today = new Date().toISOString().slice(0, 10);
-
-const initialState: FormState = {
-  employeeId: "",
-  firstName: "",
-  lastName: "",
-  email: "",
-  phone: "",
-  dateOfBirth: "",
-  gender: "",
-  departmentId: "",
-  branchId: "",
-  defaultShiftTemplateId: "",
-  designationId: "",
-  employmentType: "Permanent",
-  status: "Pre-Joining",
-  dateOfJoining: today,
-  ctc: "",
-  managerId: "",
-  location: "Chennai",
-  notes: "",
-};
 
 function suggestEmployeeId(): string {
   const year = new Date().getFullYear();
@@ -75,17 +54,38 @@ function suggestEmployeeId(): string {
   return `AMT-${year}-${rand}`;
 }
 
+const initialState: FormState = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  employeeId: suggestEmployeeId(),
+  phone: "",
+  dateOfBirth: "",
+  gender: "",
+  location: "Chennai",
+  departmentId: "",
+  designationId: "",
+  managerId: "",
+  branchId: "",
+  defaultShiftTemplateId: "",
+  employmentType: "Permanent",
+  status: "Pre-Joining",
+  dateOfJoining: today,
+  ctc: "",
+  notes: "",
+};
+
 export default function NewEmployeePage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const [form, setForm] = useState<FormState>({ ...initialState, employeeId: suggestEmployeeId() });
+  const [form, setForm] = useState<FormState>(initialState);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const { data: deptResp } = useListDepartments();
   const { data: desigResp } = useListDesignations();
-  const { data: empResp } = useListEmployees({ limit: 100 });
+  const { data: empResp } = useListEmployees({ limit: 200 });
   const { data: branchList = [] } = useQuery<any[]>({
     queryKey: ["branches"],
     queryFn: () => fetch(`${BASE_URL}/api/branches`, { credentials: "include" }).then((r) => r.json()),
@@ -101,19 +101,20 @@ export default function NewEmployeePage() {
     ? designations.filter((d: any) => String(d.departmentId) === form.departmentId)
     : designations;
 
-  const update = <K extends keyof FormState>(key: K, val: FormState[K]) => {
-    setForm((prev) => ({ ...prev, [key]: val }));
-    if (key === "departmentId" && val !== form.departmentId) {
-      setForm((prev) => ({ ...prev, designationId: "" }));
+  function update<K extends keyof FormState>(key: K, val: FormState[K]) {
+    if (key === "departmentId") {
+      setForm((prev) => ({ ...prev, departmentId: val as string, designationId: "" }));
+    } else {
+      setForm((prev) => ({ ...prev, [key]: val }));
     }
-  };
+  }
 
   const validate = (): string | null => {
-    if (!form.employeeId.trim()) return "Employee ID is required";
     if (!form.firstName.trim()) return "First name is required";
     if (!form.lastName.trim()) return "Last name is required";
     if (!form.email.trim()) return "Email is required";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return "Email is not valid";
+    if (!form.employeeId.trim()) return "Employee ID is required";
     if (form.ctc && Number.isNaN(Number(form.ctc))) return "CTC must be a valid number";
     return null;
   };
@@ -171,7 +172,7 @@ export default function NewEmployeePage() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate("/employees")}>
           <ArrowLeft className="w-4 h-4 mr-1" /> Employees
@@ -181,7 +182,7 @@ export default function NewEmployeePage() {
             <UserPlus className="w-6 h-6 text-primary" /> New Employee
           </h1>
           <p className="text-sm text-muted-foreground">
-            Create an employee record. Required fields are marked with <span className="text-destructive">*</span>.
+            Fields marked <span className="text-destructive font-medium">*</span> are required.
           </p>
         </div>
       </div>
@@ -199,45 +200,52 @@ export default function NewEmployeePage() {
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Identity */}
+      <form onSubmit={handleSubmit} className="space-y-5">
+
+        {/* Basic Identity */}
         <Card>
-          <CardHeader>
-            <CardTitle>Identity</CardTitle>
-            <CardDescription>Basic personal details</CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Basic Information</CardTitle>
+            <CardDescription>Name and contact details</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="employeeId">Employee ID <span className="text-destructive">*</span></Label>
-              <Input id="employeeId" value={form.employeeId}
-                onChange={(e) => update("employeeId", e.target.value)} placeholder="AMT-2026-001" />
+            <div className="space-y-1.5">
+              <Label htmlFor="firstName">First Name <span className="text-destructive">*</span></Label>
+              <Input id="firstName" value={form.firstName} autoFocus
+                onChange={(e) => update("firstName", e.target.value)} placeholder="e.g. Priya" />
             </div>
-            <div>
-              <Label htmlFor="email">Email <span className="text-destructive">*</span></Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="lastName">Last Name <span className="text-destructive">*</span></Label>
+              <Input id="lastName" value={form.lastName}
+                onChange={(e) => update("lastName", e.target.value)} placeholder="e.g. Sharma" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Work Email <span className="text-destructive">*</span></Label>
               <Input id="email" type="email" value={form.email}
                 onChange={(e) => update("email", e.target.value)} placeholder="firstname.lastname@automystics.com" />
             </div>
-            <div>
-              <Label htmlFor="firstName">First Name <span className="text-destructive">*</span></Label>
-              <Input id="firstName" value={form.firstName}
-                onChange={(e) => update("firstName", e.target.value)} />
+            <div className="space-y-1.5">
+              <Label htmlFor="employeeId">Employee ID <span className="text-destructive">*</span></Label>
+              <Input id="employeeId" value={form.employeeId}
+                onChange={(e) => update("employeeId", e.target.value)} placeholder="AMT-2026-001" />
+              <p className="text-xs text-muted-foreground">Auto-suggested — edit if needed</p>
             </div>
-            <div>
-              <Label htmlFor="lastName">Last Name <span className="text-destructive">*</span></Label>
-              <Input id="lastName" value={form.lastName}
-                onChange={(e) => update("lastName", e.target.value)} />
-            </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="phone">Phone</Label>
               <Input id="phone" value={form.phone}
                 onChange={(e) => update("phone", e.target.value)} placeholder="+91 98765 43210" />
             </div>
-            <div>
+            <div className="space-y-1.5">
+              <Label htmlFor="loc">Work Location</Label>
+              <Input id="loc" value={form.location}
+                onChange={(e) => update("location", e.target.value)} placeholder="Chennai" />
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="dob">Date of Birth</Label>
               <Input id="dob" type="date" value={form.dateOfBirth}
                 onChange={(e) => update("dateOfBirth", e.target.value)} />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label>Gender</Label>
               <Select value={form.gender || undefined} onValueChange={(v) => update("gender", v)}>
                 <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
@@ -246,22 +254,17 @@ export default function NewEmployeePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="loc">Location</Label>
-              <Input id="loc" value={form.location}
-                onChange={(e) => update("location", e.target.value)} placeholder="Chennai" />
-            </div>
           </CardContent>
         </Card>
 
         {/* Position */}
         <Card>
-          <CardHeader>
-            <CardTitle>Position</CardTitle>
-            <CardDescription>Department, role, and reporting</CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Role & Reporting</CardTitle>
+            <CardDescription>Department, designation, and reporting manager</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+            <div className="space-y-1.5">
               <Label>Department</Label>
               <Select value={form.departmentId || undefined} onValueChange={(v) => update("departmentId", v)}>
                 <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
@@ -272,9 +275,13 @@ export default function NewEmployeePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label>Designation</Label>
-              <Select value={form.designationId || undefined} onValueChange={(v) => update("designationId", v)}>
+              <Select
+                value={form.designationId || undefined}
+                onValueChange={(v) => update("designationId", v)}
+                disabled={filteredDesignations.length === 0}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={form.departmentId ? "Select designation" : "Select department first"} />
                 </SelectTrigger>
@@ -285,10 +292,10 @@ export default function NewEmployeePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label>Reporting Manager</Label>
               <Select value={form.managerId || undefined} onValueChange={(v) => update("managerId", v)}>
-                <SelectTrigger><SelectValue placeholder="Select manager (optional)" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                 <SelectContent>
                   {employees.map((e: any) => (
                     <SelectItem key={e.id} value={String(e.id)}>
@@ -298,10 +305,10 @@ export default function NewEmployeePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label>Branch / Office</Label>
               <Select value={form.branchId || undefined} onValueChange={(v) => update("branchId", v)}>
-                <SelectTrigger><SelectValue placeholder="Select branch (optional)" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                 <SelectContent>
                   {branches.map((b: any) => (
                     <SelectItem key={b.id} value={String(b.id)}>
@@ -311,10 +318,10 @@ export default function NewEmployeePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label>Default Shift</Label>
               <Select value={form.defaultShiftTemplateId || undefined} onValueChange={(v) => update("defaultShiftTemplateId", v)}>
-                <SelectTrigger><SelectValue placeholder="Select shift template (optional)" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                 <SelectContent>
                   {shiftTemplates.map((s: any) => (
                     <SelectItem key={s.id} value={String(s.id)}>
@@ -329,12 +336,12 @@ export default function NewEmployeePage() {
 
         {/* Employment */}
         <Card>
-          <CardHeader>
-            <CardTitle>Employment</CardTitle>
-            <CardDescription>Type, status, joining date, and compensation</CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Employment Details</CardTitle>
+            <CardDescription>Type, status, dates, and compensation</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+            <div className="space-y-1.5">
               <Label>Employment Type <span className="text-destructive">*</span></Label>
               <Select value={form.employmentType} onValueChange={(v) => update("employmentType", v as any)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -343,7 +350,7 @@ export default function NewEmployeePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label>Status <span className="text-destructive">*</span></Label>
               <Select value={form.status} onValueChange={(v) => update("status", v as any)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -352,32 +359,32 @@ export default function NewEmployeePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="doj">Date of Joining</Label>
               <Input id="doj" type="date" value={form.dateOfJoining}
                 onChange={(e) => update("dateOfJoining", e.target.value)} />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="ctc">Annual CTC (₹)</Label>
               <Input id="ctc" type="number" step="0.01" value={form.ctc}
                 onChange={(e) => update("ctc", e.target.value)} placeholder="e.g. 1200000" />
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 space-y-1.5">
               <Label htmlFor="notes">Internal Notes</Label>
               <Textarea id="notes" rows={2} value={form.notes}
                 onChange={(e) => update("notes", e.target.value)}
-                placeholder="Optional context for HR (not visible to employee)" />
+                placeholder="Optional context for HR — not visible to employee" />
             </div>
           </CardContent>
         </Card>
 
-        <div className="flex items-center justify-end gap-2 pb-6">
+        <div className="flex items-center justify-end gap-3 pb-8">
           <Button type="button" variant="outline" onClick={() => navigate("/employees")} disabled={submitting}>
             Cancel
           </Button>
           <Button type="submit" disabled={submitting}>
             {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {submitting ? "Creating..." : "Create Employee"}
+            {submitting ? "Creating…" : "Create Employee"}
           </Button>
         </div>
       </form>

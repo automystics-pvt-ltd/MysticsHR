@@ -8,6 +8,9 @@ import {
   useUpdateEmployee,
   useUpdateMyTimezone,
   getGetEmployeeQueryKey,
+  useListDepartments,
+  useListDesignations,
+  useListEmployees,
   useGetEmployeesIdEducation,
   usePostEmployeesIdEducation,
   usePostEmployeesIdEducationImport,
@@ -75,7 +78,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import {
   ArrowLeft, Mail, Phone, MapPin, Calendar, Plus, Pencil, Trash2,
   GraduationCap, Briefcase, FileText, History, ClipboardList, Download,
-  TrendingUp, Upload, Award, BadgeCheck, Users,
+  TrendingUp, Upload, Award, BadgeCheck, Users, AlertCircle,
 } from "lucide-react";
 import { CsvImportModal, type CsvColumn } from "@/components/CsvImportModal";
 
@@ -175,6 +178,10 @@ const STATUS_COLORS: Record<string, string> = {
   "Suspended": "bg-red-100 text-red-800",
   "Separated": "bg-gray-100 text-gray-600",
 };
+
+const EMPLOYMENT_TYPES = ["Permanent", "Contract", "Probation", "Intern", "Part-Time"] as const;
+const STATUSES = ["Pre-Joining", "Active", "On Leave of Absence", "Notice Period", "Suspended", "Separated"] as const;
+const GENDERS = ["Male", "Female", "Other"] as const;
 
 const TASK_CATEGORY_COLORS: Record<string, string> = {
   HR: "bg-blue-100 text-blue-700",
@@ -935,6 +942,15 @@ export default function EmployeeDetailPage() {
   const [editingOrg, setEditingOrg] = useState(false);
   const [orgForm, setOrgForm] = useState({ branchId: "", defaultShiftTemplateId: "" });
 
+  const [editingEmployee, setEditingEmployee] = useState(false);
+  const [empEditError, setEmpEditError] = useState<string | null>(null);
+  const [empForm, setEmpForm] = useState({
+    firstName: "", lastName: "", email: "", phone: "", dateOfBirth: "",
+    gender: "", location: "", departmentId: "", designationId: "", managerId: "",
+    employmentType: "", status: "", dateOfJoining: "", ctc: "",
+    branchId: "", defaultShiftTemplateId: "",
+  });
+
   const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
   const { data: branchList = [] } = useQuery<any[]>({
     queryKey: ["branches"],
@@ -943,6 +959,16 @@ export default function EmployeeDetailPage() {
   const branches = Array.isArray(branchList) ? branchList : [];
   const { data: shiftResp } = useGetShiftsTemplates();
   const shiftTemplates: any[] = (Array.isArray(shiftResp) ? shiftResp : (shiftResp as any)?.data) ?? [];
+
+  const { data: deptResp } = useListDepartments();
+  const { data: desigResp } = useListDesignations();
+  const { data: empListResp } = useListEmployees({ limit: 200 });
+  const departments: any[] = (Array.isArray(deptResp) ? deptResp : (deptResp as any)?.data) ?? [];
+  const allDesignations: any[] = (Array.isArray(desigResp) ? desigResp : (desigResp as any)?.data) ?? [];
+  const allEmployees: any[] = (Array.isArray(empListResp) ? empListResp : (empListResp as any)?.data) ?? [];
+  const filteredDesignations = empForm.departmentId
+    ? allDesignations.filter((d: any) => String(d.departmentId) === empForm.departmentId)
+    : allDesignations;
 
   function openOrgEdit() {
     setOrgForm({
@@ -963,6 +989,71 @@ export default function EmployeeDetailPage() {
       qc.invalidateQueries({ queryKey: getGetEmployeeQueryKey(empId) });
     } catch (e) {
       console.error("Save org failed", e);
+    }
+  }
+
+  function openEmpEdit() {
+    if (!emp) return;
+    setEmpEditError(null);
+    setEmpForm({
+      firstName: emp.firstName ?? "",
+      lastName: emp.lastName ?? "",
+      email: emp.email ?? "",
+      phone: emp.phone ?? "",
+      dateOfBirth: emp.dateOfBirth ?? "",
+      gender: emp.gender ?? "",
+      location: emp.location ?? "",
+      departmentId: String((emp as any).departmentId ?? ""),
+      designationId: String((emp as any).designationId ?? ""),
+      managerId: String((emp as any).managerId ?? ""),
+      employmentType: emp.employmentType ?? "Permanent",
+      status: emp.status ?? "Active",
+      dateOfJoining: emp.dateOfJoining ?? "",
+      ctc: String(emp.ctc ?? ""),
+      branchId: String((emp as any).branchId ?? ""),
+      defaultShiftTemplateId: String((emp as any).defaultShiftTemplateId ?? ""),
+    });
+    setEditingEmployee(true);
+  }
+
+  function updateEmpForm(key: string, val: string) {
+    if (key === "departmentId") {
+      setEmpForm((prev) => ({ ...prev, departmentId: val, designationId: "" }));
+    } else {
+      setEmpForm((prev) => ({ ...prev, [key]: val }));
+    }
+  }
+
+  async function saveEmpEdit() {
+    setEmpEditError(null);
+    if (!empForm.firstName.trim()) { setEmpEditError("First name is required"); return; }
+    if (!empForm.lastName.trim()) { setEmpEditError("Last name is required"); return; }
+    if (!empForm.email.trim()) { setEmpEditError("Email is required"); return; }
+    try {
+      const payload: Record<string, unknown> = {
+        firstName: empForm.firstName.trim(),
+        lastName: empForm.lastName.trim(),
+        email: empForm.email.trim().toLowerCase(),
+        phone: empForm.phone.trim() || null,
+        dateOfBirth: empForm.dateOfBirth || null,
+        gender: empForm.gender || null,
+        location: empForm.location.trim() || null,
+        employmentType: empForm.employmentType,
+        status: empForm.status,
+        dateOfJoining: empForm.dateOfJoining || null,
+        ctc: empForm.ctc || null,
+      };
+      if (empForm.departmentId) payload.departmentId = Number(empForm.departmentId);
+      if (empForm.designationId) payload.designationId = Number(empForm.designationId);
+      if (empForm.managerId && empForm.managerId !== "0") payload.managerId = Number(empForm.managerId);
+      payload.branchId = empForm.branchId ? Number(empForm.branchId) : null;
+      payload.defaultShiftTemplateId = empForm.defaultShiftTemplateId ? Number(empForm.defaultShiftTemplateId) : null;
+
+      await updateEmp.mutateAsync({ id: empId, data: payload });
+      setEditingEmployee(false);
+      qc.invalidateQueries({ queryKey: getGetEmployeeQueryKey(empId) });
+    } catch (e: any) {
+      setEmpEditError(e?.message || "Failed to save changes");
     }
   }
 
@@ -1053,12 +1144,21 @@ export default function EmployeeDetailPage() {
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold">{emp.firstName} {emp.lastName}</h1>
-              <p className="text-muted-foreground">{emp.designationTitle ?? "—"} · {emp.departmentName ?? "—"}</p>
-              <div className="flex items-center gap-3 mt-2 flex-wrap">
-                <span className="text-sm font-mono text-muted-foreground border border-border rounded px-2 py-0.5">{emp.employeeId}</span>
-                <Badge className={STATUS_COLORS[emp.status] ?? ""}>{emp.status}</Badge>
-                <Badge variant="outline">{emp.employmentType}</Badge>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl font-bold">{emp.firstName} {emp.lastName}</h1>
+                  <p className="text-muted-foreground">{emp.designationTitle ?? "—"} · {emp.departmentName ?? "—"}</p>
+                  <div className="flex items-center gap-3 mt-2 flex-wrap">
+                    <span className="text-sm font-mono text-muted-foreground border border-border rounded px-2 py-0.5">{emp.employeeId}</span>
+                    <Badge className={STATUS_COLORS[emp.status] ?? ""}>{emp.status}</Badge>
+                    <Badge variant="outline">{emp.employmentType}</Badge>
+                  </div>
+                </div>
+                {canEdit && (
+                  <Button size="sm" variant="outline" onClick={openEmpEdit} className="flex-shrink-0 gap-1.5">
+                    <Pencil className="w-3.5 h-3.5" /> Edit Employee
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1159,7 +1259,7 @@ export default function EmployeeDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Employment Details</CardTitle>
-              {canEdit && <Button size="sm" variant="outline" onClick={openOrgEdit}>Edit Org</Button>}
+              {canEdit && <Button size="sm" variant="outline" onClick={openEmpEdit}><Pencil className="w-3.5 h-3.5 mr-1" />Edit</Button>}
             </CardHeader>
             <CardContent>
               <dl>
@@ -1273,6 +1373,166 @@ export default function EmployeeDetailPage() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Comprehensive Edit Employee Dialog */}
+      <Dialog open={editingEmployee} onOpenChange={(o) => { setEditingEmployee(o); setEmpEditError(null); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Employee</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-1">
+            {empEditError && (
+              <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {empEditError}
+              </div>
+            )}
+
+            {/* Identity */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Identity</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>First Name <span className="text-destructive">*</span></Label>
+                  <Input value={empForm.firstName} onChange={(e) => updateEmpForm("firstName", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Last Name <span className="text-destructive">*</span></Label>
+                  <Input value={empForm.lastName} onChange={(e) => updateEmpForm("lastName", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Work Email <span className="text-destructive">*</span></Label>
+                  <Input type="email" value={empForm.email} onChange={(e) => updateEmpForm("email", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Phone</Label>
+                  <Input value={empForm.phone} onChange={(e) => updateEmpForm("phone", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Date of Birth</Label>
+                  <Input type="date" value={empForm.dateOfBirth} onChange={(e) => updateEmpForm("dateOfBirth", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Gender</Label>
+                  <Select value={empForm.gender || undefined} onValueChange={(v) => updateEmpForm("gender", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      {GENDERS.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Work Location</Label>
+                  <Input value={empForm.location} onChange={(e) => updateEmpForm("location", e.target.value)} placeholder="Chennai" />
+                </div>
+              </div>
+            </div>
+
+            {/* Role */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Role & Reporting</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Department</Label>
+                  <Select value={empForm.departmentId || undefined} onValueChange={(v) => updateEmpForm("departmentId", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                    <SelectContent>
+                      {departments.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Designation</Label>
+                  <Select
+                    value={empForm.designationId || undefined}
+                    onValueChange={(v) => updateEmpForm("designationId", v)}
+                    disabled={filteredDesignations.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={empForm.departmentId ? "Select designation" : "Select department first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredDesignations.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.title}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Reporting Manager</Label>
+                  <Select value={empForm.managerId || undefined} onValueChange={(v) => updateEmpForm("managerId", v)}>
+                    <SelectTrigger><SelectValue placeholder="No manager" /></SelectTrigger>
+                    <SelectContent>
+                      {allEmployees.filter((e: any) => e.id !== empId).map((e: any) => (
+                        <SelectItem key={e.id} value={String(e.id)}>
+                          {e.firstName} {e.lastName} — {e.employeeId}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Employment */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Employment</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Employment Type</Label>
+                  <Select value={empForm.employmentType || undefined} onValueChange={(v) => updateEmpForm("employmentType", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      {EMPLOYMENT_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Status</Label>
+                  <Select value={empForm.status || undefined} onValueChange={(v) => updateEmpForm("status", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Date of Joining</Label>
+                  <Input type="date" value={empForm.dateOfJoining} onChange={(e) => updateEmpForm("dateOfJoining", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Annual CTC (₹)</Label>
+                  <Input type="number" value={empForm.ctc} onChange={(e) => updateEmpForm("ctc", e.target.value)} placeholder="e.g. 1200000" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Branch / Office</Label>
+                  <Select value={empForm.branchId || "_none"} onValueChange={(v) => updateEmpForm("branchId", v === "_none" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— None —</SelectItem>
+                      {branches.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}{b.city ? ` — ${b.city}` : ""}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Default Shift</Label>
+                  <Select value={empForm.defaultShiftTemplateId || "_none"} onValueChange={(v) => updateEmpForm("defaultShiftTemplateId", v === "_none" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— None —</SelectItem>
+                      {shiftTemplates.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditingEmployee(false); setEmpEditError(null); }}>Cancel</Button>
+            <Button onClick={saveEmpEdit} disabled={updateEmp.isPending}>
+              {updateEmp.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editingOrg} onOpenChange={setEditingOrg}>
         <DialogContent className="max-w-md">
