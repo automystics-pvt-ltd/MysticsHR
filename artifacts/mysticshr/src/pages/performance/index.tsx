@@ -5,6 +5,7 @@ import {
   useCreatePerformanceCycle,
   useAdvancePerformanceCycleStage,
   useListPerformanceGoals,
+  getListPerformanceCyclesQueryKey,
   type PerformanceCycle,
   CreatePerformanceCycleBodyCycleType,
 } from "@workspace/api-client-react";
@@ -74,7 +75,7 @@ function CycleCard({ cycle, isHR }: { cycle: PerformanceCycle; isHR: boolean }) 
 
   function handleAdvance(e: React.MouseEvent) {
     e.stopPropagation();
-    advance.mutate({ id: cycle.id }, { onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/performance/cycles"] }) });
+    advance.mutate({ id: cycle.id }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListPerformanceCyclesQueryKey() }) });
   }
 
   return (
@@ -136,7 +137,7 @@ function CreateCycleModal({ open, onClose }: { open: boolean; onClose: () => voi
     e.preventDefault();
     create.mutate({ data: { ...form, status: "Draft" } }, {
       onSuccess: () => {
-        qc.invalidateQueries({ queryKey: ["/api/performance/cycles"] });
+        qc.invalidateQueries({ queryKey: getListPerformanceCyclesQueryKey() });
         onClose();
         setForm({ title: "", cycleType: CreatePerformanceCycleBodyCycleType.Annual, startDate: "", endDate: "", description: "" });
       },

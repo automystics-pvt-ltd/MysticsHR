@@ -312,7 +312,7 @@ export default function ExitPage() {
                       <td className="px-4 py-3">{r.requestedLwd ?? "—"}</td>
                       <td className="px-4 py-3">{r.noticePeriodDays ?? "—"}</td>
                       <td className="px-4 py-3 text-gray-500">
-                        {new Date(r.createdAt).toLocaleDateString("en-IN")}
+                        {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-IN") : "—"}
                       </td>
                       <td className="px-4 py-3">
                         <Link href={`/exit/${r.id}`}>

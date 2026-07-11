@@ -11,6 +11,10 @@ import {
   useSubmitExitInterview,
   useListIssuedDocuments,
   getListExitRequestsQueryKey,
+  getGetExitRequestQueryKey,
+  getListClearanceTasksQueryKey,
+  getGetFnfComputationQueryKey,
+  getGetExitInterviewQueryKey,
   type UpdateExitRequestBody,
   type UpdateClearanceTaskBody,
   type SubmitExitInterviewBody,
@@ -103,17 +107,33 @@ export default function ExitDetailPage() {
   }
 
   function handleClearanceTask(taskId: number, newStatus: "Pending" | "Completed" | "Waived") {
-    updateTask.mutate({ taskId, data: { status: newStatus } as UpdateClearanceTaskBody });
+    updateTask.mutate({ taskId, data: { status: newStatus } as UpdateClearanceTaskBody }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetExitRequestQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getListClearanceTasksQueryKey(id) });
+      },
+    });
   }
 
   function handleComputeFnf(e: React.FormEvent) {
     e.preventDefault();
-    computeFnf.mutate({ id, data: fnfForm as ComputeFnfBody }, { onSuccess: () => setFnfModal(false) });
+    computeFnf.mutate({ id, data: fnfForm as ComputeFnfBody }, {
+      onSuccess: () => {
+        setFnfModal(false);
+        qc.invalidateQueries({ queryKey: getGetFnfComputationQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetExitRequestQueryKey(id) });
+      },
+    });
   }
 
   function handleApproveFnf() {
-    // approverRole is derived server-side from the user's session role — body only carries optional remarks
-    approveFnf.mutate({ id, data: {} as ApproveFnfBody });
+    approveFnf.mutate({ id, data: {} as ApproveFnfBody }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetFnfComputationQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetExitRequestQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getListExitRequestsQueryKey() });
+      },
+    });
   }
 
   function handleSubmitInterview(e: React.FormEvent) {
@@ -121,7 +141,12 @@ export default function ExitDetailPage() {
     const responses = Object.entries(interviewResponses).map(([qId, answer]) => ({ questionId: Number(qId), answer }));
     submitInterview.mutate(
       { id, data: { responses } as SubmitExitInterviewBody },
-      { onSuccess: () => setInterviewModal(false) },
+      {
+        onSuccess: () => {
+          setInterviewModal(false);
+          qc.invalidateQueries({ queryKey: getGetExitInterviewQueryKey(id) });
+        },
+      },
     );
   }
 

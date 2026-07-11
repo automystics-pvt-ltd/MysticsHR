@@ -160,12 +160,11 @@ router.post("/platform/db/tables/:table/rows", async (req, res) => {
     const keys = Object.keys(body).filter((k) => /^[a-z_][a-z0-9_]*$/i.test(k));
     if (keys.length === 0) { res.status(400).json({ error: "No fields provided" }); return; }
 
-    const cols = keys.map(escId).join(", ");
-    const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
-    const values = keys.map((k) => body[k]);
+    const colsSql = sql.raw(keys.map(escId).join(", "));
+    const valuesSql = sql.join(keys.map((k) => sql`${body[k]}`), sql.raw(", "));
 
     const result = await db.execute(
-      sql.raw(`INSERT INTO ${escId(table)} (${cols}) VALUES (${placeholders}) RETURNING *`, values as never)
+      sql`INSERT INTO ${sql.raw(escId(table))} (${colsSql}) VALUES (${valuesSql}) RETURNING *`
     );
 
     await logDbAdminOp(admin.id, admin.email, "CREATE", table, { created: result.rows[0] });
@@ -183,7 +182,7 @@ router.patch("/platform/db/tables/:table/rows/:id", async (req, res) => {
     if (!valid.includes(table)) { res.status(404).json({ error: "Table not found" }); return; }
 
     // get old value first
-    const oldResult = await db.execute(sql.raw(`SELECT * FROM ${escId(table)} WHERE id = $1 LIMIT 1`, [id] as never));
+    const oldResult = await db.execute(sql`SELECT * FROM ${sql.raw(escId(table))} WHERE id = ${id} LIMIT 1`);
     const oldRow = oldResult.rows[0];
     if (!oldRow) { res.status(404).json({ error: "Row not found" }); return; }
 
@@ -191,11 +190,10 @@ router.patch("/platform/db/tables/:table/rows/:id", async (req, res) => {
     const keys = Object.keys(body).filter((k) => /^[a-z_][a-z0-9_]*$/i.test(k) && k !== "id");
     if (keys.length === 0) { res.status(400).json({ error: "No fields provided" }); return; }
 
-    const setClause = keys.map((k, i) => `${escId(k)} = $${i + 1}`).join(", ");
-    const values = [...keys.map((k) => body[k]), id];
+    const setClauses = sql.join(keys.map((k) => sql`${sql.raw(escId(k))} = ${body[k]}`), sql.raw(", "));
 
     const result = await db.execute(
-      sql.raw(`UPDATE ${escId(table)} SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`, values as never)
+      sql`UPDATE ${sql.raw(escId(table))} SET ${setClauses} WHERE id = ${id} RETURNING *`
     );
     if (!result.rows[0]) { res.status(404).json({ error: "Row not found" }); return; }
 
@@ -213,11 +211,11 @@ router.delete("/platform/db/tables/:table/rows/:id", async (req, res) => {
     const valid = await getValidTables();
     if (!valid.includes(table)) { res.status(404).json({ error: "Table not found" }); return; }
 
-    const oldResult = await db.execute(sql.raw(`SELECT * FROM ${escId(table)} WHERE id = $1 LIMIT 1`, [id] as never));
+    const oldResult = await db.execute(sql`SELECT * FROM ${sql.raw(escId(table))} WHERE id = ${id} LIMIT 1`);
     const oldRow = oldResult.rows[0];
     if (!oldRow) { res.status(404).json({ error: "Row not found" }); return; }
 
-    await db.execute(sql.raw(`DELETE FROM ${escId(table)} WHERE id = $1`, [id] as never));
+    await db.execute(sql`DELETE FROM ${sql.raw(escId(table))} WHERE id = ${id}`);
 
     await logDbAdminOp(admin.id, admin.email, "DELETE", table, { id, deleted: oldRow });
     res.json({ ok: true });
@@ -234,7 +232,7 @@ router.post("/platform/db/tables/:table/rows/:id/archive", async (req, res) => {
     const valid = await getValidTables();
     if (!valid.includes(table)) { res.status(404).json({ error: "Table not found" }); return; }
 
-    const oldResult = await db.execute(sql.raw(`SELECT * FROM ${escId(table)} WHERE id = $1 LIMIT 1`, [id] as never));
+    const oldResult = await db.execute(sql`SELECT * FROM ${sql.raw(escId(table))} WHERE id = ${id} LIMIT 1`);
     const row = oldResult.rows[0];
     if (!row) { res.status(404).json({ error: "Row not found" }); return; }
 
@@ -326,9 +324,10 @@ router.get("/platform/db/search", async (req, res) => {
         const cols = (colsResult.rows as { column_name: string }[]).map((c) => c.column_name);
         if (cols.length === 0) continue;
 
-        const conds = cols.map((c) => `${escId(c)}::text ILIKE $1`).join(" OR ");
+        const likeParam = `%${query}%`;
+        const condsSql = sql.join(cols.map((c) => sql`${sql.raw(escId(c))}::text ILIKE ${likeParam}`), sql.raw(" OR "));
         const rows = await db.execute(
-          sql.raw(`SELECT * FROM ${escId(table)} WHERE ${conds} LIMIT ${maxPerTable}`, [`%${query}%`] as never)
+          sql`SELECT * FROM ${sql.raw(escId(table))} WHERE ${condsSql} LIMIT ${maxPerTable}`
         );
         if (rows.rows.length > 0) results.push({ table, rows: rows.rows });
       } catch { /* skip table */ }
@@ -354,16 +353,16 @@ router.post("/platform/db/bulk", async (req, res) => {
 
     let affected = 0;
     if (action === "delete") {
-      const idList = ids.map((_, i) => `$${i + 1}`).join(", ");
+      const idsSql = sql.join(ids.map((id) => sql`${id}`), sql.raw(", "));
       const result = await db.execute(
-        sql.raw(`DELETE FROM ${escId(table)} WHERE id IN (${idList}) RETURNING id`, ids as never)
+        sql`DELETE FROM ${sql.raw(escId(table))} WHERE id IN (${idsSql}) RETURNING id`
       );
       affected = result.rows.length;
       await logDbAdminOp(admin.id, admin.email, "BULK_DELETE", table, { ids, affected });
     } else if (action === "archive") {
       // Archive each row
       for (const id of ids) {
-        const oldResult = await db.execute(sql.raw(`SELECT * FROM ${escId(table)} WHERE id = $1 LIMIT 1`, [id] as never));
+        const oldResult = await db.execute(sql`SELECT * FROM ${sql.raw(escId(table))} WHERE id = ${id} LIMIT 1`);
         const row = oldResult.rows[0];
         if (!row) continue;
         await db.execute(sql`
