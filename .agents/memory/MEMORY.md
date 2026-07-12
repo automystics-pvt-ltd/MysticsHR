@@ -1,2 +1,3 @@
 - [Platform Admin OTP auth](platform-admin-otp.md) — whitelist-only OTP login (no passwords); in-memory OTP store; auto-creates admin record on first verify.
 - [MysticsHR VPS deployment](vps-deployment.md) — port conflicts, pm2 env override, git checkout trick, and SPA build requirement on server.
+- [Artifact registration lost on re-import](artifact-reimport-registration.md) — fix via a real `verifyAndReplaceArtifactToml` edit, which triggers full artifact re-scan.

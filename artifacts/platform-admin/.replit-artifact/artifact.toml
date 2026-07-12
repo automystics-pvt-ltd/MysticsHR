@@ -12,7 +12,7 @@ version = "1.0.0"
 [[services]]
 name = "web"
 paths = [ "/platform_admin/" ]
-localPort = 19215
+localPort = 19154
 
 [services.development]
 run = "pnpm --filter @workspace/platform-admin run dev"
@@ -33,5 +33,5 @@ from = "/*"
 to = "/index.html"
 
 [services.env]
-PORT = "19215"
+PORT = "19154"
 BASE_PATH = "/platform_admin/"

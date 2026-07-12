@@ -8,6 +8,15 @@ MysticsHR is a comprehensive Human Resource Management System (HRMS) designed fo
 
 I prefer iterative development with clear communication on progress and potential changes. Please ask before making any major architectural decisions or significant code overhauls. I value detailed explanations for complex implementations.
 
+## Running on Replit
+
+Three artifacts run as separate services behind the shared proxy:
+- `artifacts/mysticshr` (web, at `/`) — employee-facing HRMS app
+- `artifacts/platform-admin` (web, at `/platform_admin/`) — platform admin console
+- `artifacts/api-server` (api, at `/api`) — Express backend shared by both frontends
+
+Start/restart each via the Replit workflow tool using its managed name (e.g. `artifacts/api-server: API Server`). The database schema is applied with `pnpm --filter @workspace/db run push`. Required env vars (`DATABASE_URL`, `JWT_SECRET`) are already provisioned; optional integrations (email/SMTP, WhatsApp, Clerk) are not configured and degrade gracefully if unset.
+
 ## System Architecture
 
 MysticsHR is structured as a pnpm monorepo. The core technology stack includes:
