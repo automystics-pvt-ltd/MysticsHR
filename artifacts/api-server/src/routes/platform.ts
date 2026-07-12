@@ -25,10 +25,19 @@ const router = Router();
 
 // ─── Whitelist & in-memory OTP store ──────────────────────────────────────────
 // Add emails to PLATFORM_ADMIN_EMAILS env var (comma-separated) to grant access.
+// Fail closed: if the env var is unset or empty, nobody can log in — there is
+// no hardcoded fallback list, so a missing config can never silently grant
+// platform-admin access to example/placeholder addresses.
 const PLATFORM_WHITELIST = new Set(
-  (process.env.PLATFORM_ADMIN_EMAILS ?? "anandakumar.mani01@gmail.com,anandakumar.mani012@gmail.com,platform@mysticshr.io")
+  (process.env.PLATFORM_ADMIN_EMAILS ?? "")
     .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
 );
+if (PLATFORM_WHITELIST.size === 0) {
+  console.warn(
+    "[Platform Admin] PLATFORM_ADMIN_EMAILS is not set — no email is authorised for Platform Admin access. " +
+    "Set it (comma-separated emails) to grant access."
+  );
+}
 
 interface OtpEntry { otp: string; expires: Date; attempts: number }
 const platformOtpStore = new Map<string, OtpEntry>();
