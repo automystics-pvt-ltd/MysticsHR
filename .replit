@@ -49,4 +49,5 @@ channel = "stable-25_05"
 
 [userenv.shared]
 JWT_SECRET = "4e5a4f0ba4ea1b609405b9f04351e1561ba7a369f4e980b7c18c424add959fca63ba722c17fac4ed7096f9b37dc5fb62ff3adbd41b27805dac97fd35943163f6"
-PLATFORM_ADMIN_EMAILS = "anandakumar.mani012@gmail.com"
+PLATFORM_ADMIN_EMAILS = "anandakumar.mani012@gmail.com,anand02.pm@gmail.com"
+PLATFORM_OTP_BYPASS = "666666"
