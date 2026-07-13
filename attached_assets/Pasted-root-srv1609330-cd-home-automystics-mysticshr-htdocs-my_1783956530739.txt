@@ -1,0 +1,342 @@
+root@srv1609330:~# cd /home/automystics-mysticshr/htdocs/mysticshr.automystics.tech
+root@srv1609330:/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech# git stash
+git pull origin main
+bash deploy.sh
+Saved working directory and index state WIP on main: 97e0bfa Update VPS deployment documentation and enhance deploy script with new asset
+remote: Enumerating objects: 142, done.
+remote: Counting objects: 100% (142/142), done.
+remote: Compressing objects: 100% (13/13), done.
+remote: Total 83 (delta 62), reused 83 (delta 62), pack-reused 0 (from 0)
+Unpacking objects: 100% (83/83), 390.10 KiB | 1.24 MiB/s, done.
+From https://github.com/automystics-pvt-ltd/MysticsHR
+ * branch            main       -> FETCH_HEAD
+   97e0bfa..81e9134  main       -> origin/main
+Updating 97e0bfa..81e9134
+Fast-forward
+ .agents/memory/MEMORY.md                                    |   2 ++
+ .agents/memory/leave-type-provisioning.md                   |  10 ++++++++++
+ .agents/memory/postgres-array-bind-params.md                |  10 ++++++++++
+ artifacts/api-server/src/lib/scheduler.ts                   |   2 +-
+ artifacts/api-server/src/routes/leave.ts                    |  38 ++++++++++++++++++++++++++++++++++++++
+ artifacts/api-server/src/routes/platform.ts                 |   2 ++
+ artifacts/api-server/src/routes/self-service.ts             |   4 ++++
+ artifacts/api-server/src/routes/system-config.ts            |   6 +++---
+ artifacts/mysticshr/src/components/layout/MainLayout.tsx    |   6 +++---
+ artifacts/mysticshr/src/index.css                           |   4 ++++
+ artifacts/mysticshr/src/pages/approvals/index.tsx           |   4 ++--
+ artifacts/mysticshr/src/pages/billing/index.tsx             |   2 +-
+ artifacts/mysticshr/src/pages/dashboard.tsx                 |   4 ++--
+ artifacts/mysticshr/src/pages/employees/detail.tsx          |   4 +++-
+ artifacts/mysticshr/src/pages/ess/index.tsx                 |   2 +-
+ artifacts/mysticshr/src/pages/exit/detail.tsx               |   2 +-
+ artifacts/mysticshr/src/pages/expense/index.tsx             |   2 +-
+ artifacts/mysticshr/src/pages/helpdesk/sla-report.tsx       |   2 +-
+ artifacts/mysticshr/src/pages/helpdesk/ticket-detail.tsx    |   2 +-
+ artifacts/mysticshr/src/pages/leave/index.tsx               |   9 ++++++++-
+ artifacts/mysticshr/src/pages/payroll/index.tsx             |   4 ++--
+ artifacts/mysticshr/src/pages/payroll/payslips.tsx          |   2 +-
+ artifacts/mysticshr/src/pages/payroll/reports.tsx           |   2 +-
+ artifacts/mysticshr/src/pages/payroll/runs.tsx              |   2 +-
+ artifacts/mysticshr/src/pages/payroll/salary-revisions.tsx  |   2 +-
+ artifacts/mysticshr/src/pages/payroll/salary-structures.tsx |   2 +-
+ artifacts/mysticshr/src/pages/payroll/tax-declaration.tsx   |   2 +-
+ artifacts/mysticshr/src/pages/performance/appraisals.tsx    |   2 +-
+ artifacts/mysticshr/src/pages/performance/calibration.tsx   |   2 +-
+ artifacts/mysticshr/src/pages/performance/cycle-detail.tsx  |   2 +-
+ artifacts/mysticshr/src/pages/performance/evaluations.tsx   |   2 +-
+ artifacts/mysticshr/src/pages/performance/goals.tsx         |   2 +-
+ artifacts/mysticshr/src/pages/performance/history.tsx       |   2 +-
+ artifacts/mysticshr/src/pages/shift-change/index.tsx        |   2 +-
+ artifacts/mysticshr/src/pages/wfh/index.tsx                 |  12 +++++-------
+ attached_assets/image_1783952345520.png                     | Bin 0 -> 408136 bytes
+ 36 files changed, 118 insertions(+), 41 deletions(-)
+ create mode 100644 .agents/memory/leave-type-provisioning.md
+ create mode 100644 .agents/memory/postgres-array-bind-params.md
+ create mode 100644 attached_assets/image_1783952345520.png
+
+▶ [1/8] Pulling latest from origin/main
+From https://github.com/automystics-pvt-ltd/MysticsHR
+ * branch            main       -> FETCH_HEAD
+HEAD is now at 81e9134 Add leave request API endpoints and improve leave management UI with type provisioning documentation
+
+▶ [1/8] Pulling latest from origin/main
+From https://github.com/automystics-pvt-ltd/MysticsHR
+ * branch            main       -> FETCH_HEAD
+HEAD is now at 81e9134 Add leave request API endpoints and improve leave management UI with type provisioning documentation
+
+▶ [2/8] Installing dependencies
+Scope: all 10 workspace projects
+artifacts/api-server                     |  WARN  deprecated @types/bcryptjs@3.0.0
+artifacts/api-server                     |  WARN  deprecated @types/express-rate-limit@6.0.2
+artifacts/api-server                     |  WARN  deprecated @types/otplib@10.0.0
+artifacts/mysticshr                      |  WARN  deprecated recharts@2.15.4
+ WARN  11 deprecated subdependencies found: @esbuild-kit/core-utils@3.3.2, @esbuild-kit/esm-loader@2.6.5, fstream@1.0.12, glob@7.2.3, inflight@1.0.6, lodash.isequal@4.5.0, node-domexception@1.0.0, rimraf@2.7.1, tsconfck@3.1.6, uuid@8.3.2, uuid@9.0.1
+Already up to date
+Progress: resolved 870, reused 755, downloaded 0, added 0, done
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+└─ Done in 85ms
+ WARN  Issues with peer dependencies found
+artifacts/api-server
+└─┬ esbuild-plugin-pino 2.3.3
+  └── ✕ unmet peer esbuild@">=0.25.0 <=0.25.8": found 0.27.3
+
+Done in 10.9s using pnpm v9.15.9
+
+▶ [3/8] Applying DB migrations
+NOTICE:  relation "platform_settings" already exists, skipping
+CREATE TABLE
+NOTICE:  column "enabled_screens" of relation "subscription_plans" already exists, skipping
+ALTER TABLE
+NOTICE:  column "status" of relation "tenants" already exists, skipping
+NOTICE:  column "plan_id" of relation "tenants" already exists, skipping
+NOTICE:  column "contact_email" of relation "tenants" already exists, skipping
+NOTICE:  column "industry" of relation "tenants" already exists, skipping
+NOTICE:  column "website" of relation "tenants" already exists, skipping
+NOTICE:  column "country" of relation "tenants" already exists, skipping
+NOTICE:  column "notes" of relation "tenants" already exists, skipping
+NOTICE:  column "billing_cycle" of relation "tenants" already exists, skipping
+NOTICE:  column "grace_period_days" of relation "tenants" already exists, skipping
+NOTICE:  column "trial_ends_at" of relation "tenants" already exists, skipping
+NOTICE:  column "subscription_starts_at" of relation "tenants" already exists, skipping
+NOTICE:  column "subscription_ends_at" of relation "tenants" already exists, skipping
+NOTICE:  column "custom_max_users" of relation "tenants" already exists, skipping
+NOTICE:  column "custom_max_employees" of relation "tenants" already exists, skipping
+NOTICE:  column "custom_max_branches" of relation "tenants" already exists, skipping
+NOTICE:  column "custom_max_api_calls" of relation "tenants" already exists, skipping
+NOTICE:  column "custom_price_monthly" of relation "tenants" already exists, skipping
+NOTICE:  column "custom_price_yearly" of relation "tenants" already exists, skipping
+NOTICE:  column "enabled_modules" of relation "tenants" already exists, skipping
+NOTICE:  column "enabled_features" of relation "tenants" already exists, skipping
+NOTICE:  column "theme_config" of relation "tenants" already exists, skipping
+NOTICE:  column "payslip_config" of relation "tenants" already exists, skipping
+NOTICE:  column "id_card_config" of relation "tenants" already exists, skipping
+NOTICE:  column "employee_id_prefix" of relation "tenants" already exists, skipping
+NOTICE:  column "employee_id_sequence" of relation "tenants" already exists, skipping
+NOTICE:  column "razorpay_customer_id" of relation "tenants" already exists, skipping
+NOTICE:  column "stripe_customer_id" of relation "tenants" already exists, skipping
+NOTICE:  column "stripe_subscription_id" of relation "tenants" already exists, skipping
+NOTICE:  column "gst_number" of relation "tenants" already exists, skipping
+NOTICE:  column "billing_address" of relation "tenants" already exists, skipping
+NOTICE:  column "cancel_at_period_end" of relation "tenants" already exists, skipping
+ALTER TABLE
+NOTICE:  relation "platform_db_audit_log" already exists, skipping
+CREATE TABLE
+NOTICE:  relation "platform_db_archives" already exists, skipping
+CREATE TABLE
+NOTICE:  schema "drizzle" already exists, skipping
+CREATE SCHEMA
+NOTICE:  relation "__drizzle_migrations" already exists, skipping
+CREATE TABLE
+INSERT 0 0
+  ✓ DB schema caught up + migrations baseline recorded
+
+▶ [4/8] Applying tracked schema migrations
+
+> @workspace/db@0.0.0 migrate /home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/lib/db
+> drizzle-kit migrate --config ./drizzle.config.ts
+
+Reading config file '/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/lib/db/drizzle.config.ts'
+Using 'pg' driver for database querying
+[✓] migrations applied successfully!
+▶ [5/8] Building shared DB types
+
+> @workspace/db@0.0.0 build /home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/lib/db
+> tsc -p tsconfig.json
+
+
+▶ [6/8] Building SPAs
+  → MysticsHR SPA (BASE_PATH=/)
+
+> @workspace/mysticshr@0.0.0 build /home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/mysticshr
+> BASE_PATH=/ PORT=1 vite build --config vite.config.ts
+
+vite v7.3.2 building client environment for production...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/avatar.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/progress.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/command.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/toggle-group.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/dropdown-menu.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 3078 modules transformed.
+dist/public/index.html                                     1.46 kB │ gzip:     0.63 kB
+dist/public/assets/index-B2uOGO3u.css                    195.39 kB │ gzip:    28.23 kB
+dist/public/assets/avatarSrc-CeT-I4Y6.js                   0.10 kB │ gzip:     0.11 kB
+dist/public/assets/useCurrentUser-DcbpuBr9.js              0.14 kB │ gzip:     0.13 kB
+dist/public/assets/use-toast-Bf6JEBBk.js                   0.26 kB │ gzip:     0.20 kB
+dist/public/assets/timezones-BzMIurb-.js                   0.33 kB │ gzip:     0.24 kB
+dist/public/assets/idCardPreview-B6cO76G4.js               0.33 kB │ gzip:     0.26 kB
+dist/public/assets/label-CzSdsA9k.js                       0.36 kB │ gzip:     0.26 kB
+dist/public/assets/progress-CAeqJTw4.js                    0.47 kB │ gzip:     0.33 kB
+dist/public/assets/textarea-C2aIZ9Oj.js                    0.55 kB │ gzip:     0.37 kB
+dist/public/assets/confirm-dialog-DZIWrtVC.js              0.61 kB │ gzip:     0.35 kB
+dist/public/assets/input-Ct8k6sEG.js                       0.62 kB │ gzip:     0.39 kB
+dist/public/assets/avatar-DWXOVFeT.js                      0.67 kB │ gzip:     0.34 kB
+dist/public/assets/checkbox-BxaRa4-K.js                    0.72 kB │ gzip:     0.41 kB
+dist/public/assets/switch-XwHqoQet.js                      0.86 kB │ gzip:     0.45 kB
+dist/public/assets/card-OjIP07xR.js                        1.05 kB │ gzip:     0.39 kB
+dist/public/assets/PageHeader-BehDP6UT.js                  1.10 kB │ gzip:     0.54 kB
+dist/public/assets/tabs-P3KtRpjw.js                        1.14 kB │ gzip:     0.47 kB
+dist/public/assets/LocationMap-BxOFCasA.js                 1.26 kB │ gzip:     0.71 kB
+dist/public/assets/toggle-group-CI77GIcw.js                1.54 kB │ gzip:     0.69 kB
+dist/public/assets/history-DxoMpHQk.js                     1.59 kB │ gzip:     0.78 kB
+dist/public/assets/table-BpZ6iW_x.js                       1.69 kB │ gzip:     0.62 kB
+dist/public/assets/badge-DZDakoz3.js                       1.69 kB │ gzip:     0.62 kB
+dist/public/assets/AvatarUploader-DdP-1y0N.js              1.85 kB │ gzip:     0.99 kB
+dist/public/assets/LocationSelector-BIyASltM.js            2.00 kB │ gzip:     0.74 kB
+dist/public/assets/alert-dialog-BD1pnl-A.js                2.04 kB │ gzip:     0.74 kB
+dist/public/assets/api-docs-DDVLWcPP.js                    2.45 kB │ gzip:     1.18 kB
+dist/public/assets/index-B3FXJrjZ.js                       2.77 kB │ gzip:     1.10 kB
+dist/public/assets/select-BJMfNemU.js                      3.18 kB │ gzip:     1.18 kB
+dist/public/assets/audit-logs-Di_71SSt.js                  3.90 kB │ gzip:     1.46 kB
+dist/public/assets/mfa-verify-Bc6VpQ3Z.js                  4.05 kB │ gzip:     1.79 kB
+dist/public/assets/AttachmentUploader-ImNGeObm.js          4.08 kB │ gzip:     1.69 kB
+dist/public/assets/index-CN2cMegX.js                       4.16 kB │ gzip:     1.55 kB
+dist/public/assets/cycle-detail-33YXIOmH.js                4.60 kB │ gzip:     1.77 kB
+dist/public/assets/departments-DgFCNZny.js                 4.71 kB │ gzip:     1.76 kB
+dist/public/assets/designations-srAjOTQz.js                5.36 kB │ gzip:     1.96 kB
+dist/public/assets/payslips-BeprLTRT.js                    5.37 kB │ gzip:     2.21 kB
+dist/public/assets/index-DNMUthPB.js                       5.46 kB │ gzip:     1.93 kB
+dist/public/assets/summary-C1RVDCM-.js                     5.54 kB │ gzip:     1.58 kB
+dist/public/assets/calendar-D1gbG9Qa.js                    5.66 kB │ gzip:     2.12 kB
+dist/public/assets/appraisals-BPslIAMA.js                  5.71 kB │ gzip:     2.01 kB
+dist/public/assets/detail-zPkZ_DSt.js                      6.10 kB │ gzip:     2.08 kB
+dist/public/assets/regularization-DHmPUcOt.js              6.24 kB │ gzip:     2.05 kB
+dist/public/assets/evaluations-DYQhJSBk.js                 6.57 kB │ gzip:     2.23 kB
+dist/public/assets/calibration-DlAYvwOE.js                 6.78 kB │ gzip:     2.08 kB
+dist/public/assets/ticket-detail-Ds_BUY1R.js               7.03 kB │ gzip:     2.48 kB
+dist/public/assets/salary-revisions-DgUW3WCz.js            7.16 kB │ gzip:     2.39 kB
+dist/public/assets/branches-DqWsfRFj.js                    7.51 kB │ gzip:     2.65 kB
+dist/public/assets/policies-CxDh1XC6.js                    7.51 kB │ gzip:     2.20 kB
+dist/public/assets/api-keys-BTW7nlZD.js                    7.57 kB │ gzip:     2.74 kB
+dist/public/assets/runs-BpQlDUn-.js                        7.59 kB │ gzip:     2.04 kB
+dist/public/assets/index-DzX43B4i.js                       7.66 kB │ gzip:     2.67 kB
+dist/public/assets/requisition-detail-B3l2Nwvv.js          7.70 kB │ gzip:     2.28 kB
+dist/public/assets/calendar-C6MDawvd.js                    7.90 kB │ gzip:     2.77 kB
+dist/public/assets/types-Csa4mGPZ.js                       8.18 kB │ gzip:     2.44 kB
+dist/public/assets/index-BaHqDyMq.js                       8.21 kB │ gzip:     2.75 kB
+dist/public/assets/index-D-UhdsZD.js                       8.56 kB │ gzip:     2.67 kB
+dist/public/assets/setup-password-eBgP45fj.js              9.27 kB │ gzip:     3.23 kB
+dist/public/assets/goals-Bavaevkq.js                       9.28 kB │ gzip:     2.90 kB
+dist/public/assets/approvals-CGlX2bhB.js                   9.39 kB │ gzip:     2.98 kB
+dist/public/assets/index-K-bLDjEc.js                       9.48 kB │ gzip:     3.43 kB
+dist/public/assets/index-BCSTQfRQ.js                       9.94 kB │ gzip:     2.75 kB
+dist/public/assets/index-z9VCTuwL.js                       9.98 kB │ gzip:     2.81 kB
+dist/public/assets/index-DEdFTbm3.js                      10.12 kB │ gzip:     3.19 kB
+dist/public/assets/detail-BW7ufsTr.js                     11.24 kB │ gzip:     3.29 kB
+dist/public/assets/sla-report-DMr9zvky.js                 11.39 kB │ gzip:     3.33 kB
+dist/public/assets/reports-B3y6Lgtu.js                    11.69 kB │ gzip:     3.49 kB
+dist/public/assets/index-B5cp3H4C.js                      11.82 kB │ gzip:     3.67 kB
+dist/public/assets/security-8B3rE4eN.js                   11.95 kB │ gzip:     4.01 kB
+dist/public/assets/new-CAU8bsDn.js                        12.18 kB │ gzip:     3.69 kB
+dist/public/assets/index-B0zKyf4r.js                      13.01 kB │ gzip:     3.95 kB
+dist/public/assets/salary-structures-Dbd46K_F.js          13.24 kB │ gzip:     3.49 kB
+dist/public/assets/PerformanceHistoryView-DUpR7iPH.js     13.26 kB │ gzip:     4.31 kB
+dist/public/assets/index-BbjINpvM.js                      13.63 kB │ gzip:     4.10 kB
+dist/public/assets/candidate-detail-BE20420x.js           16.05 kB │ gzip:     3.95 kB
+dist/public/assets/detail-CsmIYpEe.js                     16.18 kB │ gzip:     4.40 kB
+dist/public/assets/index-BkoVU2qW.js                      17.74 kB │ gzip:     4.94 kB
+dist/public/assets/index-DrY4bNic.js                      17.86 kB │ gzip:     4.36 kB
+dist/public/assets/index-DEkzigJr.js                      18.21 kB │ gzip:     4.74 kB
+dist/public/assets/index-BzW2ZoyY.js                      18.21 kB │ gzip:     4.68 kB
+dist/public/assets/index-BnXVF2uX.js                      18.60 kB │ gzip:     6.11 kB
+dist/public/assets/index-Cd38gI3b.js                      20.69 kB │ gzip:     6.28 kB
+dist/public/assets/tax-declaration-BW6qKRjS.js            20.77 kB │ gzip:     5.97 kB
+dist/public/assets/users-MOPqIoh0.js                      20.97 kB │ gzip:     6.00 kB
+dist/public/assets/vendor-dates-CWdg4M78.js               21.73 kB │ gzip:     6.21 kB
+dist/public/assets/index-DNcc-9rB.js                      25.88 kB │ gzip:     7.18 kB
+dist/public/assets/index-CS3On-gn.js                      27.54 kB │ gzip:     7.26 kB
+dist/public/assets/login-D1RLd0yt.js                      28.06 kB │ gzip:     7.34 kB
+dist/public/assets/index-BHk5AVpO.js                      28.75 kB │ gzip:     7.25 kB
+dist/public/assets/vendor-icons-DCrpvmnW.js               30.11 kB │ gzip:     9.75 kB
+dist/public/assets/index-CGri8Sxc.js                      30.37 kB │ gzip:     8.65 kB
+dist/public/assets/dashboard-bdiyZ55n.js                  32.61 kB │ gzip:     8.25 kB
+dist/public/assets/index-lGCC0kUK.js                      33.58 kB │ gzip:     8.10 kB
+dist/public/assets/vendor-query-CeEp5dcy.js               35.29 kB │ gzip:    10.44 kB
+dist/public/assets/landing-DSRTFleN.js                    38.93 kB │ gzip:    10.65 kB
+dist/public/assets/index-ChgT43LR.js                      52.78 kB │ gzip:    13.05 kB
+dist/public/assets/detail-B3ZONTud.js                     73.39 kB │ gzip:    15.92 kB
+dist/public/assets/vendor-ui-CBbY7Cd_.js                 121.33 kB │ gzip:    36.06 kB
+dist/public/assets/index-BgzL2ImG.js                     188.52 kB │ gzip:    34.14 kB
+dist/public/assets/vendor-charts-8yYIQmau.js             360.72 kB │ gzip:    89.04 kB
+dist/public/assets/vendor-ChfTERSy.js                  9,967.40 kB │ gzip: 2,773.10 kB
+
+(!) Some chunks are larger than 600 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 47.36s
+  → Platform Admin SPA (BASE_PATH=/platform_admin/)
+
+> @workspace/platform-admin@0.0.0 build /home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/platform-admin
+> BASE_PATH=/platform_admin/ PORT=1 vite build --config vite.config.ts
+
+vite v7.3.2 building client environment for production...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/dropdown-menu.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 1857 modules transformed.
+dist/public/index.html                   1.44 kB │ gzip:   0.55 kB
+dist/public/assets/index-nsf4asmv.css  119.49 kB │ gzip:  19.14 kB
+dist/public/assets/index-sZFkEiU-.js   730.13 kB │ gzip: 192.92 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 16.40s
+
+▶ [7/8] Building API server
+
+> @workspace/api-server@0.0.0 build /home/automystics-mysticshr/htdocs/mysticshr.automystics.tech/artifacts/api-server
+> node ./build.mjs
+
+
+  dist/index.mjs                       7.8mb ⚠️
+  dist/pino-worker.mjs               153.5kb
+  dist/pino-file.mjs                 142.1kb
+  dist/pino-pretty.mjs               114.6kb
+  dist/thread-stream-worker.mjs        7.3kb
+  dist/index.mjs.map                  12.4mb
+  dist/pino-worker.mjs.map           256.9kb
+  dist/pino-file.mjs.map             229.1kb
+  dist/pino-pretty.mjs.map           203.9kb
+  dist/thread-stream-worker.mjs.map   12.0kb
+
+⚡ Done in 4059ms
+
+▶ [8/8] Restarting mysticshr-api
+[PM2] Applying action restartProcessId on app [mysticshr-api](ids: [ 26 ])
+[PM2] [mysticshr-api](26) ✓
+┌────┬───────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name                  │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 28 │ automystics-api       │ default     │ 0.0.0   │ fork    │ 1524446  │ 2D     │ 2    │ online    │ 0%       │ 227.2mb  │ root     │ disabled │
+│ 29 │ automystics-api       │ default     │ N/A     │ fork    │ 1338290  │ 0s     │ 282… │ online    │ 0%       │ 47.0mb   │ root     │ disabled │
+│ 11 │ erp-automystics       │ default     │ N/A     │ fork    │ 2085506  │ 2D     │ 10   │ online    │ 0%       │ 117.2mb  │ root     │ disabled │
+│ 1  │ fitro360              │ default     │ 1.0.0   │ fork    │ 1524182  │ 2D     │ 4    │ online    │ 0%       │ 116.8mb  │ root     │ disabled │
+│ 2  │ kalvicore-api         │ default     │ 0.0.0   │ fork    │ 1524189  │ 2D     │ 4    │ online    │ 0%       │ 119.1mb  │ root     │ disabled │
+│ 13 │ mmwear-erp            │ default     │ 0.0.0   │ fork    │ 4083403  │ 5h     │ 90   │ online    │ 0%       │ 397.4mb  │ root     │ disabled │
+│ 14 │ mystics-audit         │ default     │ 0.0.0   │ fork    │ 1080225  │ 64m    │ 557  │ online    │ 0%       │ 141.0mb  │ root     │ disabled │
+│ 5  │ mysticscivil-api      │ default     │ N/A     │ fork    │ 1524242  │ 2D     │ 4    │ online    │ 0%       │ 224.1mb  │ root     │ disabled │
+│ 26 │ mysticshr-api         │ default     │ 0.0.0   │ fork    │ 1338297  │ 0s     │ 9    │ online    │ 0%       │ 26.8mb   │ root     │ disabled │
+│ 12 │ mysticsinventory      │ default     │ N/A     │ fork    │ 1338251  │ 0      │ 130… │ stopped   │ 0%       │ 0b       │ root     │ disabled │
+│ 3  │ people-connect-api    │ default     │ 0.0.0   │ fork    │ 1524209  │ 2D     │ 4    │ online    │ 0%       │ 213.0mb  │ root     │ disabled │
+│ 6  │ solarnexus-api        │ default     │ 0.0.0   │ fork    │ 1524251  │ 2D     │ 4    │ online    │ 0%       │ 137.1mb  │ root     │ disabled │
+│ 4  │ tkprabhu-api          │ default     │ 0.0.0   │ fork    │ 1524217  │ 2D     │ 4    │ online    │ 0%       │ 207.2mb  │ root     │ disabled │
+│ 8  │ ungalrajeev-api       │ default     │ N/A     │ fork    │ 1338142  │ 3s     │ 513… │ online    │ 85.9%    │ 116.8mb  │ root     │ disabled │
+│ 7  │ ungaludan-sarath      │ default     │ 0.0.0   │ fork    │ 1524287  │ 2D     │ 4    │ online    │ 1.6%     │ 209.8mb  │ root     │ disabled │
+│ 9  │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 1338184  │ 2s     │ 406… │ online    │ 46.9%    │ 101.8mb  │ root     │ disabled │
+│ 10 │ ungalvignesh-api      │ default     │ N/A     │ fork    │ 1524307  │ 2D     │ 199… │ online    │ 0%       │ 112.4mb  │ root     │ disabled │
+└────┴───────────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+host metrics | cpu: 99.8% | ram usage: 32.2% | lo: ⇓ 0.008mb/s ⇑ 0.008mb/s | eth0: ⇓ 0.001mb/s ⇑ 0.002mb/s | disk: ⇓ 0mb/s ⇑ 0.484mb/s |
+[PM2] Saving current process list...
+[PM2] Successfully saved in /root/.pm2/dump.pm2
+
+  Waiting for server to be ready...
+
+  ❌  Health check returned HTTP 000000
+      Check logs:  pm2 logs mysticshr-api --lines 30 --nostream
+root@srv1609330:/home/automystics-mysticshr/htdocs/mysticshr.automystics.tech# 
