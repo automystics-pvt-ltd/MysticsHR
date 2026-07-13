@@ -60,6 +60,24 @@ interface ImportResult {
   };
 }
 
+type ImportIssue = { row: number; column?: string; message: string; severity: "error" | "warning" };
+type ImportSheetKey = "employees" | "profiles" | "education" | "workExperience" | "skills" | "certifications" | "familyMembers";
+interface ValidationResult {
+  sheets: Record<ImportSheetKey, ImportIssue[]>;
+  errorCount: number;
+  warningCount: number;
+}
+
+const SHEET_LABELS: Record<ImportSheetKey, string> = {
+  employees: "Employees",
+  profiles: "Profiles",
+  education: "Education",
+  workExperience: "Work Experience",
+  skills: "Skills",
+  certifications: "Certifications",
+  familyMembers: "Family Members",
+};
+
 // Excel stores dates as JS Date objects when the workbook is read with
 // `cellDates: true`. Format using local date parts (not toISOString, which
 // shifts by timezone and can roll the date to the previous/next day) so the
@@ -104,6 +122,9 @@ export default function EmployeesPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [selectMode, setSelectMode] = useState(false);
@@ -151,7 +172,71 @@ export default function EmployeesPage() {
     setImportFile(null);
     setImportResult(null);
     setImportError(null);
+    setValidation(null);
+    setValidationError(null);
     setImportOpen(true);
+  }
+
+  function buildImportPayload(wb: XLSX.WorkBook) {
+    return {
+      employees: sheetToRows(wb, "Employees"),
+      profiles: sheetToRows(wb, "Profiles"),
+      education: sheetToRows(wb, "Education"),
+      workExperience: sheetToRows(wb, "Work_Experience"),
+      skills: sheetToRows(wb, "Skills"),
+      certifications: sheetToRows(wb, "Certifications"),
+      familyMembers: sheetToRows(wb, "Family_Members"),
+    };
+  }
+
+  // Runs the moment a file is selected/dropped: parses it exactly like the
+  // real import would, then asks the backend to check every row against the
+  // same rules the import will enforce (formats, enum values, duplicate or
+  // missing IDs, references to employees not in the file). Nothing is saved
+  // to the database — this is purely so the user can fix their spreadsheet
+  // and re-upload before spending an "Import" attempt.
+  async function validateFile(file: File) {
+    setValidating(true);
+    setValidationError(null);
+    setValidation(null);
+    setImportResult(null);
+    setImportError(null);
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+      const payload = buildImportPayload(wb);
+
+      if (payload.employees.length === 0) {
+        setValidationError("No data found in the Employees sheet. Make sure you are using the downloaded template.");
+        return;
+      }
+
+      const resp = await fetch(`${BASE_URL}/api/employees/bulk-import/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      const json = await resp.json();
+      if (!resp.ok) {
+        setValidationError(json.error ?? "Could not check this file. Please try again.");
+        return;
+      }
+      setValidation(json as ValidationResult);
+    } catch {
+      setValidationError("This file could not be read. Make sure it is a valid .xlsx file exported from the template.");
+    } finally {
+      setValidating(false);
+    }
+  }
+
+  function handleFileSelected(f: File | null) {
+    setImportFile(f);
+    setImportResult(null);
+    setImportError(null);
+    setValidation(null);
+    setValidationError(null);
+    if (f) void validateFile(f);
   }
 
   function toggleSelectMode() {
@@ -231,6 +316,7 @@ export default function EmployeesPage() {
 
   async function handleImport() {
     if (!importFile) return;
+    if (validation && validation.errorCount > 0) return;
     setImportError(null);
     setImportResult(null);
     setImporting(true);
@@ -238,16 +324,9 @@ export default function EmployeesPage() {
     try {
       const buffer = await importFile.arrayBuffer();
       const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+      const payload = buildImportPayload(wb);
 
-      const employees = sheetToRows(wb, "Employees");
-      const profiles = sheetToRows(wb, "Profiles");
-      const education = sheetToRows(wb, "Education");
-      const workExperience = sheetToRows(wb, "Work_Experience");
-      const skills = sheetToRows(wb, "Skills");
-      const certifications = sheetToRows(wb, "Certifications");
-      const familyMembers = sheetToRows(wb, "Family_Members");
-
-      if (employees.length === 0) {
+      if (payload.employees.length === 0) {
         setImportError("No data found in the Employees sheet. Make sure you are using the downloaded template.");
         return;
       }
@@ -256,7 +335,7 @@ export default function EmployeesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ employees, profiles, education, workExperience, skills, certifications, familyMembers }),
+        body: JSON.stringify(payload),
       });
 
       const json = await resp.json();
@@ -562,7 +641,7 @@ export default function EmployeesPage() {
               onDrop={(e) => {
                 e.preventDefault();
                 const f = e.dataTransfer.files[0];
-                if (f && (f.name.endsWith(".xlsx") || f.name.endsWith(".xls"))) setImportFile(f);
+                if (f && (f.name.endsWith(".xlsx") || f.name.endsWith(".xls"))) handleFileSelected(f);
               }}
             >
               <input
@@ -570,7 +649,7 @@ export default function EmployeesPage() {
                 type="file"
                 accept=".xlsx,.xls"
                 className="hidden"
-                onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => handleFileSelected(e.target.files?.[0] ?? null)}
               />
               <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
               {importFile ? (
@@ -579,7 +658,7 @@ export default function EmployeesPage() {
                   <span className="text-sm font-medium text-foreground">{importFile.name}</span>
                   <button
                     className="text-muted-foreground hover:text-destructive"
-                    onClick={(e) => { e.stopPropagation(); setImportFile(null); }}
+                    onClick={(e) => { e.stopPropagation(); handleFileSelected(null); }}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -591,6 +670,64 @@ export default function EmployeesPage() {
                 </>
               )}
             </div>
+
+            {validating && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground rounded-lg border p-3">
+                <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-primary rounded-full animate-spin flex-shrink-0" />
+                Checking your file for issues before import…
+              </div>
+            )}
+
+            {validationError && (
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive">{validationError}</p>
+              </div>
+            )}
+
+            {!validating && validation && !importResult && (
+              validation.errorCount === 0 && validation.warningCount === 0 ? (
+                <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 p-3">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <p className="text-sm text-green-800 font-medium">Your file looks good — ready to import.</p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className={`w-4 h-4 flex-shrink-0 ${validation.errorCount > 0 ? "text-destructive" : "text-amber-600"}`} />
+                    <p className={`text-sm font-semibold ${validation.errorCount > 0 ? "text-destructive" : "text-amber-800"}`}>
+                      {validation.errorCount > 0
+                        ? `${validation.errorCount} issue${validation.errorCount !== 1 ? "s" : ""} must be fixed before importing`
+                        : `${validation.warningCount} thing${validation.warningCount !== 1 ? "s" : ""} to review — you can still import`}
+                    </p>
+                  </div>
+                  <p className="text-xs text-amber-800">
+                    {validation.errorCount > 0
+                      ? "Correct these in your spreadsheet, then re-upload the file here."
+                      : "These rows will still import, but with the noted fields left blank. Fix and re-upload if that's not what you want."}
+                  </p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {(Object.keys(validation.sheets) as ImportSheetKey[])
+                      .filter((key) => validation.sheets[key].length > 0)
+                      .map((key) => (
+                        <div key={key}>
+                          <p className="text-xs font-semibold text-foreground">{SHEET_LABELS[key]}</p>
+                          <div className="space-y-0.5 mt-0.5">
+                            {validation.sheets[key].map((issue, i) => (
+                              <div key={i} className={`flex items-start gap-1.5 text-xs ${issue.severity === "error" ? "text-destructive" : "text-amber-700"}`}>
+                                <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                <span>
+                                  Row {issue.row}{issue.column ? ` — ${issue.column}` : ""}: {issue.message}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )
+            )}
 
             {importResult && (
               <div className="rounded-lg border p-4 space-y-3">
@@ -657,8 +794,11 @@ export default function EmployeesPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
-            <Button onClick={handleImport} disabled={!importFile || importing}>
-              {importing ? "Importing…" : "Import"}
+            <Button
+              onClick={handleImport}
+              disabled={!importFile || importing || validating || (validation?.errorCount ?? 0) > 0}
+            >
+              {importing ? "Importing…" : validating ? "Checking file…" : "Import"}
             </Button>
           </DialogFooter>
         </DialogContent>

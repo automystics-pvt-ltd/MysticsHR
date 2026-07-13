@@ -21,6 +21,7 @@ import { eq, and, isNull, desc } from "drizzle-orm";
 import { recordHistory } from "../lib/history-utils";
 import { autoCreateOnboardingChecklist } from "../lib/onboarding-utils";
 import { seedNotificationPreferencesForEmployee } from "../lib/notification-service";
+import { validateBulkImportPayload, DATE_RE, type ImportPayload } from "../lib/bulk-import-validation";
 
 const router = Router();
 
@@ -231,6 +232,49 @@ router.get(
   }
 );
 
+// Read-only dry run: parses the same payload shape the real import expects
+// and reports every issue it can find (bad formats, unknown enum values,
+// duplicate/likely-conflicting IDs, dangling references to employees not in
+// this file or the system) WITHOUT writing anything to the database. The
+// frontend calls this right after a file is selected/dropped so the user
+// can fix problems in their spreadsheet and re-upload before ever hitting
+// "Import" — instead of discovering issues only after a partial import.
+router.post(
+  "/employees/bulk-import/validate",
+  requireHrmsUser,
+  requireRole(...HR_ROLES),
+  async (req, res) => {
+    try {
+      const body = req.body as ImportPayload;
+      const employees = Array.isArray(body.employees) ? body.employees : [];
+
+      if (employees.length > MAX_IMPORT_ROWS) {
+        res.status(400).json({ error: `Too many employee rows: limit is ${MAX_IMPORT_ROWS} per import` });
+        return;
+      }
+
+      const tenantId = req.hrmsUser!.tenantId;
+      const [depts, desigs, existingEmployees] = await Promise.all([
+        db.select({ id: departmentsTable.id, name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.tenantId, tenantId)),
+        db.select({ id: designationsTable.id, title: designationsTable.title }).from(designationsTable).where(eq(designationsTable.tenantId, tenantId)),
+        db.select({ employeeId: employeesTable.employeeId, email: employeesTable.email }).from(employeesTable).where(eq(employeesTable.tenantId, tenantId)),
+      ]);
+
+      const result = validateBulkImportPayload(body, {
+        deptMap: new Map(depts.map(d => [d.name.toLowerCase(), d.id])),
+        desigMap: new Map(desigs.map(d => [d.title.toLowerCase(), d.id])),
+        existingEmployeeIds: new Set(existingEmployees.map(e => e.employeeId.toLowerCase())),
+        existingEmails: new Set(existingEmployees.map(e => e.email.toLowerCase())),
+      });
+
+      res.json(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
 router.post(
   "/employees/bulk-import",
   requireHrmsUser,
@@ -271,7 +315,7 @@ router.post(
 
       const empResult: SectionResult = { imported: 0, errors: [] };
       const empIdMap = new Map<string, number>();
-      const empDateRe = /^\d{4}-\d{2}-\d{2}$/;
+      const empDateRe = DATE_RE;
 
       for (let i = 0; i < employees.length; i++) {
         const r = employees[i];
@@ -350,6 +394,12 @@ router.post(
         try {
           const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { profileResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
+          if (r.probationEndDate?.trim() && !empDateRe.test(r.probationEndDate.trim())) {
+            profileResult.errors.push({ row: i + 1, error: `probationEndDate "${r.probationEndDate.trim()}" must be in YYYY-MM-DD format` }); continue;
+          }
+          if (r.confirmationDate?.trim() && !empDateRe.test(r.confirmationDate.trim())) {
+            profileResult.errors.push({ row: i + 1, error: `confirmationDate "${r.confirmationDate.trim()}" must be in YYYY-MM-DD format` }); continue;
+          }
           const data = {
             nationalId: r.nationalId?.trim() || null,
             pan: r.pan?.trim() || null,
@@ -425,6 +475,12 @@ router.post(
           }
           const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { wxpResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
+          if (r.startDate?.trim() && !empDateRe.test(r.startDate.trim())) {
+            wxpResult.errors.push({ row: i + 1, error: `startDate "${r.startDate.trim()}" must be in YYYY-MM-DD format` }); continue;
+          }
+          if (r.endDate?.trim() && !empDateRe.test(r.endDate.trim())) {
+            wxpResult.errors.push({ row: i + 1, error: `endDate "${r.endDate.trim()}" must be in YYYY-MM-DD format` }); continue;
+          }
           await db.insert(employeeWorkExperienceTable).values({
             employeeId: dbId,
             company: r.company.trim(),
@@ -474,6 +530,12 @@ router.post(
           }
           const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { certResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
+          if (r.issueDate?.trim() && !empDateRe.test(r.issueDate.trim())) {
+            certResult.errors.push({ row: i + 1, error: `issueDate "${r.issueDate.trim()}" must be in YYYY-MM-DD format` }); continue;
+          }
+          if (r.expiryDate?.trim() && !empDateRe.test(r.expiryDate.trim())) {
+            certResult.errors.push({ row: i + 1, error: `expiryDate "${r.expiryDate.trim()}" must be in YYYY-MM-DD format` }); continue;
+          }
           await db.insert(employeeCertificationsTable).values({
             employeeId: dbId,
             name: r.name.trim(),
@@ -500,6 +562,9 @@ router.post(
           }
           const dbId = await resolveDbId(r.employeeId, req.hrmsUser!.tenantId);
           if (!dbId) { famResult.errors.push({ row: i + 1, error: `Employee '${r.employeeId}' not found` }); continue; }
+          if (r.dateOfBirth?.trim() && !empDateRe.test(r.dateOfBirth.trim())) {
+            famResult.errors.push({ row: i + 1, error: `dateOfBirth "${r.dateOfBirth.trim()}" must be in YYYY-MM-DD format` }); continue;
+          }
           await db.insert(employeeFamilyMembersTable).values({
             employeeId: dbId,
             name: r.name.trim(),
