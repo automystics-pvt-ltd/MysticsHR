@@ -122,7 +122,7 @@ export default function AppraisalsPage() {
   const pending = goals.filter(g => !appraisalMap[g.id]);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <CheckCircle2 className="w-6 h-6 text-primary" /> Self Appraisal

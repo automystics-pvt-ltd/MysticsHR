@@ -114,7 +114,7 @@ export default function WfhPage() {
   const pending = requests.filter((r) => r.status === "Pending");
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="Work From Home"
         description="Submit and manage WFH requests"

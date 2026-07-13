@@ -664,7 +664,7 @@ export default function DashboardPage() {
 
   if (isEmployee && !isHod && !isAnyManager) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         <EmployeeView firstName={firstName} greeting={greeting} />
       </div>
     );

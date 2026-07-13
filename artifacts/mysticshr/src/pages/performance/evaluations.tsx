@@ -139,7 +139,7 @@ export default function EvaluationsPage() {
   const evaluated = filteredGoals.filter(g => evalMap[`${g.id}-${g.employeeId}`]);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Users className="w-6 h-6 text-primary" /> Team Evaluations

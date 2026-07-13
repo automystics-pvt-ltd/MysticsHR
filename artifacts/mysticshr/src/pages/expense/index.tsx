@@ -153,7 +153,7 @@ export default function ExpensePage() {
   const pending = claims.filter((c) => c.status === "Submitted");
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="Expense Claims"
         description="Submit and manage expense reimbursements"

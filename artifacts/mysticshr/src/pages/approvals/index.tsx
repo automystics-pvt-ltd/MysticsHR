@@ -302,7 +302,7 @@ export default function ApprovalsHubPage() {
 
   if (!canApprove) {
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <div className="max-w-2xl mx-auto py-12">
         <PageHeader title="Approvals Hub" description="Manage all pending approvals in one place" />
         <Card className="mt-6">
           <CardContent className="p-10 text-center">
@@ -315,7 +315,7 @@ export default function ApprovalsHubPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="Approvals Hub"
         description="Review and action all pending requests in one place"
