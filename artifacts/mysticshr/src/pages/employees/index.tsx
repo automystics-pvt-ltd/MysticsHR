@@ -60,7 +60,7 @@ interface ImportResult {
   };
 }
 
-type ImportIssue = { row: number; column?: string; message: string; severity: "error" | "warning" };
+type ImportIssue = { row: number; column?: string; who?: string; message: string; severity: "error" | "warning" };
 type ImportSheetKey = "employees" | "profiles" | "education" | "workExperience" | "skills" | "certifications" | "familyMembers";
 interface ValidationResult {
   sheets: Record<ImportSheetKey, ImportIssue[]>;
@@ -717,7 +717,7 @@ export default function EmployeesPage() {
                               <div key={i} className={`flex items-start gap-1.5 text-xs ${issue.severity === "error" ? "text-destructive" : "text-amber-700"}`}>
                                 <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                                 <span>
-                                  Row {issue.row}{issue.column ? ` — ${issue.column}` : ""}: {issue.message}
+                                  Row {issue.row + 1}{issue.who ? ` (${issue.who})` : ""}{issue.column ? ` — ${issue.column}` : ""}: {issue.message}
                                 </span>
                               </div>
                             ))}
@@ -763,7 +763,7 @@ export default function EmployeesPage() {
                     {importResult.errors.map((e, i) => (
                       <div key={i} className="flex items-start gap-1.5 text-xs text-destructive">
                         <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                        <span>Row {e.row}: {e.error}</span>
+                        <span>Row {e.row + 1}: {e.error}</span>
                       </div>
                     ))}
                   </div>
@@ -775,7 +775,7 @@ export default function EmployeesPage() {
                       {(s as SectionResult).errors.map((e, i) => (
                         <div key={i} className="flex items-start gap-1.5 text-xs text-destructive">
                           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                          <span>Row {e.row}: {e.error}</span>
+                          <span>Row {e.row + 1}: {e.error}</span>
                         </div>
                       ))}
                     </div>
