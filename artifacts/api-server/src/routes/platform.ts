@@ -2,6 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../lib/db";
 import { logAudit } from "../lib/audit";
+import { provisionDefaultLeaveTypes } from "./leave";
 import {
   platformAdminsTable,
   tenantsTable,
@@ -367,6 +368,7 @@ router.post("/platform/tenants", async (req, res) => {
       recordId: tenant.id,
       newValue: `name="${tenant.name}", slug="${tenant.slug}", status="${status}"`,
     });
+    await provisionDefaultLeaveTypes(tenant.id);
     res.status(201).json(tenant);
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });

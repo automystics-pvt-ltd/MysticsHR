@@ -450,7 +450,7 @@ export default function LeavePage() {
           <div className="space-y-4">
             <div>
               <Label>Leave Type *</Label>
-              <Select value={form.leaveTypeId} onValueChange={(v) => setForm(f => ({ ...f, leaveTypeId: v }))}>
+              <Select value={form.leaveTypeId} onValueChange={(v) => setForm(f => ({ ...f, leaveTypeId: v }))} disabled={(leaveTypes ?? []).length === 0}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select leave type" />
                 </SelectTrigger>
@@ -460,6 +460,13 @@ export default function LeavePage() {
                   ))}
                 </SelectContent>
               </Select>
+              {(leaveTypes ?? []).length === 0 && (
+                <p className="mt-1.5 text-xs text-amber-600">
+                  {isHr
+                    ? "No leave types are configured yet. Go to Leave Types to add one before applying for leave."
+                    : "No leave types are configured yet. Please ask HR to set up leave types first."}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

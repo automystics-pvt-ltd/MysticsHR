@@ -16,6 +16,7 @@ import { signToken, signMfaToken as _signMfaToken, verifyMfaToken, setAuthCookie
 import { logAudit } from "../lib/audit";
 import nodemailer from "nodemailer";
 import { systemSettingsTable } from "@workspace/db/schema";
+import { provisionDefaultLeaveTypes } from "./leave";
 
 const router = Router();
 
@@ -358,6 +359,9 @@ router.post("/auth/signup/verify", async (req, res) => {
       .update(tenantRegistrationsTable)
       .set({ isVerified: true, verifiedAt: new Date(), updatedAt: new Date() })
       .where(eq(tenantRegistrationsTable.id, registrationId));
+
+    // Provision default leave types/policies so Leave module is usable immediately
+    await provisionDefaultLeaveTypes(tenant.id);
 
     const authToken = signToken({ userId: user.id, email: user.email, role: user.role, tenantId: user.tenantId });
     setAuthCookie(res, authToken);

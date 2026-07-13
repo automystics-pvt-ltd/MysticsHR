@@ -87,6 +87,44 @@ async function getOrCreateBalance(employeeId: number, leaveTypeId: number, year:
   return created;
 }
 
+// ─── PROVISIONING ────────────────────────────────────────────────────────────
+
+const DEFAULT_LEAVE_TYPES = [
+  { name: "Casual Leave", code: "CL", annualQuota: "12", carryForwardEnabled: false, advanceNoticeDays: 1, allowHalfDay: true, description: "For personal matters and short breaks" },
+  { name: "Sick Leave", code: "SL", annualQuota: "10", carryForwardEnabled: true, carryForwardMax: "5", advanceNoticeDays: 0, allowHalfDay: true, description: "For illness with medical certificate if > 2 days" },
+  { name: "Earned Leave", code: "EL", annualQuota: "18", carryForwardEnabled: true, carryForwardMax: "30", encashmentEnabled: true, advanceNoticeDays: 7, description: "Paid time off; encashable on exit" },
+  { name: "Maternity Leave", code: "ML", annualQuota: "180", carryForwardEnabled: false, advanceNoticeDays: 30, allowHalfDay: false, description: "26 weeks paid maternity leave" },
+  { name: "Paternity Leave", code: "PL", annualQuota: "5", carryForwardEnabled: false, advanceNoticeDays: 7, allowHalfDay: false, description: "5 working days for new fathers" },
+  { name: "Loss of Pay", code: "LOP", annualQuota: "0", carryForwardEnabled: false, lopByDefault: true, advanceNoticeDays: 0, description: "Unpaid leave when no balance available" },
+] as const;
+
+/**
+ * Provisions a standard set of leave types (+ matching leave policies) for a
+ * brand-new tenant, so HR/employees see usable options immediately instead of
+ * an empty Leave Type dropdown. Safe to call multiple times (onConflictDoNothing).
+ */
+export async function provisionDefaultLeaveTypes(tenantId: number): Promise<void> {
+  await db.insert(leaveTypesTable).values(
+    DEFAULT_LEAVE_TYPES.map((lt) => ({ tenantId, ...lt }))
+  ).onConflictDoNothing();
+
+  const types = await db.select().from(leaveTypesTable).where(eq(leaveTypesTable.tenantId, tenantId));
+  for (const lt of types) {
+    await db.insert(leavePoliciesTable).values({
+      tenantId,
+      leaveTypeId: lt.id,
+      requiresHodApproval: lt.code !== "LOP",
+      requiresHrApproval: lt.requiresHrApproval,
+      advanceNoticeDays: lt.advanceNoticeDays,
+      allowHalfDay: lt.allowHalfDay,
+      lopByDefault: lt.lopByDefault,
+      carryForwardEnabled: lt.carryForwardEnabled,
+      carryForwardMax: lt.carryForwardMax,
+      encashmentEnabled: lt.encashmentEnabled,
+    }).onConflictDoNothing();
+  }
+}
+
 // ─── LEAVE TYPES ─────────────────────────────────────────────────────────────
 
 router.get("/leave/types", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {

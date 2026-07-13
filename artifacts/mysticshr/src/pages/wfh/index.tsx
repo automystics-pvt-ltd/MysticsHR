@@ -119,12 +119,10 @@ export default function WfhPage() {
         title="Work From Home"
         description="Submit and manage WFH requests"
         actions={
-          !isHrOrManager && (
-            <Button size="sm" onClick={() => setShowCreate(true)}>
-              <Plus className="w-4 h-4 mr-1.5" />
-              New Request
-            </Button>
-          )
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4 mr-1.5" />
+            New Request
+          </Button>
         }
       />
 

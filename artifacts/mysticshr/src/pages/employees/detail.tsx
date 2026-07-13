@@ -938,7 +938,9 @@ export default function EmployeeDetailPage() {
   const tabFromUrl = new URLSearchParams(search).get("tab");
   const initialTab = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : "personal";
   const { data: emp, isLoading, error } = useGetEmployee(empId);
-  const { data: profile } = useGetEmployeesIdProfile(empId);
+  const { data: profile } = useGetEmployeesIdProfile(empId, {
+    query: { retry: false, staleTime: 60_000 },
+  } as any);
   const upsertProfile = usePutEmployeesIdProfile();
   const updateEmp = useUpdateEmployee();
   const updateMyTz = useUpdateMyTimezone();

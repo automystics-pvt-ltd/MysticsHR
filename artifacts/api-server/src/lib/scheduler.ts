@@ -588,7 +588,7 @@ async function processConfiguredEscalations() {
       const escalateTo = config.escalateTo;
       if (!escalateTo) continue;
 
-      const recipientUsers = await getUsersByRoles([escalateTo], config.tenantId);
+      const recipientUsers = await getUsersByRoles([escalateTo as Parameters<typeof getUsersByRoles>[0][number]], config.tenantId);
       if (recipientUsers.length === 0) continue;
 
       if (config.transactionType === "leave") {

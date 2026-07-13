@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { db } from "../lib/db";
-import { systemSettingsTable, approvalChainConfigsTable, hrmsUsersTable, storageCleanupRunsTable } from "@workspace/db/schema";
+import { systemSettingsTable, approvalChainConfigsTable, hrmsUsersTable, storageCleanupRunsTable, hrmsRoleEnum } from "@workspace/db/schema";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import { cleanupOrphanedAttachments } from "../lib/orphan-attachment-cleanup";
@@ -489,13 +489,13 @@ router.post("/storage-cleanup/run", requireHrmsUser, requireRole(...SUPER_ADMIN)
 });
 
 // ─── Utility: Get all active users for broadcast notifications ────────────────
-export async function getUsersByRoles(roles: string[], tenantId: number): Promise<Array<{ id: number; email: string; name: string; employeeId: number | null }>> {
+export async function getUsersByRoles(roles: (typeof hrmsRoleEnum.enumValues)[number][], tenantId: number): Promise<Array<{ id: number; email: string; name: string; employeeId: number | null }>> {
   const users = await db.select({ id: hrmsUsersTable.id, email: hrmsUsersTable.email, name: hrmsUsersTable.name, employeeId: hrmsUsersTable.employeeId })
     .from(hrmsUsersTable)
     .where(and(
       eq(hrmsUsersTable.isActive, true),
       eq(hrmsUsersTable.tenantId, tenantId),
-      sql`${hrmsUsersTable.role} = ANY(${roles})`,
+      inArray(hrmsUsersTable.role, roles),
     ));
   return users;
 }

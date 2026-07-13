@@ -7,3 +7,5 @@
 - [XLSX bulk-import date parsing](xlsx-date-parsing.md) — read with cellDates:true and format Date as local YYYY-MM-DD, or serial numbers leak into date columns and break inserts.
 - [Stale dist after schema change](drizzle-project-references-stale-dist.md) — composite lib packages (lib/db etc.) need a rebuild after schema changes, or consumers see phantom "property does not exist" typecheck errors.
 - [Bulk-import pre-flight validation](bulk-import-preflight-validation.md) — dry-run validate endpoint + shared rules module so import UI can review/guide fixes before committing.
+- [Leave type auto-provisioning](leave-type-provisioning.md) — new tenants got zero leave types (Apply Leave silently unusable); now auto-seeded on tenant creation.
+- [Postgres array bind params](postgres-array-bind-params.md) — raw `sql\`col = ANY(${jsArray})\`` breaks with drizzle; use `inArray()` or build a real `ARRAY[...]` literal.
