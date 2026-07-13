@@ -16,11 +16,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Plus, ChevronLeft, ChevronRight, Upload, FileDown, CheckCircle2, AlertCircle, X, FileSpreadsheet } from "lucide-react";
+import { Search, Plus, ChevronLeft, ChevronRight, Upload, FileDown, CheckCircle2, AlertCircle, X, FileSpreadsheet, IdCard, CheckSquare, Square } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { employeeAvatarSrc } from "@/lib/avatarSrc";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQueryClient } from "@tanstack/react-query";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -90,6 +91,12 @@ export default function EmployeesPage() {
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [exporting, setExporting] = useState(false);
+  const [exportSkipped, setExportSkipped] = useState<{ id: number; reason: string }[] | null>(null);
+  const [exportSkippedNames, setExportSkippedNames] = useState<Record<number, string>>({});
+
   const queryClient = useQueryClient();
 
   const { data: departments } = useListDepartments();
@@ -130,6 +137,81 @@ export default function EmployeesPage() {
     setImportResult(null);
     setImportError(null);
     setImportOpen(true);
+  }
+
+  function toggleSelectMode() {
+    setSelectMode((v) => !v);
+    setSelectedIds(new Set());
+    setExportSkipped(null);
+  }
+
+  function toggleSelected(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllOnPage() {
+    setSelectedIds((prev) => {
+      const allSelected = employees.length > 0 && employees.every((e) => prev.has(e.id));
+      if (allSelected) {
+        const next = new Set(prev);
+        employees.forEach((e) => next.delete(e.id));
+        return next;
+      }
+      const next = new Set(prev);
+      employees.forEach((e) => next.add(e.id));
+      return next;
+    });
+  }
+
+  async function handleExportIdCards() {
+    if (selectedIds.size === 0) return;
+    setExporting(true);
+    setExportSkipped(null);
+    try {
+      const namesById: Record<number, string> = {};
+      employees.forEach((e) => { namesById[e.id] = `${e.firstName} ${e.lastName}`; });
+      setExportSkippedNames((prev) => ({ ...prev, ...namesById }));
+
+      const resp = await fetch(`${BASE_URL}/api/employees/id-cards/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ employeeIds: Array.from(selectedIds) }),
+      });
+
+      if (!resp.ok) {
+        const json = await resp.json().catch(() => ({}));
+        alert(json.error ?? "Failed to export ID cards. Please try again.");
+        return;
+      }
+
+      const skippedHeader = resp.headers.get("X-Id-Card-Skipped");
+      if (skippedHeader) {
+        try {
+          const skipped = JSON.parse(atob(skippedHeader)) as { id: number; reason: string }[];
+          setExportSkipped(skipped);
+        } catch {
+          setExportSkipped(null);
+        }
+      }
+
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "id_cards_bulk.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to export ID cards. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function handleImport() {
@@ -183,16 +265,59 @@ export default function EmployeesPage() {
         title="Employees"
         description={`${total} employees`}
         actions={
-          <>
-            <Button variant="outline" onClick={handleOpenImport}>
-              <Upload className="w-4 h-4 mr-2" />Import
-            </Button>
-            <Link href="/employees/new">
-              <Button><Plus className="w-4 h-4 mr-2" />Add Employee</Button>
-            </Link>
-          </>
+          selectMode ? (
+            <>
+              <Button variant="outline" size="sm" onClick={toggleSelectAllOnPage}>
+                {employees.length > 0 && employees.every((e) => selectedIds.has(e.id)) ? (
+                  <><CheckSquare className="w-4 h-4 mr-2" />Deselect page</>
+                ) : (
+                  <><Square className="w-4 h-4 mr-2" />Select page</>
+                )}
+              </Button>
+              <Button onClick={handleExportIdCards} disabled={selectedIds.size === 0 || exporting}>
+                <IdCard className="w-4 h-4 mr-2" />
+                {exporting ? "Exporting…" : `Export ID Cards (${selectedIds.size})`}
+              </Button>
+              <Button variant="ghost" onClick={toggleSelectMode}>Cancel</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={toggleSelectMode}>
+                <IdCard className="w-4 h-4 mr-2" />Bulk ID Cards
+              </Button>
+              <Button variant="outline" onClick={handleOpenImport}>
+                <Upload className="w-4 h-4 mr-2" />Import
+              </Button>
+              <Link href="/employees/new">
+                <Button><Plus className="w-4 h-4 mr-2" />Add Employee</Button>
+              </Link>
+            </>
+          )
         }
       />
+
+      {selectMode && (
+        <p className="text-sm text-muted-foreground">
+          Select employees below (use the Department filter to narrow to one department), then export a combined PDF. Only employees with fully completed onboarding will be included.
+        </p>
+      )}
+
+      {exportSkipped && exportSkipped.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-amber-800">{exportSkipped.length} employee{exportSkipped.length !== 1 ? "s" : ""} skipped</p>
+            <button className="text-amber-700 hover:text-amber-900" onClick={() => setExportSkipped(null)}><X className="w-4 h-4" /></button>
+          </div>
+          <div className="space-y-0.5 max-h-32 overflow-y-auto">
+            {exportSkipped.map((s) => (
+              <div key={s.id} className="flex items-start gap-1.5 text-xs text-amber-800">
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <span>{exportSkippedNames[s.id] ?? `Employee #${s.id}`}: {s.reason}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
@@ -305,11 +430,20 @@ export default function EmployeesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {employees.map((emp) => (
-            <Link key={emp.id} href={`/employees/${emp.id}`}>
-              <Card className="border-border hover:shadow-md hover:border-primary/30 transition-all cursor-pointer">
+          {employees.map((emp) => {
+            const cardBody = (
+              <Card className={`border-border transition-all ${selectMode ? "cursor-pointer" : "hover:shadow-md hover:border-primary/30 cursor-pointer"} ${selectMode && selectedIds.has(emp.id) ? "border-primary ring-1 ring-primary/40" : ""}`}>
                 <CardContent className="p-5">
                   <div className="flex items-start gap-3">
+                    {selectMode && (
+                      <Checkbox
+                        checked={selectedIds.has(emp.id)}
+                        onCheckedChange={() => toggleSelected(emp.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 flex-shrink-0"
+                        aria-label={`Select ${emp.firstName} ${emp.lastName}`}
+                      />
+                    )}
                     <Avatar className="w-11 h-11 flex-shrink-0">
                       <AvatarImage src={employeeAvatarSrc(emp.id, emp.avatarUrl)} />
                       <AvatarFallback className="text-sm font-semibold bg-primary/10 text-primary">
@@ -335,8 +469,17 @@ export default function EmployeesPage() {
                   </div>
                 </CardContent>
               </Card>
-            </Link>
-          ))}
+            );
+            return selectMode ? (
+              <div key={emp.id} onClick={() => toggleSelected(emp.id)}>
+                {cardBody}
+              </div>
+            ) : (
+              <Link key={emp.id} href={`/employees/${emp.id}`}>
+                {cardBody}
+              </Link>
+            );
+          })}
         </div>
       )}
 

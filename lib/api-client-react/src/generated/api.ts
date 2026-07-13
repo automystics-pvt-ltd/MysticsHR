@@ -38,6 +38,7 @@ import type {
   AuditLogListResponse,
   BackfillLeaveAttendanceBody,
   BlackoutDate,
+  BulkExportIdCardsBody,
   BulkImportResult,
   CalibrationRecord,
   CancelActionLeaveApplicationBody,
@@ -7432,6 +7433,92 @@ export function useDownloadEmployeeIdCard<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Generate a combined multi-page PDF of ID cards for multiple employees
+ */
+export const getBulkExportIdCardsUrl = () => {
+  return `/api/employees/id-cards/bulk`;
+};
+
+export const bulkExportIdCards = async (
+  bulkExportIdCardsBody: BulkExportIdCardsBody,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getBulkExportIdCardsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bulkExportIdCardsBody),
+  });
+};
+
+export const getBulkExportIdCardsMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkExportIdCards>>,
+    TError,
+    { data: BodyType<BulkExportIdCardsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkExportIdCards>>,
+  TError,
+  { data: BodyType<BulkExportIdCardsBody> },
+  TContext
+> => {
+  const mutationKey = ["bulkExportIdCards"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkExportIdCards>>,
+    { data: BodyType<BulkExportIdCardsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkExportIdCards(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkExportIdCardsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkExportIdCards>>
+>;
+export type BulkExportIdCardsMutationBody = BodyType<BulkExportIdCardsBody>;
+export type BulkExportIdCardsMutationError = ErrorType<void>;
+
+/**
+ * @summary Generate a combined multi-page PDF of ID cards for multiple employees
+ */
+export const useBulkExportIdCards = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkExportIdCards>>,
+    TError,
+    { data: BodyType<BulkExportIdCardsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkExportIdCards>>,
+  TError,
+  { data: BodyType<BulkExportIdCardsBody> },
+  TContext
+> => {
+  return useMutation(getBulkExportIdCardsMutationOptions(options));
+};
 
 /**
  * @summary Update employee status (lifecycle transition)

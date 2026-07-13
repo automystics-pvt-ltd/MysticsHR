@@ -3863,6 +3863,10 @@ export type PostOnboardingTasksIdCompleteBody = {
   notes?: string | null;
 };
 
+export type BulkExportIdCardsBody = {
+  employeeIds: number[];
+};
+
 export type ListRequisitionsParams = {
   /**
    * @nullable

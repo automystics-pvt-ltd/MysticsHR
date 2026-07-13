@@ -1525,6 +1525,33 @@ paths:
         "403":
           description: Conditions not met — onboarding checklist not 100% complete
 
+  /employees/id-cards/bulk:
+    post:
+      summary: Generate a combined multi-page PDF of ID cards for multiple employees
+      operationId: bulkExportIdCards
+      tags: [Onboarding]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [employeeIds]
+              properties:
+                employeeIds:
+                  type: array
+                  items: { type: integer }
+      responses:
+        "200":
+          description: PDF binary file containing one page per eligible employee. Headers X-Id-Card-Generated-Count and X-Id-Card-Skipped (base64 JSON array of {id, reason}) report the outcome per employee.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: No employees eligible, or invalid/oversized employeeIds
+
   /employees/{id}/status:
     patch:
       operationId: updateEmployeeStatus

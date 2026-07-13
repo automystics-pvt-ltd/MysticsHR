@@ -1724,6 +1724,13 @@ export const DownloadEmployeeIdCardParams = zod.object({
 });
 
 /**
+ * @summary Generate a combined multi-page PDF of ID cards for multiple employees
+ */
+export const BulkExportIdCardsBody = zod.object({
+  employeeIds: zod.array(zod.number()),
+});
+
+/**
  * @summary Update employee status (lifecycle transition)
  */
 export const UpdateEmployeeStatusParams = zod.object({

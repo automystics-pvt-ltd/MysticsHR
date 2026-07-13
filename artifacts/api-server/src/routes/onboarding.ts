@@ -576,6 +576,103 @@ async function embedEmployeePhoto(pdfDoc: PDFDocument, avatarUrl: string | null 
   }
 }
 
+type ResolvedIdCardEmployee = Awaited<ReturnType<typeof resolveIdCardEmployee>>["emp"];
+
+/** Draws a single ID-card page (matching the standalone single-card PDF exactly) onto a shared pdf-lib document. Used by both the single-download and bulk-export routes so branding/field toggles stay identical. */
+async function renderIdCardPage(pdfDoc: PDFDocument, emp: ResolvedIdCardEmployee, config: IdCardConfig) {
+  const { fields } = config;
+  const employeeName = `${emp.firstName} ${emp.lastName}`;
+  const profileUrl = buildAppUrl(`/employees/${emp.id}`);
+  const qrCodeDataUrl = await QRCode.toDataURL(profileUrl, { width: 120, margin: 1 });
+  const qrBuf = Buffer.from(qrCodeDataUrl.replace(/^data:image\/png;base64,/, ""), "base64");
+
+  const page = pdfDoc.addPage([226, 340]);
+  const { width, height } = page.getSize();
+
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  const [br, bg, bb] = hexToRgbTriple(config.brandColorHex);
+  const blue = rgb(br, bg, bb);
+  const dark = rgb(0.118, 0.176, 0.298);
+  const white = rgb(1, 1, 1);
+  const muted = rgb(0.580, 0.627, 0.729);
+  const panel = rgb(0.200, 0.263, 0.384);
+
+  page.drawRectangle({ x: 0, y: 0, width, height, color: dark });
+  page.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: blue });
+  page.drawRectangle({ x: 0, y: 0, width, height: 8, color: blue });
+
+  const logoImg = await embedLogoImage(pdfDoc, config.logoDataUri);
+  if (logoImg) {
+    const logoH = 14;
+    const logoW = (logoImg.width / logoImg.height) * logoH;
+    page.drawImage(logoImg, { x: (width - logoW) / 2, y: height - 26, width: logoW, height: logoH });
+  } else {
+    page.drawText(config.companyName, { x: 0, y: height - 28, size: 9, font: boldFont, color: white, maxWidth: width, lineHeight: 14 });
+  }
+  page.drawText(config.cardTitle, { x: 68, y: height - 40, size: 7, font: regularFont, color: muted });
+
+  let y = height - 60;
+
+  const photoImg = fields.photo ? await embedEmployeePhoto(pdfDoc, emp.avatarUrl) : null;
+  if (fields.photo) {
+    page.drawRectangle({ x: 83, y: y - 60, width: 60, height: 60, color: panel });
+    if (photoImg) {
+      page.drawImage(photoImg, { x: 83, y: y - 60, width: 60, height: 60 });
+    } else {
+      page.drawText("PHOTO", { x: 101, y: y - 34, size: 7, font: regularFont, color: muted });
+    }
+    y -= 76;
+  }
+
+  if (fields.nameAndId) {
+    const nameWidth = boldFont.widthOfTextAtSize(employeeName, 11);
+    page.drawText(employeeName, { x: (width - nameWidth) / 2, y, size: 11, font: boldFont, color: white });
+    y -= 15;
+  }
+
+  if (fields.designationDept) {
+    const desigText = (emp.designationTitle ?? "—").slice(0, 32);
+    const desigWidth = regularFont.widthOfTextAtSize(desigText, 8);
+    page.drawText(desigText, { x: (width - desigWidth) / 2, y, size: 8, font: regularFont, color: blue });
+    y -= 10;
+  }
+
+  y -= 5;
+  page.drawLine({ start: { x: 20, y }, end: { x: 206, y }, thickness: 0.5, color: panel });
+  y -= 16;
+
+  const rows2: Array<[string, string]> = [["Employee ID", emp.employeeId], ["Email", emp.email.slice(0, 26)]];
+  if (fields.designationDept) rows2.splice(1, 0, ["Department", emp.departmentName ?? "—"]);
+  if (fields.bloodGroup) rows2.push(["Blood Group", emp.bloodGroup ?? "—"]);
+  if (fields.emergencyContact && (emp.emergencyContactName || emp.emergencyContactPhone)) {
+    rows2.push(["Emergency", `${emp.emergencyContactName ?? "—"} ${emp.emergencyContactPhone ?? ""}`.trim().slice(0, 26)]);
+  }
+  rows2.forEach(([label, value], i) => {
+    const rowY = y - i * 22;
+    page.drawText(label + ":", { x: 25, y: rowY, size: 7, font: regularFont, color: muted });
+    page.drawText(value, { x: 115, y: rowY, size: 7, font: boldFont, color: white });
+  });
+  y -= rows2.length * 22 + 6;
+
+  page.drawLine({ start: { x: 20, y }, end: { x: 206, y }, thickness: 0.5, color: panel });
+  y -= 66;
+
+  if (fields.qrCode) {
+    const qrImage = await pdfDoc.embedPng(qrBuf);
+    page.drawImage(qrImage, { x: 83, y, width: 60, height: 60 });
+    page.drawText("Scan to view profile", { x: 72, y: y - 16, size: 6, font: regularFont, color: muted });
+    y -= 24;
+  }
+
+  if (fields.signatureLine) {
+    y -= 8;
+    page.drawLine({ start: { x: 40, y }, end: { x: 186, y }, thickness: 0.5, color: muted });
+    page.drawText("Authorized Signature", { x: 68, y: y - 10, size: 6, font: regularFont, color: muted });
+  }
+}
+
 router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROLES, "employee"), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
@@ -601,98 +698,9 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
     }
 
     const config = await getIdCardConfig(tenantId);
-    const { fields } = config;
-    const employeeName = `${emp.firstName} ${emp.lastName}`;
-    const profileUrl = buildAppUrl(`/employees/${emp.id}`);
-    const qrCodeDataUrl = await QRCode.toDataURL(profileUrl, { width: 120, margin: 1 });
-    const qrBuf = Buffer.from(qrCodeDataUrl.replace(/^data:image\/png;base64,/, ""), "base64");
 
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([226, 340]);
-    const { width, height } = page.getSize();
-
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-    const [br, bg, bb] = hexToRgbTriple(config.brandColorHex);
-    const blue = rgb(br, bg, bb);
-    const dark = rgb(0.118, 0.176, 0.298);
-    const white = rgb(1, 1, 1);
-    const muted = rgb(0.580, 0.627, 0.729);
-    const panel = rgb(0.200, 0.263, 0.384);
-
-    page.drawRectangle({ x: 0, y: 0, width, height, color: dark });
-    page.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: blue });
-    page.drawRectangle({ x: 0, y: 0, width, height: 8, color: blue });
-
-    const logoImg = await embedLogoImage(pdfDoc, config.logoDataUri);
-    if (logoImg) {
-      const logoH = 14;
-      const logoW = (logoImg.width / logoImg.height) * logoH;
-      page.drawImage(logoImg, { x: (width - logoW) / 2, y: height - 26, width: logoW, height: logoH });
-    } else {
-      page.drawText(config.companyName, { x: 0, y: height - 28, size: 9, font: boldFont, color: white, maxWidth: width, lineHeight: 14 });
-    }
-    page.drawText(config.cardTitle, { x: 68, y: height - 40, size: 7, font: regularFont, color: muted });
-
-    let y = height - 60;
-
-    const photoImg = fields.photo ? await embedEmployeePhoto(pdfDoc, emp.avatarUrl) : null;
-    if (fields.photo) {
-      page.drawRectangle({ x: 83, y: y - 60, width: 60, height: 60, color: panel });
-      if (photoImg) {
-        page.drawImage(photoImg, { x: 83, y: y - 60, width: 60, height: 60 });
-      } else {
-        page.drawText("PHOTO", { x: 101, y: y - 34, size: 7, font: regularFont, color: muted });
-      }
-      y -= 76;
-    }
-
-    if (fields.nameAndId) {
-      const nameWidth = boldFont.widthOfTextAtSize(employeeName, 11);
-      page.drawText(employeeName, { x: (width - nameWidth) / 2, y, size: 11, font: boldFont, color: white });
-      y -= 15;
-    }
-
-    if (fields.designationDept) {
-      const desigText = (emp.designationTitle ?? "—").slice(0, 32);
-      const desigWidth = regularFont.widthOfTextAtSize(desigText, 8);
-      page.drawText(desigText, { x: (width - desigWidth) / 2, y, size: 8, font: regularFont, color: blue });
-      y -= 10;
-    }
-
-    y -= 5;
-    page.drawLine({ start: { x: 20, y }, end: { x: 206, y }, thickness: 0.5, color: panel });
-    y -= 16;
-
-    const rows2: Array<[string, string]> = [["Employee ID", emp.employeeId], ["Email", emp.email.slice(0, 26)]];
-    if (fields.designationDept) rows2.splice(1, 0, ["Department", emp.departmentName ?? "—"]);
-    if (fields.bloodGroup) rows2.push(["Blood Group", emp.bloodGroup ?? "—"]);
-    if (fields.emergencyContact && (emp.emergencyContactName || emp.emergencyContactPhone)) {
-      rows2.push(["Emergency", `${emp.emergencyContactName ?? "—"} ${emp.emergencyContactPhone ?? ""}`.trim().slice(0, 26)]);
-    }
-    rows2.forEach(([label, value], i) => {
-      const rowY = y - i * 22;
-      page.drawText(label + ":", { x: 25, y: rowY, size: 7, font: regularFont, color: muted });
-      page.drawText(value, { x: 115, y: rowY, size: 7, font: boldFont, color: white });
-    });
-    y -= rows2.length * 22 + 6;
-
-    page.drawLine({ start: { x: 20, y }, end: { x: 206, y }, thickness: 0.5, color: panel });
-    y -= 66;
-
-    if (fields.qrCode) {
-      const qrImage = await pdfDoc.embedPng(qrBuf);
-      page.drawImage(qrImage, { x: 83, y, width: 60, height: 60 });
-      page.drawText("Scan to view profile", { x: 72, y: y - 16, size: 6, font: regularFont, color: muted });
-      y -= 24;
-    }
-
-    if (fields.signatureLine) {
-      y -= 8;
-      page.drawLine({ start: { x: 40, y }, end: { x: 186, y }, thickness: 0.5, color: muted });
-      page.drawText("Authorized Signature", { x: 68, y: y - 10, size: 6, font: regularFont, color: muted });
-    }
+    await renderIdCardPage(pdfDoc, emp, config);
 
     const pdfBytes = await pdfDoc.save();
     const pdfBuffer = Buffer.from(pdfBytes);
@@ -722,6 +730,110 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
     res.set("Content-Type", "application/pdf");
     res.set("Content-Disposition", `attachment; filename="idcard_${emp.employeeId}.pdf"`);
     res.set("Content-Length", String(pdfBuffer.length));
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+const MAX_BULK_ID_CARDS = 200;
+
+// Bulk export: combines many employees' ID cards into a single multi-page PDF,
+// reusing the exact same per-card renderer, tenant branding, and onboarding/
+// document-verification gating as the single-employee endpoint above.
+router.post("/employees/id-cards/bulk", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
+  try {
+    const tenantId = req.hrmsUser!.tenantId;
+    const rawIds = req.body?.employeeIds;
+    if (!Array.isArray(rawIds) || rawIds.length === 0) {
+      res.status(400).json({ error: "employeeIds must be a non-empty array" });
+      return;
+    }
+    const ids = [...new Set(rawIds.map((v) => parseInt(String(v), 10)))].filter((v) => Number.isFinite(v));
+    if (ids.length === 0) {
+      res.status(400).json({ error: "employeeIds must contain valid employee IDs" });
+      return;
+    }
+    if (ids.length > MAX_BULK_ID_CARDS) {
+      res.status(400).json({ error: `Cannot generate more than ${MAX_BULK_ID_CARDS} ID cards at once` });
+      return;
+    }
+
+    const config = await getIdCardConfig(tenantId);
+    const pdfDoc = await PDFDocument.create();
+    const generated: { id: number; employeeId: string }[] = [];
+    const skipped: { id: number; reason: string }[] = [];
+    const checklistsToStamp: number[] = [];
+    const notifyTargets: { email: string; name: string; employeeId: string; checklistId: number; empDbId: number }[] = [];
+
+    for (const id of ids) {
+      try {
+        const { emp, checklist } = await resolveIdCardEmployee(id, tenantId);
+        await renderIdCardPage(pdfDoc, emp, config);
+        generated.push({ id, employeeId: emp.employeeId });
+        checklistsToStamp.push(checklist.id);
+        if (emp.email) {
+          notifyTargets.push({
+            email: emp.email,
+            name: `${emp.firstName} ${emp.lastName}`,
+            employeeId: emp.employeeId,
+            checklistId: checklist.id,
+            empDbId: emp.id,
+          });
+        }
+      } catch (e) {
+        if (e instanceof IdCardBlockedError) {
+          const body = e.statusPayload.body as Record<string, unknown>;
+          skipped.push({ id, reason: (body.error as string) ?? "Not eligible" });
+          continue;
+        }
+        throw e;
+      }
+    }
+
+    if (generated.length === 0) {
+      res.status(400).json({ error: "No employees were eligible for ID card generation", skipped });
+      return;
+    }
+
+    const pdfBytes = await pdfDoc.save();
+    const pdfBuffer = Buffer.from(pdfBytes);
+
+    const now = new Date();
+    for (const checklistId of checklistsToStamp) {
+      await db
+        .update(onboardingChecklistsTable)
+        .set({ idCardGeneratedAt: now, updatedAt: now })
+        .where(and(eq(onboardingChecklistsTable.id, checklistId), eq(onboardingChecklistsTable.tenantId, tenantId)));
+    }
+
+    await logAudit({
+      user: req.hrmsUser,
+      action: "GENERATE_ID_CARD_BULK",
+      module: "Onboarding",
+      newValue: JSON.stringify({ generated: generated.map((g) => g.id), skipped }),
+      ipAddress: req.ip,
+    });
+
+    for (const t of notifyTargets) {
+      import("../lib/notification-service").then(({ dispatchNotification }) => {
+        dispatchNotification({
+          eventType: "id_card_generated", module: "onboarding",
+          recipientEmail: t.email, recipientName: t.name,
+          recipientEmployeeDbId: t.empDbId,
+          variables: { recipientName: t.name, employeeId: t.employeeId },
+          entityType: "onboarding_checklist", entityId: t.checklistId,
+          tenantId,
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
+    res.set("Content-Type", "application/pdf");
+    res.set("Content-Disposition", `attachment; filename="id_cards_bulk.pdf"`);
+    res.set("Content-Length", String(pdfBuffer.length));
+    res.set("X-Id-Card-Generated-Count", String(generated.length));
+    res.set("X-Id-Card-Skipped", Buffer.from(JSON.stringify(skipped)).toString("base64"));
     res.send(pdfBuffer);
   } catch (err) {
     console.error(err);
