@@ -292,6 +292,8 @@ import type {
   SavedReportTemplate,
   ScheduleInterviewBody,
   SelfAppraisal,
+  SendTestNotification200,
+  SendTestNotificationBody,
   ShiftAssignment,
   ShiftCalendarEntry,
   ShiftSwap,
@@ -28412,6 +28414,94 @@ export const useTestWhatsAppConfig = <
   TContext
 > => {
   return useMutation(getTestWhatsAppConfigMutationOptions(options));
+};
+
+/**
+ * Uses the credentials currently saved in System Config (not values typed into an unsaved form) to send a real test email or WhatsApp message to the calling admin, so they can confirm delivery works after changing settings.
+ * @summary Send a test notification to the currently logged-in admin
+ */
+export const getSendTestNotificationUrl = () => {
+  return `/api/notifications/send-test`;
+};
+
+export const sendTestNotification = async (
+  sendTestNotificationBody: SendTestNotificationBody,
+  options?: RequestInit,
+): Promise<SendTestNotification200> => {
+  return customFetch<SendTestNotification200>(getSendTestNotificationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendTestNotificationBody),
+  });
+};
+
+export const getSendTestNotificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTestNotification>>,
+    TError,
+    { data: BodyType<SendTestNotificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendTestNotification>>,
+  TError,
+  { data: BodyType<SendTestNotificationBody> },
+  TContext
+> => {
+  const mutationKey = ["sendTestNotification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendTestNotification>>,
+    { data: BodyType<SendTestNotificationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return sendTestNotification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendTestNotificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendTestNotification>>
+>;
+export type SendTestNotificationMutationBody =
+  BodyType<SendTestNotificationBody>;
+export type SendTestNotificationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a test notification to the currently logged-in admin
+ */
+export const useSendTestNotification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTestNotification>>,
+    TError,
+    { data: BodyType<SendTestNotificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendTestNotification>>,
+  TError,
+  { data: BodyType<SendTestNotificationBody> },
+  TContext
+> => {
+  return useMutation(getSendTestNotificationMutationOptions(options));
 };
 
 /**

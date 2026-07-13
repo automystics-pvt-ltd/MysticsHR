@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../lib/db";
-import { notificationLogsTable, notificationTemplatesTable, notificationPreferencesTable, systemSettingsTable, userNotificationsTable } from "@workspace/db/schema";
+import { notificationLogsTable, notificationTemplatesTable, notificationPreferencesTable, systemSettingsTable, userNotificationsTable, employeesTable } from "@workspace/db/schema";
 import { eq, and, desc, count, ilike, or, gte, isNotNull, inArray, sql, SQL } from "drizzle-orm";
 import { requireHrmsUser, requireRole } from "../lib/auth";
 import {
@@ -9,6 +9,8 @@ import {
   NOTIFICATION_DEFAULTS_CATEGORY,
   NOTIFICATION_DEFAULTS_KEY,
   getNotificationDefaults,
+  sendEmail,
+  sendWhatsApp,
 } from "../lib/notification-service";
 import nodemailer from "nodemailer";
 
@@ -193,6 +195,71 @@ router.post("/notifications/test-whatsapp", requireHrmsUser, requireRole(...SUPE
     }
     res.json({ success: true, message: "WhatsApp test message sent" });
   } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ success: false, error: msg });
+  }
+});
+
+// ─── Send Test Notification (to self) ─────────────────────────────────────────
+
+/** POST /notifications/send-test
+ * Body: { channel: "email" | "whatsapp" }
+ * Sends a real test notification to the calling admin using whatever
+ * credentials are currently saved in System Config (DB value, falling back
+ * to server env vars) — not values typed into an unsaved form. This lets an
+ * admin confirm a config change actually works without waiting for a real
+ * event to fire. */
+router.post("/notifications/send-test", requireHrmsUser, requireRole(...SUPER_ADMIN), async (req, res): Promise<void> => {
+  try {
+    const { channel } = req.body as { channel?: string };
+    if (channel !== "email" && channel !== "whatsapp") {
+      res.status(400).json({ success: false, error: "channel must be 'email' or 'whatsapp'" });
+      return;
+    }
+    const u = req.hrmsUser!;
+
+    if (channel === "email") {
+      const ok = await sendEmail({
+        to: u.email,
+        toName: u.name,
+        subject: "MysticsHR test notification",
+        html: `<p>Hi ${u.name},</p><p>This is a test notification sent from MysticsHR System Configuration to confirm your email settings are working correctly.</p><p>Sent at ${new Date().toISOString()}.</p>`,
+        eventType: "test_notification",
+        module: "System",
+        tenantId: u.tenantId,
+      });
+      if (!ok) {
+        res.status(400).json({ success: false, error: "Failed to send test email. Check your SMTP settings and the notification logs for details." });
+        return;
+      }
+      res.json({ success: true, message: `Test email sent to ${u.email}` });
+      return;
+    }
+
+    // channel === "whatsapp": resolve the admin's own phone via their linked employee record.
+    let phone: string | undefined;
+    if (u.employeeId) {
+      const [emp] = await db.select({ phone: employeesTable.phone }).from(employeesTable).where(eq(employeesTable.id, u.employeeId)).limit(1);
+      phone = emp?.phone ?? undefined;
+    }
+    if (!phone) {
+      res.status(400).json({ success: false, error: "No phone number on file for your account. Add a phone number to your employee profile to receive a WhatsApp test message." });
+      return;
+    }
+    const ok = await sendWhatsApp({
+      to: phone,
+      toName: u.name,
+      message: `MysticsHR: This is a test WhatsApp notification to confirm your WhatsApp settings are working correctly. Sent at ${new Date().toISOString()}.`,
+      eventType: "test_notification",
+      module: "System",
+      tenantId: u.tenantId,
+    });
+    if (!ok) {
+      res.status(400).json({ success: false, error: "Failed to send test WhatsApp message. Check your WhatsApp settings and the notification logs for details." });
+      return;
+    }
+    res.json({ success: true, message: `Test WhatsApp message sent to ${phone}` });
+  } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     res.status(500).json({ success: false, error: msg });
   }

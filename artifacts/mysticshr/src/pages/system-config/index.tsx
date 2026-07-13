@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetSystemSettings,
   useUpdateSystemSettings,
+  useSendTestNotification,
   useGetNotificationDefaults,
   useUpdateNotificationDefaults,
   useListApprovalChains,
@@ -1236,6 +1237,7 @@ function CredentialCategoryCard({
   const saved = envelope?.values ?? {};
 
   const updateMut = useUpdateSystemSettings();
+  const testMut = useSendTestNotification();
   const [form, setForm] = useState<Record<string, string>>({});
   // Reset the local form whenever the server payload arrives or changes.
   useEffect(() => {
@@ -1266,6 +1268,23 @@ function CredentialCategoryCard({
     await refetch();
   }
 
+  async function sendTest() {
+    try {
+      const result = await testMut.mutateAsync({ data: { channel: category as "email" | "whatsapp" } });
+      const r = result as { success?: boolean; message?: string; error?: string };
+      if (r.success) {
+        toast({ title: r.message ?? "Test notification sent" });
+      } else {
+        toast({ title: r.error ?? "Failed to send test notification", variant: "destructive" });
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to send test notification";
+      toast({ title: msg, variant: "destructive" });
+    }
+  }
+
+  const canSendTest = category === "email" || category === "whatsapp";
+
   return (
     <Card>
       <CardHeader>
@@ -1292,9 +1311,31 @@ function CredentialCategoryCard({
             />
           </div>
         ))}
-        <Button onClick={save} disabled={updateMut.isPending} data-testid={`button-save-cred-${category}`}>
-          {updateMut.isPending ? "Saving…" : `Save ${title}`}
-        </Button>
+        <div className="flex gap-3">
+          <Button onClick={save} disabled={updateMut.isPending} data-testid={`button-save-cred-${category}`}>
+            {updateMut.isPending ? "Saving…" : `Save ${title}`}
+          </Button>
+          {canSendTest && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={sendTest}
+                    disabled={testMut.isPending}
+                    data-testid={`button-send-test-${category}`}
+                  >
+                    {testMut.isPending ? "Sending…" : "Send test notification"}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs">
+                  Sends a real {category === "email" ? "email" : "WhatsApp message"} to your own account using the
+                  currently saved settings — save first if you just made changes.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

@@ -296,9 +296,9 @@ export interface AttendanceSuspicionConfig {
    * @minimum 0
    */
   maxRadiusMeters: number;
+  /** When true, punches without latitude/longitude telemetry are flagged as suspicious. */
+  requireGps?: boolean;
   offices: AttendanceSuspicionOffice[];
-  /** When true, clock-in is blocked unless the browser provides GPS co-ordinates. */
-  requireGps: boolean;
 }
 
 /**
@@ -309,8 +309,8 @@ export interface AttendanceSuspicionConfigUpdate {
   maxAccuracyMeters?: number;
   /** @minimum 0 */
   maxRadiusMeters?: number;
-  offices?: AttendanceSuspicionOffice[];
   requireGps?: boolean;
+  offices?: AttendanceSuspicionOffice[];
 }
 
 /**
@@ -4753,6 +4753,24 @@ export type TestWhatsAppConfigBody = {
 export type TestWhatsAppConfig200 = {
   success?: boolean;
   message?: string;
+};
+
+export type SendTestNotificationBodyChannel =
+  (typeof SendTestNotificationBodyChannel)[keyof typeof SendTestNotificationBodyChannel];
+
+export const SendTestNotificationBodyChannel = {
+  email: "email",
+  whatsapp: "whatsapp",
+} as const;
+
+export type SendTestNotificationBody = {
+  channel: SendTestNotificationBodyChannel;
+};
+
+export type SendTestNotification200 = {
+  success?: boolean;
+  message?: string;
+  error?: string;
 };
 
 export type GetNotificationDefaults200 = {

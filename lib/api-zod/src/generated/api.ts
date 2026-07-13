@@ -6240,6 +6240,12 @@ export const GetAttendanceSuspicionConfigResponse = zod.object({
     .describe(
       "Distance from every registered office above which the punch is flagged.",
     ),
+  requireGps: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, punches without latitude\/longitude telemetry are flagged as suspicious.",
+    ),
   offices: zod.array(
     zod.object({
       name: zod.string(),
@@ -6285,6 +6291,7 @@ export const UpdateAttendanceSuspicionConfigBody = zod
       .number()
       .min(updateAttendanceSuspicionConfigBodyMaxRadiusMetersMin)
       .optional(),
+    requireGps: zod.boolean().optional(),
     offices: zod
       .array(
         zod.object({
@@ -6331,6 +6338,12 @@ export const UpdateAttendanceSuspicionConfigResponse = zod.object({
     .min(updateAttendanceSuspicionConfigResponseMaxRadiusMetersMin)
     .describe(
       "Distance from every registered office above which the punch is flagged.",
+    ),
+  requireGps: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, punches without latitude\/longitude telemetry are flagged as suspicious.",
     ),
   offices: zod.array(
     zod.object({
@@ -8183,6 +8196,20 @@ export const TestWhatsAppConfigBody = zod.object({
 export const TestWhatsAppConfigResponse = zod.object({
   success: zod.boolean().optional(),
   message: zod.string().optional(),
+});
+
+/**
+ * Uses the credentials currently saved in System Config (not values typed into an unsaved form) to send a real test email or WhatsApp message to the calling admin, so they can confirm delivery works after changing settings.
+ * @summary Send a test notification to the currently logged-in admin
+ */
+export const SendTestNotificationBody = zod.object({
+  channel: zod.enum(["email", "whatsapp"]),
+});
+
+export const SendTestNotificationResponse = zod.object({
+  success: zod.boolean().optional(),
+  message: zod.string().optional(),
+  error: zod.string().optional(),
 });
 
 /**
