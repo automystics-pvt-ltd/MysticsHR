@@ -78,8 +78,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import {
   ArrowLeft, Mail, Phone, MapPin, Calendar, Plus, Pencil, Trash2,
   GraduationCap, Briefcase, FileText, History, ClipboardList, Download,
-  TrendingUp, Upload, Award, BadgeCheck, Users, AlertCircle,
+  TrendingUp, Upload, Award, BadgeCheck, Users, AlertCircle, Eye,
 } from "lucide-react";
+import { previewIdCard } from "@/lib/idCardPreview";
+import { employeeAvatarSrc } from "@/lib/avatarSrc";
+import { AvatarUploader } from "@/components/AvatarUploader";
 import { CsvImportModal, type CsvColumn } from "@/components/CsvImportModal";
 
 const EDUCATION_CSV_COLUMNS: CsvColumn[] = [
@@ -869,9 +872,14 @@ function OnboardingTab({ employeeId, canEdit }: { employeeId: number; canEdit: b
       <div className="flex items-center justify-between">
         <h3 className="text-base font-semibold">Onboarding Checklist</h3>
         {canDownloadIdCard && (
-          <a href={`/api/employees/${employeeId}/id-card`} target="_blank" rel="noopener noreferrer">
-            <Button size="sm" className="gap-2"><Download className="w-3.5 h-3.5" />Download ID Card</Button>
-          </a>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => previewIdCard(employeeId)}>
+              <Eye className="w-3.5 h-3.5" />Preview ID Card
+            </Button>
+            <a href={`/api/employees/${employeeId}/id-card`} target="_blank" rel="noopener noreferrer">
+              <Button size="sm" className="gap-2"><Download className="w-3.5 h-3.5" />Download ID Card</Button>
+            </a>
+          </div>
         )}
       </div>
       <div className="space-y-2">
@@ -948,7 +956,7 @@ export default function EmployeeDetailPage() {
     firstName: "", lastName: "", email: "", phone: "", dateOfBirth: "",
     gender: "", location: "", departmentId: "", designationId: "", managerId: "",
     employmentType: "", status: "", dateOfJoining: "", ctc: "",
-    branchId: "", defaultShiftTemplateId: "",
+    branchId: "", defaultShiftTemplateId: "", avatarUrl: "",
   });
 
   const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -1012,6 +1020,7 @@ export default function EmployeeDetailPage() {
       ctc: String(emp.ctc ?? ""),
       branchId: String((emp as any).branchId ?? ""),
       defaultShiftTemplateId: String((emp as any).defaultShiftTemplateId ?? ""),
+      avatarUrl: emp.avatarUrl ?? "",
     });
     setEditingEmployee(true);
   }
@@ -1048,6 +1057,7 @@ export default function EmployeeDetailPage() {
       if (empForm.managerId && empForm.managerId !== "0") payload.managerId = Number(empForm.managerId);
       payload.branchId = empForm.branchId ? Number(empForm.branchId) : null;
       payload.defaultShiftTemplateId = empForm.defaultShiftTemplateId ? Number(empForm.defaultShiftTemplateId) : null;
+      if (empForm.avatarUrl !== (emp?.avatarUrl ?? "")) payload.avatarUrl = empForm.avatarUrl || null;
 
       await updateEmp.mutateAsync({ id: empId, data: payload });
       setEditingEmployee(false);
@@ -1138,7 +1148,7 @@ export default function EmployeeDetailPage() {
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
             <Avatar className="w-20 h-20 flex-shrink-0">
-              <AvatarImage src={emp.avatarUrl ?? undefined} />
+              <AvatarImage src={employeeAvatarSrc(emp.id, emp.avatarUrl)} />
               <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
                 {emp.firstName[0]}{emp.lastName[0]}
               </AvatarFallback>
@@ -1391,6 +1401,13 @@ export default function EmployeeDetailPage() {
             {/* Identity */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Identity</p>
+              <div className="mb-4">
+                <Label className="mb-1.5 block">Photo</Label>
+                <AvatarUploader
+                  previewUrl={employeeAvatarSrc(empId, empForm.avatarUrl)}
+                  onUploaded={(objectPath) => setEmpForm((prev) => ({ ...prev, avatarUrl: objectPath }))}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>First Name <span className="text-destructive">*</span></Label>

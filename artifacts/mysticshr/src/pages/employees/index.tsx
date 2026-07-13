@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Search, Plus, ChevronLeft, ChevronRight, Upload, FileDown, CheckCircle2, AlertCircle, X, FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { employeeAvatarSrc } from "@/lib/avatarSrc";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -310,7 +311,7 @@ export default function EmployeesPage() {
                 <CardContent className="p-5">
                   <div className="flex items-start gap-3">
                     <Avatar className="w-11 h-11 flex-shrink-0">
-                      <AvatarImage src={emp.avatarUrl ?? undefined} />
+                      <AvatarImage src={employeeAvatarSrc(emp.id, emp.avatarUrl)} />
                       <AvatarFallback className="text-sm font-semibold bg-primary/10 text-primary">
                         {emp.firstName[0]}{emp.lastName[0]}
                       </AvatarFallback>

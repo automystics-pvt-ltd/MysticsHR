@@ -396,6 +396,72 @@ export const UpdateMyTimezoneResponse = zod.object({
 });
 
 /**
+ * @summary Update the authenticated employee's own profile photo (self-service)
+ */
+export const UpdateMyAvatarBody = zod.object({
+  avatarUrl: zod
+    .string()
+    .describe("Object storage path returned by the presigned upload flow."),
+});
+
+export const UpdateMyAvatarResponse = zod.object({
+  id: zod.number(),
+  employeeId: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string(),
+  phone: zod.string().nullish(),
+  dateOfBirth: zod.coerce.date().nullish(),
+  gender: zod.string().nullish(),
+  departmentId: zod.number().nullish(),
+  departmentName: zod.string().nullish(),
+  designationId: zod.number().nullish(),
+  designationTitle: zod.string().nullish(),
+  employmentType: zod.string(),
+  status: zod.string(),
+  dateOfJoining: zod.coerce.date().nullish(),
+  ctc: zod.number().nullish(),
+  managerId: zod.number().nullish(),
+  managerName: zod.string().nullish(),
+  location: zod.string().nullish(),
+  timezone: zod
+    .string()
+    .optional()
+    .describe(
+      'IANA timezone identifier for this employee (e.g. \"Asia\/Kolkata\").',
+    ),
+  avatarUrl: zod.string().nullish(),
+  isDeleted: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Get the tenant's configured employee ID prefix (validation hint only)
+ */
+export const GetEmployeeIdConfigResponse = zod.object({
+  employeeIdPrefix: zod.string().nullish(),
+});
+
+/**
+ * @summary On-screen HTML preview of the employee ID card (same branding/fields as the PDF)
+ */
+export const PreviewEmployeeIdCardParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PreviewEmployeeIdCardResponse = zod.object({
+  html: zod.string().optional(),
+});
+
+/**
+ * @summary Serve an employee's uploaded photo
+ */
+export const GetEmployeeAvatarParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary List distinct skill names held by any non-deleted employee
  */
 export const ListDistinctEmployeeSkillsResponse = zod.object({
@@ -6120,6 +6186,7 @@ export const GetEssProfileResponse = zod.object({
   department: zod.string().nullish(),
   dateOfJoining: zod.string().nullish(),
   phone: zod.string().nullish(),
+  avatarUrl: zod.string().nullish(),
   personalEmail: zod.string().nullish(),
   currentAddress: zod.string().nullish(),
   emergencyContactName: zod.string().nullish(),
@@ -6148,6 +6215,7 @@ export const UpdateEssProfileResponse = zod.object({
   department: zod.string().nullish(),
   dateOfJoining: zod.string().nullish(),
   phone: zod.string().nullish(),
+  avatarUrl: zod.string().nullish(),
   personalEmail: zod.string().nullish(),
   currentAddress: zod.string().nullish(),
   emergencyContactName: zod.string().nullish(),

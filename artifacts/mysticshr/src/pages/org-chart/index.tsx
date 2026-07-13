@@ -11,6 +11,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronDown, ChevronRight, Search, Users, Network, TrendingUp, FileImage, FileDown, Loader2, Filter, X } from "lucide-react";
 import { useCurrentHrmsUser, hasRole } from "@/lib/useCurrentHrmsUser";
+import { employeeAvatarSrc } from "@/lib/avatarSrc";
 import { toast } from "sonner";
 import { exportOrgChartPng, exportOrgChartPdf } from "./export-utils";
 
@@ -124,7 +125,7 @@ function NodeCard({
       <CardContent className="p-3">
         <div className="flex items-start gap-3">
           <Avatar className="w-12 h-12 shrink-0">
-            {node.avatarUrl ? <AvatarImage src={node.avatarUrl} alt={node.firstName} /> : null}
+            {node.avatarUrl ? <AvatarImage src={employeeAvatarSrc(node.id, node.avatarUrl)} alt={node.firstName} /> : null}
             <AvatarFallback>{initials(node.firstName, node.lastName)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">

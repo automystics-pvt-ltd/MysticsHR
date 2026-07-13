@@ -12,16 +12,26 @@ import {
   hrmsUsersTable,
   preOnboardingRecordsTable,
   candidatesTable,
+  employeeProfilesTable,
 } from "@workspace/db/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import QRCode from "qrcode";
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts, PDFFont, PDFPage } from "pdf-lib";
 import { DEFAULT_ONBOARDING_TASKS } from "../lib/onboarding-utils";
+import { getIdCardConfig, embedLogoImage, hexToRgbTriple, type IdCardConfig } from "../lib/tenantBranding";
+import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 
 const router = Router();
 
 const HR_ROLES = ["customer_admin", "hr_manager", "hr_executive"] as const;
 const HR_READ_ROLES = ["customer_admin", "hr_manager", "hr_executive", "hod", "payroll_admin"] as const;
+
+function buildAppUrl(path: string): string {
+  const base = process.env.APP_URL
+    ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
+  if (!base) return path;
+  return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 async function recomputeChecklist(checklistId: number, tenantId: number) {
   const tasks = await db
@@ -484,6 +494,88 @@ router.delete("/induction-sessions/:id", requireHrmsUser, requireRole(...HR_ROLE
   }
 });
 
+class IdCardBlockedError extends Error {
+  constructor(public statusPayload: Record<string, unknown>) { super("ID card blocked"); }
+}
+
+async function resolveIdCardEmployee(id: number, tenantId: number) {
+  const [emp] = await db
+    .select({
+      id: employeesTable.id,
+      employeeId: employeesTable.employeeId,
+      firstName: employeesTable.firstName,
+      lastName: employeesTable.lastName,
+      email: employeesTable.email,
+      avatarUrl: employeesTable.avatarUrl,
+      designationTitle: designationsTable.title,
+      departmentName: departmentsTable.name,
+      bloodGroup: employeeProfilesTable.bloodGroup,
+      emergencyContactName: employeeProfilesTable.emergencyContactName,
+      emergencyContactPhone: employeeProfilesTable.emergencyContactPhone,
+      emergencyContactRelation: employeeProfilesTable.emergencyContactRelation,
+    })
+    .from(employeesTable)
+    .leftJoin(designationsTable, and(eq(employeesTable.designationId, designationsTable.id), eq(designationsTable.tenantId, tenantId)))
+    .leftJoin(departmentsTable, and(eq(employeesTable.departmentId, departmentsTable.id), eq(departmentsTable.tenantId, tenantId)))
+    .leftJoin(employeeProfilesTable, and(eq(employeeProfilesTable.employeeId, employeesTable.id), eq(employeeProfilesTable.tenantId, tenantId)))
+    .where(and(eq(employeesTable.id, id), eq(employeesTable.tenantId, tenantId)))
+    .limit(1);
+
+  if (!emp) throw new IdCardBlockedError({ status: 404, body: { error: "Employee not found" } });
+
+  const [checklist] = await db
+    .select()
+    .from(onboardingChecklistsTable)
+    .where(and(eq(onboardingChecklistsTable.employeeId, id), eq(onboardingChecklistsTable.tenantId, tenantId)))
+    .limit(1);
+
+  if (!checklist || checklist.completionPercentage < 100) {
+    throw new IdCardBlockedError({
+      status: 403,
+      body: {
+        error: "ID card cannot be generated: onboarding checklist is not 100% complete.",
+        completionPercentage: checklist?.completionPercentage ?? 0,
+      },
+    });
+  }
+
+  const [preOnboardingRecord] = await db
+    .select({ completionPercentage: preOnboardingRecordsTable.completionPercentage })
+    .from(preOnboardingRecordsTable)
+    .innerJoin(candidatesTable, eq(preOnboardingRecordsTable.candidateId, candidatesTable.id))
+    .where(and(eq(candidatesTable.email, emp.email), eq(preOnboardingRecordsTable.tenantId, tenantId)))
+    .limit(1);
+
+  if (preOnboardingRecord && preOnboardingRecord.completionPercentage < 100) {
+    throw new IdCardBlockedError({
+      status: 403,
+      body: {
+        error: "ID card cannot be generated: pre-onboarding document verification is not complete.",
+        documentCompletionPercentage: preOnboardingRecord.completionPercentage,
+      },
+    });
+  }
+
+  return { emp, checklist };
+}
+
+async function embedEmployeePhoto(pdfDoc: PDFDocument, avatarUrl: string | null | undefined) {
+  if (!avatarUrl) return null;
+  try {
+    const objectStorageService = new ObjectStorageService();
+    const file = await objectStorageService.getObjectEntityFile(avatarUrl);
+    const response = await objectStorageService.downloadObject(file);
+    if (!response.body) return null;
+    const buf = Buffer.from(await response.arrayBuffer());
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("png")) return await pdfDoc.embedPng(buf);
+    return await pdfDoc.embedJpg(buf);
+  } catch (e) {
+    if (!(e instanceof ObjectNotFoundError)) console.error("Employee photo embed failed (non-fatal):", e);
+    return null;
+  }
+}
+
 router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROLES, "employee"), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
@@ -499,67 +591,21 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
         return;
       }
     }
-    const [emp] = await db
-      .select({
-        id: employeesTable.id,
-        employeeId: employeesTable.employeeId,
-        firstName: employeesTable.firstName,
-        lastName: employeesTable.lastName,
-        email: employeesTable.email,
-        avatarUrl: employeesTable.avatarUrl,
-        designationTitle: designationsTable.title,
-        departmentName: departmentsTable.name,
-      })
-      .from(employeesTable)
-      .leftJoin(designationsTable, and(eq(employeesTable.designationId, designationsTable.id), eq(designationsTable.tenantId, tenantId)))
-      .leftJoin(departmentsTable, and(eq(employeesTable.departmentId, departmentsTable.id), eq(departmentsTable.tenantId, tenantId)))
-      .where(and(eq(employeesTable.id, id), eq(employeesTable.tenantId, tenantId)))
-      .limit(1);
 
-    if (!emp) {
-      res.status(404).json({ error: "Employee not found" });
-      return;
+    let emp, checklist;
+    try {
+      ({ emp, checklist } = await resolveIdCardEmployee(id, tenantId));
+    } catch (e) {
+      if (e instanceof IdCardBlockedError) { res.status(e.statusPayload.status as number).json(e.statusPayload.body); return; }
+      throw e;
     }
 
-    const [checklist] = await db
-      .select()
-      .from(onboardingChecklistsTable)
-      .where(and(eq(onboardingChecklistsTable.employeeId, id), eq(onboardingChecklistsTable.tenantId, tenantId)))
-      .limit(1);
-
-    if (!checklist || checklist.completionPercentage < 100) {
-      res.status(403).json({
-        error: "ID card cannot be generated: onboarding checklist is not 100% complete.",
-        completionPercentage: checklist?.completionPercentage ?? 0,
-      });
-      return;
-    }
-
-    const [preOnboardingRecord] = await db
-      .select({ completionPercentage: preOnboardingRecordsTable.completionPercentage })
-      .from(preOnboardingRecordsTable)
-      .innerJoin(candidatesTable, eq(preOnboardingRecordsTable.candidateId, candidatesTable.id))
-      .where(and(eq(candidatesTable.email, emp.email), eq(preOnboardingRecordsTable.tenantId, tenantId)))
-      .limit(1);
-
-    if (preOnboardingRecord && preOnboardingRecord.completionPercentage < 100) {
-      res.status(403).json({
-        error: "ID card cannot be generated: pre-onboarding document verification is not complete.",
-        documentCompletionPercentage: preOnboardingRecord.completionPercentage,
-      });
-      return;
-    }
-
+    const config = await getIdCardConfig(tenantId);
+    const { fields } = config;
     const employeeName = `${emp.firstName} ${emp.lastName}`;
-    const qrData = JSON.stringify({
-      id: emp.employeeId,
-      name: employeeName,
-      dept: emp.departmentName ?? "",
-      designation: emp.designationTitle ?? "",
-    });
-    const qrCodeDataUrl = await QRCode.toDataURL(qrData, { width: 120, margin: 1 });
-    const qrBase64 = qrCodeDataUrl.replace(/^data:image\/png;base64,/, "");
-    const qrBuf = Buffer.from(qrBase64, "base64");
+    const profileUrl = buildAppUrl(`/employees/${emp.id}`);
+    const qrCodeDataUrl = await QRCode.toDataURL(profileUrl, { width: 120, margin: 1 });
+    const qrBuf = Buffer.from(qrCodeDataUrl.replace(/^data:image\/png;base64,/, ""), "base64");
 
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([226, 340]);
@@ -568,8 +614,9 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
+    const [br, bg, bb] = hexToRgbTriple(config.brandColorHex);
+    const blue = rgb(br, bg, bb);
     const dark = rgb(0.118, 0.176, 0.298);
-    const blue = rgb(0.231, 0.510, 0.965);
     const white = rgb(1, 1, 1);
     const muted = rgb(0.580, 0.627, 0.729);
     const panel = rgb(0.200, 0.263, 0.384);
@@ -578,37 +625,74 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
     page.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: blue });
     page.drawRectangle({ x: 0, y: 0, width, height: 8, color: blue });
 
-    page.drawText("AUTOMYSTICS TECHNOLOGIES", { x: 0, y: height - 28, size: 9, font: boldFont, color: white, maxWidth: width, lineHeight: 14 });
-    page.drawText("EMPLOYEE ID CARD", { x: 68, y: height - 40, size: 7, font: regularFont, color: muted });
+    const logoImg = await embedLogoImage(pdfDoc, config.logoDataUri);
+    if (logoImg) {
+      const logoH = 14;
+      const logoW = (logoImg.width / logoImg.height) * logoH;
+      page.drawImage(logoImg, { x: (width - logoW) / 2, y: height - 26, width: logoW, height: logoH });
+    } else {
+      page.drawText(config.companyName, { x: 0, y: height - 28, size: 9, font: boldFont, color: white, maxWidth: width, lineHeight: 14 });
+    }
+    page.drawText(config.cardTitle, { x: 68, y: height - 40, size: 7, font: regularFont, color: muted });
 
-    page.drawRectangle({ x: 83, y: height - 116, width: 60, height: 60, color: panel });
-    page.drawText("PHOTO", { x: 101, y: height - 92, size: 7, font: regularFont, color: muted });
+    let y = height - 60;
 
-    const nameWidth = boldFont.widthOfTextAtSize(employeeName, 11);
-    page.drawText(employeeName, { x: (width - nameWidth) / 2, y: height - 135, size: 11, font: boldFont, color: white });
+    const photoImg = fields.photo ? await embedEmployeePhoto(pdfDoc, emp.avatarUrl) : null;
+    if (fields.photo) {
+      page.drawRectangle({ x: 83, y: y - 60, width: 60, height: 60, color: panel });
+      if (photoImg) {
+        page.drawImage(photoImg, { x: 83, y: y - 60, width: 60, height: 60 });
+      } else {
+        page.drawText("PHOTO", { x: 101, y: y - 34, size: 7, font: regularFont, color: muted });
+      }
+      y -= 76;
+    }
 
-    const desigText = (emp.designationTitle ?? "—").slice(0, 32);
-    const desigWidth = regularFont.widthOfTextAtSize(desigText, 8);
-    page.drawText(desigText, { x: (width - desigWidth) / 2, y: height - 150, size: 8, font: regularFont, color: blue });
+    if (fields.nameAndId) {
+      const nameWidth = boldFont.widthOfTextAtSize(employeeName, 11);
+      page.drawText(employeeName, { x: (width - nameWidth) / 2, y, size: 11, font: boldFont, color: white });
+      y -= 15;
+    }
 
-    page.drawLine({ start: { x: 20, y: height - 160 }, end: { x: 206, y: height - 160 }, thickness: 0.5, color: panel });
+    if (fields.designationDept) {
+      const desigText = (emp.designationTitle ?? "—").slice(0, 32);
+      const desigWidth = regularFont.widthOfTextAtSize(desigText, 8);
+      page.drawText(desigText, { x: (width - desigWidth) / 2, y, size: 8, font: regularFont, color: blue });
+      y -= 10;
+    }
 
-    const rows2 = [
-      ["Employee ID", emp.employeeId],
-      ["Department", emp.departmentName ?? "—"],
-      ["Email", emp.email.slice(0, 26)],
-    ];
+    y -= 5;
+    page.drawLine({ start: { x: 20, y }, end: { x: 206, y }, thickness: 0.5, color: panel });
+    y -= 16;
+
+    const rows2: Array<[string, string]> = [["Employee ID", emp.employeeId], ["Email", emp.email.slice(0, 26)]];
+    if (fields.designationDept) rows2.splice(1, 0, ["Department", emp.departmentName ?? "—"]);
+    if (fields.bloodGroup) rows2.push(["Blood Group", emp.bloodGroup ?? "—"]);
+    if (fields.emergencyContact && (emp.emergencyContactName || emp.emergencyContactPhone)) {
+      rows2.push(["Emergency", `${emp.emergencyContactName ?? "—"} ${emp.emergencyContactPhone ?? ""}`.trim().slice(0, 26)]);
+    }
     rows2.forEach(([label, value], i) => {
-      const y = height - 176 - i * 22;
-      page.drawText(label + ":", { x: 25, y, size: 7, font: regularFont, color: muted });
-      page.drawText(value, { x: 115, y, size: 7, font: boldFont, color: white });
+      const rowY = y - i * 22;
+      page.drawText(label + ":", { x: 25, y: rowY, size: 7, font: regularFont, color: muted });
+      page.drawText(value, { x: 115, y: rowY, size: 7, font: boldFont, color: white });
     });
+    y -= rows2.length * 22 + 6;
 
-    page.drawLine({ start: { x: 20, y: height - 242 }, end: { x: 206, y: height - 242 }, thickness: 0.5, color: panel });
+    page.drawLine({ start: { x: 20, y }, end: { x: 206, y }, thickness: 0.5, color: panel });
+    y -= 66;
 
-    const qrImage = await pdfDoc.embedPng(qrBuf);
-    page.drawImage(qrImage, { x: 83, y: height - 308, width: 60, height: 60 });
-    page.drawText("Scan to verify", { x: 80, y: height - 324, size: 6, font: regularFont, color: muted });
+    if (fields.qrCode) {
+      const qrImage = await pdfDoc.embedPng(qrBuf);
+      page.drawImage(qrImage, { x: 83, y, width: 60, height: 60 });
+      page.drawText("Scan to view profile", { x: 72, y: y - 16, size: 6, font: regularFont, color: muted });
+      y -= 24;
+    }
+
+    if (fields.signatureLine) {
+      y -= 8;
+      page.drawLine({ start: { x: 40, y }, end: { x: 186, y }, thickness: 0.5, color: muted });
+      page.drawText("Authorized Signature", { x: 68, y: y - 10, size: 6, font: regularFont, color: muted });
+    }
 
     const pdfBytes = await pdfDoc.save();
     const pdfBuffer = Buffer.from(pdfBytes);
@@ -640,6 +724,101 @@ router.get("/employees/:id/id-card", requireHrmsUser, requireRole(...HR_READ_ROL
     res.set("Content-Length", String(pdfBuffer.length));
     res.send(pdfBuffer);
   } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// On-screen HTML preview (same rules/branding as the PDF; used by the ID card page before download).
+router.get("/employees/:id/id-card/preview", requireHrmsUser, requireRole(...HR_READ_ROLES, "employee"), async (req, res) => {
+  try {
+    const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
+    if (req.hrmsUser?.role === "employee") {
+      const [hrmsUser] = await db
+        .select({ employeeId: hrmsUsersTable.employeeId })
+        .from(hrmsUsersTable)
+        .where(and(eq(hrmsUsersTable.id, req.hrmsUser.id), eq(hrmsUsersTable.tenantId, tenantId)))
+        .limit(1);
+      if (!hrmsUser?.employeeId || hrmsUser.employeeId !== id) {
+        res.status(403).json({ error: "Access denied. You can only view your own ID card." });
+        return;
+      }
+    }
+
+    const { emp } = await resolveIdCardEmployee(id, tenantId);
+    const config = await getIdCardConfig(tenantId);
+    const { fields } = config;
+    const employeeName = `${emp.firstName} ${emp.lastName}`;
+    const profileUrl = buildAppUrl(`/employees/${emp.id}`);
+    const qrCodeDataUrl = fields.qrCode ? await QRCode.toDataURL(profileUrl, { width: 160, margin: 1 }) : null;
+
+    const rows: Array<[string, string]> = [["Employee ID", emp.employeeId]];
+    if (fields.designationDept) rows.push(["Department", emp.departmentName ?? "—"]);
+    rows.push(["Email", emp.email]);
+    if (fields.bloodGroup) rows.push(["Blood Group", emp.bloodGroup ?? "—"]);
+    if (fields.emergencyContact && (emp.emergencyContactName || emp.emergencyContactPhone)) {
+      rows.push(["Emergency Contact", `${emp.emergencyContactName ?? "—"} (${emp.emergencyContactRelation ?? "—"}) — ${emp.emergencyContactPhone ?? "—"}`]);
+    }
+
+    // All values below originate from tenant-configured branding or employee
+    // profile fields — both are attacker-controllable (a malicious admin or
+    // an employee editing their own emergency contact). This HTML is opened
+    // via document.write() in the client, so any unescaped value here is a
+    // stored-XSS vector. Escape every interpolated string and validate the
+    // two attribute-context values (brand color, logo data URI) against a
+    // strict allowlist rather than escaping alone.
+    const esc = (s: unknown): string => String(s ?? "").replace(/[&<>"']/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string
+    ));
+    const safeBrandColor = /^#[0-9a-fA-F]{3,8}$/.test(config.brandColorHex || "") ? config.brandColorHex! : "#1e293b";
+    const safeLogoDataUri = typeof config.logoDataUri === "string" && /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(config.logoDataUri)
+      ? config.logoDataUri
+      : null;
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8" /><style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 24px; background: #f1f5f9; display: flex; justify-content: center; }
+  .card { width: 300px; border-radius: 14px; overflow: hidden; background: #1e2d4c; color: white; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+  .stripe { height: 8px; background: ${safeBrandColor}; }
+  .brand { text-align: center; padding: 10px 0 4px; }
+  .brand img { max-height: 24px; max-width: 140px; }
+  .brand .title { font-size: 10px; letter-spacing: 1px; color: #94a3b8; margin-top: 4px; }
+  .photo { width: 90px; height: 90px; border-radius: 8px; margin: 6px auto; background: #2e3f61; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 11px; overflow: hidden; }
+  .photo img { width: 100%; height: 100%; object-fit: cover; }
+  .name { text-align: center; font-size: 16px; font-weight: bold; margin-top: 6px; }
+  .desig { text-align: center; font-size: 12px; color: ${safeBrandColor}; margin-top: 2px; }
+  .divider { border: none; border-top: 1px solid #2e3f61; margin: 14px 20px; }
+  .rows { padding: 0 20px; }
+  .row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px; }
+  .row .label { color: #94a3b8; }
+  .qr { text-align: center; padding: 8px 0 20px; }
+  .qr img { width: 100px; height: 100px; }
+  .qr .hint { font-size: 9px; color: #94a3b8; margin-top: 4px; }
+  .sig { margin: 0 30px 20px; border-top: 1px solid #94a3b8; text-align: center; padding-top: 6px; font-size: 9px; color: #94a3b8; }
+</style></head>
+<body>
+  <div class="card">
+    <div class="stripe"></div>
+    <div class="brand">
+      ${safeLogoDataUri ? `<img src="${safeLogoDataUri}" alt="Logo" />` : `<div style="font-weight:bold;font-size:13px;">${esc(config.companyName)}</div>`}
+      <div class="title">${esc(config.cardTitle)}</div>
+    </div>
+    ${fields.photo ? `<div class="photo">${emp.avatarUrl ? `<img src="/api/employees/${emp.id}/avatar" />` : "PHOTO"}</div>` : ""}
+    ${fields.nameAndId ? `<div class="name">${esc(employeeName)}</div>` : ""}
+    ${fields.designationDept ? `<div class="desig">${esc(emp.designationTitle ?? "—")}</div>` : ""}
+    <hr class="divider" />
+    <div class="rows">
+      ${rows.map(([label, value]) => `<div class="row"><span class="label">${esc(label)}</span><span>${esc(value)}</span></div>`).join("")}
+    </div>
+    ${fields.qrCode && qrCodeDataUrl ? `<div class="qr"><img src="${qrCodeDataUrl}" /><div class="hint">Scan to view profile</div></div>` : ""}
+    ${fields.signatureLine ? `<div class="sig">Authorized Signature</div>` : `<div style="height:20px"></div>`}
+  </div>
+</body></html>`;
+
+    res.json({ html });
+  } catch (err) {
+    if (err instanceof IdCardBlockedError) { res.status(err.statusPayload.status as number).json(err.statusPayload.body); return; }
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }

@@ -60,6 +60,12 @@ export const api = {
     apiFetch<Tenant>(`/platform/tenants/${id}/config`, { method: "PATCH", body: JSON.stringify(data) }),
   updateTenantTheme: (id: number, themeConfig: ThemeConfig) =>
     apiFetch<{ ok: boolean; themeConfig: ThemeConfig }>(`/platform/tenants/${id}/theme`, { method: "PATCH", body: JSON.stringify({ themeConfig }) }),
+  updateTenantPayslipConfig: (id: number, payslipConfig: PayslipConfig | null) =>
+    apiFetch<{ ok: boolean; payslipConfig: PayslipConfig | null }>(`/platform/tenants/${id}/payslip-config`, { method: "PATCH", body: JSON.stringify({ payslipConfig }) }),
+  updateTenantIdCardConfig: (id: number, idCardConfig: IdCardConfig | null) =>
+    apiFetch<{ ok: boolean; idCardConfig: IdCardConfig | null }>(`/platform/tenants/${id}/id-card-config`, { method: "PATCH", body: JSON.stringify({ idCardConfig }) }),
+  updateTenantEmployeeIdPrefix: (id: number, employeeIdPrefix: string | null) =>
+    apiFetch<Tenant>(`/platform/tenants/${id}`, { method: "PATCH", body: JSON.stringify({ employeeIdPrefix }) }),
 
   // Tenant Health
   getTenantHealth: (id: number) => apiFetch<TenantHealth>(`/platform/tenants/${id}/health`),
@@ -191,6 +197,9 @@ export interface TenantDetail extends Tenant {
   enabledModules?: string[] | null; enabledFeatures?: string[] | null;
   notes?: string | null; subscriptionStartsAt?: string | null;
   activeUserCount?: number;
+  payslipConfig?: PayslipConfig | null;
+  idCardConfig?: IdCardConfig | null;
+  employeeIdPrefix?: string | null;
 }
 
 export interface ThemeConfig {
@@ -205,6 +214,32 @@ export interface TenantConfig {
   planEnabledModules?: string[] | null; planEnabledFeatures?: string[] | null;
   planMaxUsers?: number | null; planMaxEmployees?: number | null;
   planMaxBranches?: number | null; planMaxApiCalls?: number | null;
+}
+
+export interface PayslipConfig {
+  companyName?: string;
+  addressLine1?: string;
+  brandColorHex?: string;
+  logoDataUri?: string | null;
+  footerNote?: string;
+}
+
+export interface IdCardFields {
+  photo: boolean;
+  nameAndId: boolean;
+  designationDept: boolean;
+  bloodGroup: boolean;
+  qrCode: boolean;
+  emergencyContact: boolean;
+  signatureLine: boolean;
+}
+
+export interface IdCardConfig {
+  cardTitle?: string;
+  companyName?: string;
+  brandColorHex?: string;
+  logoDataUri?: string | null;
+  fields: IdCardFields;
 }
 
 export interface TenantHealth {

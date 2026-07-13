@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, TenantDetail, SubscriptionPlan, Invoice, ThemeConfig, fmtMoney } from "@/lib/api";
+import { api, TenantDetail, SubscriptionPlan, Invoice, ThemeConfig, PayslipConfig, IdCardConfig, IdCardFields, fmtMoney } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1648,6 +1648,245 @@ function ThemeTab({ tenant }: { tenant: TenantDetail }) {
   );
 }
 
+// ─── Payslip & ID Card Design Tab ──────────────────────────────────────────────
+
+const DEFAULT_ID_CARD_FIELDS: IdCardFields = {
+  photo: true, nameAndId: true, designationDept: true,
+  bloodGroup: false, qrCode: true, emergencyContact: false, signatureLine: false,
+};
+
+const ID_CARD_FIELD_OPTIONS: { key: keyof IdCardFields; label: string }[] = [
+  { key: "photo", label: "Photo" },
+  { key: "nameAndId", label: "Name & Employee ID" },
+  { key: "designationDept", label: "Designation & Department" },
+  { key: "bloodGroup", label: "Blood Group" },
+  { key: "qrCode", label: "QR Code (links to profile)" },
+  { key: "emergencyContact", label: "Emergency Contact" },
+  { key: "signatureLine", label: "Signature Line" },
+];
+
+function readFileAsDataUri(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function LogoUploadField({ value, onChange, label }: { value: string | null | undefined; onChange: (v: string | null) => void; label: string }) {
+  const { toast } = useToast();
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex items-center gap-3">
+        {value ? (
+          <img src={value} alt="Logo" className="h-10 max-w-[120px] object-contain rounded border border-border bg-white p-1" />
+        ) : (
+          <div className="h-10 w-20 rounded border border-dashed border-border flex items-center justify-center text-[10px] text-muted-foreground">No logo</div>
+        )}
+        <input
+          type="file"
+          accept="image/png,image/jpeg"
+          className="text-xs"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            if (file.size > 300_000) {
+              toast({ title: "Image too large", description: "Please use an image under ~300KB.", variant: "destructive" });
+              return;
+            }
+            onChange(await readFileAsDataUri(file));
+          }}
+        />
+        {value && (
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onChange(null)}>Remove</Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PayslipIdCardTab({ tenant }: { tenant: TenantDetail }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: config, isLoading } = useQuery({
+    queryKey: ["platform-tenant-config", tenant.id],
+    queryFn: () => api.getTenantConfig(tenant.id),
+  });
+
+  const [payslip, setPayslip] = useState<PayslipConfig | null>(null);
+  const [idCard, setIdCard] = useState<IdCardConfig | null>(null);
+  const [prefix, setPrefix] = useState<string>(tenant.employeeIdPrefix ?? "");
+  const [dirty, setDirty] = useState(false);
+
+  const effectivePayslip: PayslipConfig = payslip ?? (config as any)?.payslipConfig ?? {};
+  const effectiveIdCard: IdCardConfig = idCard ?? (config as any)?.idCardConfig ?? { fields: DEFAULT_ID_CARD_FIELDS };
+  const fields = effectiveIdCard.fields ?? DEFAULT_ID_CARD_FIELDS;
+
+  const setPayslipField = <K extends keyof PayslipConfig>(k: K, v: PayslipConfig[K]) => {
+    setPayslip({ ...effectivePayslip, [k]: v });
+    setDirty(true);
+  };
+  const setIdCardField = <K extends keyof IdCardConfig>(k: K, v: IdCardConfig[K]) => {
+    setIdCard({ ...effectiveIdCard, fields, [k]: v });
+    setDirty(true);
+  };
+  const toggleField = (k: keyof IdCardFields) => {
+    setIdCard({ ...effectiveIdCard, fields: { ...fields, [k]: !fields[k] } });
+    setDirty(true);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      // Only PATCH the sections the admin actually touched. `payslip`/`idCard`
+      // are null until their section is edited — sending the raw draft state
+      // unconditionally would overwrite an untouched section with null and
+      // wipe out previously saved config for it.
+      const calls: Promise<unknown>[] = [];
+      if (payslip !== null) calls.push(api.updateTenantPayslipConfig(tenant.id, payslip));
+      if (idCard !== null) calls.push(api.updateTenantIdCardConfig(tenant.id, idCard));
+      if (prefix !== (tenant.employeeIdPrefix ?? "")) {
+        calls.push(api.updateTenantEmployeeIdPrefix(tenant.id, prefix.trim() ? prefix.trim().toUpperCase() : null));
+      }
+      await Promise.all(calls);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["platform-tenant-config", tenant.id] });
+      void qc.invalidateQueries({ queryKey: ["platform-tenant", tenant.id] });
+      toast({ title: "Saved", description: "Payslip & ID card design updated for this tenant." });
+      setDirty(false);
+      setPayslip(null);
+      setIdCard(null);
+    },
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  if (isLoading) return <div className="text-sm text-muted-foreground py-6 text-center">Loading…</div>;
+
+  const brandColor = effectiveIdCard.brandColorHex || "#3b82f6";
+
+  return (
+    <div className="space-y-6">
+      {/* Payslip letterhead */}
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2"><FileText className="w-4 h-4" />Payslip Letterhead</CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 space-y-4">
+          <p className="text-xs text-muted-foreground -mt-1">Leave blank to keep the platform default letterhead ("Automystics Technologies").</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Company Name</Label>
+              <Input placeholder="Automystics Technologies" value={effectivePayslip.companyName ?? ""} onChange={e => setPayslipField("companyName", e.target.value)} className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Brand Color</Label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={effectivePayslip.brandColorHex || "#1e293b"} onChange={e => setPayslipField("brandColorHex", e.target.value)} className="h-9 w-12 rounded border border-border bg-transparent" />
+                <Input value={effectivePayslip.brandColorHex ?? ""} placeholder="#1e293b" onChange={e => setPayslipField("brandColorHex", e.target.value)} className="h-9" />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Address Line</Label>
+            <Input placeholder="123 Business Park, Bengaluru" value={effectivePayslip.addressLine1 ?? ""} onChange={e => setPayslipField("addressLine1", e.target.value)} className="h-9" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Footer Note</Label>
+            <Input placeholder="This is a system-generated payslip." value={effectivePayslip.footerNote ?? ""} onChange={e => setPayslipField("footerNote", e.target.value)} className="h-9" />
+          </div>
+          <LogoUploadField label="Logo" value={effectivePayslip.logoDataUri} onChange={v => setPayslipField("logoDataUri", v)} />
+        </CardContent>
+      </Card>
+
+      {/* ID card design */}
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2"><CreditCard className="w-4 h-4" />Employee ID Card Design</CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 space-y-5">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Card Title</Label>
+              <Input placeholder="EMPLOYEE ID CARD" value={effectiveIdCard.cardTitle ?? ""} onChange={e => setIdCardField("cardTitle", e.target.value)} className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Company Name</Label>
+              <Input placeholder="AUTOMYSTICS TECHNOLOGIES" value={effectiveIdCard.companyName ?? ""} onChange={e => setIdCardField("companyName", e.target.value)} className="h-9" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Brand Color</Label>
+            <div className="flex items-center gap-2">
+              <input type="color" value={brandColor} onChange={e => setIdCardField("brandColorHex", e.target.value)} className="h-9 w-12 rounded border border-border bg-transparent" />
+              <Input value={effectiveIdCard.brandColorHex ?? ""} placeholder="#3b82f6" onChange={e => setIdCardField("brandColorHex", e.target.value)} className="h-9 max-w-[160px]" />
+            </div>
+          </div>
+          <LogoUploadField label="Logo" value={effectiveIdCard.logoDataUri} onChange={v => setIdCardField("logoDataUri", v)} />
+
+          <div className="space-y-2">
+            <Label className="text-xs">Fields shown on the card</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {ID_CARD_FIELD_OPTIONS.map(opt => (
+                <label key={opt.key} className="flex items-center gap-2 text-xs p-2 rounded-lg border border-border bg-muted/20 cursor-pointer">
+                  <Switch checked={!!fields[opt.key]} onCheckedChange={() => toggleField(opt.key)} />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Live preview */}
+          <div className="flex justify-center pt-2">
+            <div className="w-[220px] rounded-2xl overflow-hidden shadow-lg" style={{ backgroundColor: "#1e2d4c" }}>
+              <div className="h-2" style={{ backgroundColor: brandColor }} />
+              <div className="text-center pt-3 pb-1">
+                {effectiveIdCard.logoDataUri
+                  ? <img src={effectiveIdCard.logoDataUri} className="h-6 mx-auto object-contain" />
+                  : <div className="text-white text-xs font-bold">{effectiveIdCard.companyName || "AUTOMYSTICS TECHNOLOGIES"}</div>}
+                <div className="text-[9px] text-slate-400 mt-1 tracking-wide">{effectiveIdCard.cardTitle || "EMPLOYEE ID CARD"}</div>
+              </div>
+              {fields.photo && <div className="w-16 h-16 mx-auto my-2 rounded bg-slate-700 flex items-center justify-center text-[9px] text-slate-400">PHOTO</div>}
+              {fields.nameAndId && <div className="text-center text-white text-sm font-semibold">Jane Doe</div>}
+              {fields.designationDept && <div className="text-center text-[10px] mt-0.5" style={{ color: brandColor }}>Software Engineer</div>}
+              <div className="border-t border-slate-700 my-3 mx-5" />
+              <div className="px-5 space-y-1.5 text-[10px]">
+                <div className="flex justify-between text-slate-300"><span className="text-slate-500">Employee ID</span><span>{tenant.employeeIdPrefix || "EMP"}-1024</span></div>
+                {fields.bloodGroup && <div className="flex justify-between text-slate-300"><span className="text-slate-500">Blood Group</span><span>O+</span></div>}
+                {fields.emergencyContact && <div className="flex justify-between text-slate-300"><span className="text-slate-500">Emergency</span><span>John — 98XXXXXXXX</span></div>}
+              </div>
+              {fields.qrCode && <div className="flex justify-center py-3"><div className="w-14 h-14 bg-white rounded" /></div>}
+              {fields.signatureLine && <div className="mx-8 mb-4 border-t border-slate-500 text-center text-[8px] text-slate-500 pt-1">Authorized Signature</div>}
+              {!fields.qrCode && !fields.signatureLine && <div className="h-4" />}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Employee ID prefix */}
+      <Card className="bg-card border-card-border">
+        <CardHeader className="pb-3 border-b border-border px-5 pt-5">
+          <CardTitle className="text-sm font-semibold">Employee ID Prefix</CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Optional validation hint. When set, new employee IDs must start with this prefix. IDs are still entered manually — this does not auto-generate or auto-increment them.
+          </p>
+          <Input placeholder="e.g. EMP-" value={prefix} onChange={e => { setPrefix(e.target.value); setDirty(true); }} className="h-9 max-w-[200px]" />
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !dirty} className="h-9 px-6">
+          {saveMutation.isPending ? "Saving…" : "Save Changes"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -1750,6 +1989,9 @@ export function TenantDetailPage() {
           <TabsTrigger value="theme" className="gap-1.5 text-xs">
             <Palette className="w-3.5 h-3.5" />Theme
           </TabsTrigger>
+          <TabsTrigger value="payslip-idcard" className="gap-1.5 text-xs">
+            <CreditCard className="w-3.5 h-3.5" />Payslip & ID Card
+          </TabsTrigger>
           <TabsTrigger value="health" className="gap-1.5 text-xs">
             <Activity className="w-3.5 h-3.5" />Health
           </TabsTrigger>
@@ -1772,6 +2014,9 @@ export function TenantDetailPage() {
         </TabsContent>
         <TabsContent value="theme" className="mt-5">
           <ThemeTab tenant={tenant} />
+        </TabsContent>
+        <TabsContent value="payslip-idcard" className="mt-5">
+          <PayslipIdCardTab tenant={tenant} />
         </TabsContent>
         <TabsContent value="health" className="mt-5">
           <HealthTab tenantId={tenantId} />

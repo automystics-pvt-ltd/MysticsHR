@@ -26,8 +26,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Download,
-  GraduationCap, ClipboardList, Pencil,
+  GraduationCap, ClipboardList, Pencil, Eye,
 } from "lucide-react";
+import { previewIdCard } from "@/lib/idCardPreview";
 import { format } from "date-fns";
 import { useCurrentHrmsUser, hasRole } from "@/lib/useCurrentHrmsUser";
 
@@ -169,9 +170,14 @@ export default function OnboardingDetailPage() {
             </div>
             <div className="flex items-center gap-3">
               {canDownloadIdCard && (
-                <a href={`/api/employees/${employeeId}/id-card`} target="_blank" rel="noopener noreferrer">
-                  <Button size="sm" className="gap-2"><Download className="w-4 h-4" />Download ID Card</Button>
-                </a>
+                <>
+                  <Button size="sm" variant="outline" className="gap-2" onClick={() => previewIdCard(employeeId!)}>
+                    <Eye className="w-4 h-4" />Preview ID Card
+                  </Button>
+                  <a href={`/api/employees/${employeeId}/id-card`} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" className="gap-2"><Download className="w-4 h-4" />Download ID Card</Button>
+                  </a>
+                </>
               )}
               {employeeId && (
                 <Link href={`/employees/${employeeId}`}>

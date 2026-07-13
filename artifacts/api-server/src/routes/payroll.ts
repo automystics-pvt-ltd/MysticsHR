@@ -14,6 +14,7 @@ import {
   salaryComponentTypeEnum, lockExceptionTypeEnum, salaryRevisionStatusEnum,
 } from "@workspace/db/schema";
 import { eq, and, desc, asc, or, gte, lte, sql } from "drizzle-orm";
+import { getPayslipLetterhead, embedLogoImage, hexToRgbTriple, type PayslipLetterhead } from "../lib/tenantBranding";
 
 const router = Router();
 
@@ -1078,6 +1079,7 @@ router.post("/payroll/runs/:id/approve", requireHrmsUser, requireRole(...PAYROLL
     await db.update(payrollRecordsTable).set({ status: "Approved", updatedAt: new Date() }).where(and(eq(payrollRecordsTable.payrollRunId, runId), eq(payrollRecordsTable.tenantId, req.hrmsUser!.tenantId)));
 
     const records = await db.select().from(payrollRecordsTable).where(and(eq(payrollRecordsTable.payrollRunId, runId), eq(payrollRecordsTable.tenantId, req.hrmsUser!.tenantId)));
+    const letterhead = await getPayslipLetterhead(req.hrmsUser!.tenantId);
     for (const record of records) {
       const [emp] = await db.select().from(employeesTable).where(and(eq(employeesTable.id, record.employeeId), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)));
       const [dept] = emp?.departmentId ? await db.select({ name: departmentsTable.name }).from(departmentsTable).where(and(eq(departmentsTable.id, emp.departmentId), eq(departmentsTable.tenantId, req.hrmsUser!.tenantId))) : [null];
@@ -1105,7 +1107,7 @@ router.post("/payroll/runs/:id/approve", requireHrmsUser, requireRole(...PAYROLL
       };
 
       const monthName = new Date(run.periodYear, run.periodMonth - 1).toLocaleString("en-IN", { month: "long" });
-      const html = generatePayslipHtml(payslipData, monthName, run.periodYear);
+      const html = generatePayslipHtml(payslipData, monthName, run.periodYear, letterhead);
 
     const [existingSlip] = await db.select().from(payslipsTable).where(and(eq(payslipsTable.payrollRecordId, record.id), eq(payslipsTable.tenantId, run.tenantId)));
       if (existingSlip) {
@@ -1311,7 +1313,8 @@ router.get("/payroll/payslips/:id", requireHrmsUser, requireRole(...ALL_ROLES), 
         };
 
         const monthName = new Date(payslip.periodYear, payslip.periodMonth - 1).toLocaleString("en-IN", { month: "long" });
-        const html = generatePayslipHtml(payslipData as any, monthName, payslip.periodYear);
+        const letterhead = await getPayslipLetterhead(u.tenantId);
+        const html = generatePayslipHtml(payslipData as any, monthName, payslip.periodYear, letterhead);
 
         await db.update(payslipsTable)
           .set({ payslipData, htmlContent: html, generatedAt: new Date() })
@@ -2065,6 +2068,14 @@ interface PayslipData {
   taxRegime: string | null;
 }
 
+const DEFAULT_LETTERHEAD: PayslipLetterhead = {
+  companyName: "Automystics Technologies",
+  addressLine1: "",
+  brandColorHex: "#1e293b",
+  logoDataUri: null,
+  footerNote: "",
+};
+
 function escapeHtml(str: string | null | undefined): string {
   if (!str) return "";
   return str
@@ -2075,18 +2086,28 @@ function escapeHtml(str: string | null | undefined): string {
     .replace(/'/g, "&#39;");
 }
 
-function generatePayslipHtml(data: PayslipData, monthName: string, year: number): string {
+function generatePayslipHtml(data: PayslipData, monthName: string, year: number, letterhead: PayslipLetterhead = DEFAULT_LETTERHEAD): string {
   const fmt = (n: string | number | null | undefined) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
   const e = data.earnings;
   const d = data.deductions;
   const a = data.attendance;
+  // brandColorHex/logoDataUri come from tenant-configured letterhead settings
+  // (platform-admin controlled, but still external input relative to this
+  // renderer) and are interpolated into style/attribute contexts below, so
+  // validate them against a strict allowlist rather than trusting them as-is.
+  const headerColor = /^#[0-9a-fA-F]{3,8}$/.test(letterhead.brandColorHex || "") ? letterhead.brandColorHex! : "#1e293b";
+  const safeLogoDataUri = typeof letterhead.logoDataUri === "string" && /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(letterhead.logoDataUri)
+    ? letterhead.logoDataUri
+    : null;
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
 <style>
   body { font-family: Arial, sans-serif; font-size: 12px; color: #1e293b; margin: 0; padding: 20px; }
-  .header { background: #1e293b; color: white; padding: 16px 20px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
+  .header { background: ${headerColor}; color: white; padding: 16px 20px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
+  .header .brand { display: flex; align-items: center; gap: 10px; }
+  .header img.logo { height: 32px; max-width: 100px; object-fit: contain; background: white; border-radius: 4px; padding: 2px; }
   .header h1 { margin: 0; font-size: 18px; }
   .header p { margin: 2px 0; font-size: 11px; opacity: 0.85; }
   .badge { background: #3b82f6; color: white; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; }
@@ -2110,9 +2131,13 @@ function generatePayslipHtml(data: PayslipData, monthName: string, year: number)
 </head>
 <body>
 <div class="header">
-  <div>
-    <h1>Automystics Technologies</h1>
-    <p>Salary Slip — ${monthName} ${year}</p>
+  <div class="brand">
+    ${safeLogoDataUri ? `<img class="logo" src="${safeLogoDataUri}" alt="Logo" />` : ""}
+    <div>
+      <h1>${escapeHtml(letterhead.companyName)}</h1>
+      ${letterhead.addressLine1 ? `<p>${escapeHtml(letterhead.addressLine1)}</p>` : ""}
+      <p>Salary Slip — ${monthName} ${year}</p>
+    </div>
   </div>
   <div class="badge">PAYSLIP</div>
 </div>
@@ -2146,13 +2171,14 @@ function generatePayslipHtml(data: PayslipData, monthName: string, year: number)
   <div class="label">Net Pay (Take Home)</div>
   <div class="amount">${fmt(data.netPay)}</div>
 </div>
+${letterhead.footerNote ? `<p style="text-align:center;color:#94a3b8;font-size:10px;margin-top:10px;">${escapeHtml(letterhead.footerNote)}</p>` : ""}
 </body>
 </html>`;
 }
 
 // ─── PDF PAYSLIP GENERATOR ───────────────────────────────────────────────────
 
-async function generatePayslipPdf(data: PayslipData, monthName: string, year: number): Promise<Uint8Array> {
+async function generatePayslipPdf(data: PayslipData, monthName: string, year: number, letterhead: PayslipLetterhead = DEFAULT_LETTERHEAD): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]); // A4
   const { height } = page.getSize();
@@ -2165,7 +2191,8 @@ async function generatePayslipPdf(data: PayslipData, monthName: string, year: nu
   const e = data.earnings;
   const d = data.deductions;
   const a = data.attendance;
-  const navy = rgb(0.118, 0.176, 0.235);
+  const [br, bg, bb] = hexToRgbTriple(letterhead.brandColorHex);
+  const navy = rgb(br, bg, bb);
   const white = rgb(1, 1, 1);
   const light = rgb(0.95, 0.97, 0.99);
   const gray = rgb(0.39, 0.47, 0.56);
@@ -2174,9 +2201,18 @@ async function generatePayslipPdf(data: PayslipData, monthName: string, year: nu
 
   // Header band
   page.drawRectangle({ x: 0, y: height - 80, width: 595, height: 80, color: navy });
-  page.drawText("Automystics Technologies", { x: margin, y: height - 35, size: 16, font: bold, color: white });
-  page.drawText(`Salary Slip — ${monthName} ${year}`, { x: margin, y: height - 55, size: 11, font: regular, color: rgb(0.75, 0.82, 0.9) });
-  page.drawText(`Tax Regime: ${data.taxRegime ?? "New"}`, { x: margin, y: height - 72, size: 9, font: regular, color: rgb(0.75, 0.82, 0.9) });
+  const logoImg = await embedLogoImage(pdfDoc, letterhead.logoDataUri);
+  let titleX = margin;
+  if (logoImg) {
+    const logoH = 28;
+    const logoW = (logoImg.width / logoImg.height) * logoH;
+    page.drawRectangle({ x: margin, y: height - 62, width: logoW + 8, height: logoH + 4, color: white });
+    page.drawImage(logoImg, { x: margin + 4, y: height - 60, width: logoW, height: logoH });
+    titleX = margin + logoW + 16;
+  }
+  page.drawText(letterhead.companyName, { x: titleX, y: height - 35, size: 16, font: bold, color: white });
+  page.drawText(`Salary Slip — ${monthName} ${year}`, { x: titleX, y: height - 55, size: 11, font: regular, color: rgb(0.75, 0.82, 0.9) });
+  page.drawText(`Tax Regime: ${data.taxRegime ?? "New"}`, { x: titleX, y: height - 72, size: 9, font: regular, color: rgb(0.75, 0.82, 0.9) });
 
   y = height - 100;
 
@@ -2253,6 +2289,11 @@ async function generatePayslipPdf(data: PayslipData, monthName: string, year: nu
   page.drawRectangle({ x: margin, y: y - 40, width: 515, height: 45, color: navy });
   page.drawText("NET PAY (TAKE HOME)", { x: margin + 180, y: y - 16, size: 9, font: regular, color: rgb(0.75, 0.82, 0.9) });
   page.drawText(fmt(data.netPay), { x: margin + 170, y: y - 33, size: 18, font: bold, color: white });
+
+  if (letterhead.footerNote) {
+    y -= 60;
+    page.drawText(letterhead.footerNote.slice(0, 110), { x: margin, y, size: 8, font: regular, color: gray });
+  }
 
   return pdfDoc.save();
 }
@@ -2372,7 +2413,8 @@ router.get("/payroll/payslips/:id/pdf", requireHrmsUser, requireRole(...ALL_ROLE
 
     const data = payslip.payslipData as PayslipData;
     const monthName = new Date(payslip.periodYear, payslip.periodMonth - 1).toLocaleString("en-IN", { month: "long" });
-    const pdfBytes = await generatePayslipPdf(data, monthName, payslip.periodYear);
+    const letterhead = await getPayslipLetterhead(tenantId);
+    const pdfBytes = await generatePayslipPdf(data, monthName, payslip.periodYear, letterhead);
 
     const empName = (data?.employee?.name ?? "payslip").replace(/\s+/g, "_");
     res.setHeader("Content-Type", "application/pdf");

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -6,6 +6,7 @@ import {
   useListDesignations,
   useListEmployees,
   useGetShiftsTemplates,
+  useGetEmployeeIdConfig,
   getListEmployeesQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,19 @@ export default function NewEmployeePage() {
     queryFn: () => fetch(`${BASE_URL}/api/branches`, { credentials: "include" }).then((r) => r.json()),
   });
   const { data: shiftResp } = useGetShiftsTemplates();
+  const { data: idConfig } = useGetEmployeeIdConfig();
+  const idPrefix = idConfig?.employeeIdPrefix?.trim() || null;
+
+  // Once the tenant's configured prefix loads, refresh the suggested ID to
+  // match it (only if the user hasn't already started typing their own).
+  useEffect(() => {
+    if (idPrefix && form.employeeId === initialState.employeeId) {
+      const year = new Date().getFullYear();
+      const rand = String(Math.floor(Math.random() * 900) + 100);
+      setForm((prev) => ({ ...prev, employeeId: `${idPrefix}-${year}-${rand}` }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idPrefix]);
   const departments = (Array.isArray(deptResp) ? deptResp : (deptResp as any)?.data) ?? [];
   const designations = (Array.isArray(desigResp) ? desigResp : (desigResp as any)?.data) ?? [];
   const employees = (Array.isArray(empResp) ? empResp : (empResp as any)?.data) ?? [];
@@ -227,8 +241,12 @@ export default function NewEmployeePage() {
             <div className="space-y-1.5">
               <Label htmlFor="employeeId">Employee ID <span className="text-destructive">*</span></Label>
               <Input id="employeeId" value={form.employeeId}
-                onChange={(e) => update("employeeId", e.target.value)} placeholder="AMT-2026-001" />
-              <p className="text-xs text-muted-foreground">Auto-suggested — edit if needed</p>
+                onChange={(e) => update("employeeId", e.target.value)} placeholder={idPrefix ? `${idPrefix}-2026-001` : "AMT-2026-001"} />
+              <p className="text-xs text-muted-foreground">
+                {idPrefix
+                  ? `Auto-suggested using this tenant's "${idPrefix}" prefix — edit if needed`
+                  : "Auto-suggested — edit if needed"}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="phone">Phone</Label>

@@ -28,6 +28,15 @@ export const tenantsTable = pgTable("tenants", {
   enabledModules: jsonb("enabled_modules"),
   enabledFeatures: jsonb("enabled_features"),
   themeConfig: jsonb("theme_config"),
+  // Per-tenant payslip letterhead (company name, address, logo, brand color).
+  // Falls back to hardcoded platform defaults when null/unset.
+  payslipConfig: jsonb("payslip_config"),
+  // Per-tenant employee ID card design (field toggles, logo, brand color).
+  // Falls back to hardcoded platform defaults when null/unset.
+  idCardConfig: jsonb("id_card_config"),
+  // Validation hint only (e.g. "EMP-") — checked as a required prefix on new
+  // employee IDs entered manually. Does NOT auto-generate or auto-increment.
+  employeeIdPrefix: text("employee_id_prefix"),
   razorpayCustomerId: text("razorpay_customer_id"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),

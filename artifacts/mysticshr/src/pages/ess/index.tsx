@@ -4,6 +4,7 @@ import {
   useGetEssDashboard,
   useGetEssProfile,
   useUpdateEssProfile,
+  useUpdateMyAvatar,
   useListIssuedDocuments,
   useListHelpdeskTickets,
   useCreateHelpdeskTicket,
@@ -33,6 +34,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { AttachmentUploader, type UploadedAttachment } from "@/components/AttachmentUploader";
+import { AvatarUploader } from "@/components/AvatarUploader";
+import { employeeAvatarSrc } from "@/lib/avatarSrc";
 import { getDocumentRequestFields } from "@/lib/document-fields";
 import {
   User, FileText, Calendar, Clock, Target, Wallet, Home, Phone, AlertCircle,
@@ -85,6 +88,7 @@ function EditProfileModal({ open, onClose }: { open: boolean; onClose: () => voi
   const qc = useQueryClient();
   const { data: profile } = useGetEssProfile();
   const update = useUpdateEssProfile();
+  const updateAvatar = useUpdateMyAvatar();
   const [form, setForm] = useState({
     phone: profile?.phone ?? "",
     personalEmail: profile?.personalEmail ?? "",
@@ -124,6 +128,17 @@ function EditProfileModal({ open, onClose }: { open: boolean; onClose: () => voi
           <DialogTitle>Update Personal Information</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label className="mb-1.5 block">Photo</Label>
+            <AvatarUploader
+              previewUrl={profile ? employeeAvatarSrc(profile.employeeId, profile.avatarUrl) : undefined}
+              onUploaded={(objectPath) => {
+                updateAvatar.mutate({ data: { avatarUrl: objectPath } }, {
+                  onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/ess/me"] }),
+                });
+              }}
+            />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Phone</Label>

@@ -406,6 +406,9 @@ router.get("/platform/tenants/:id", async (req, res) => {
       customPriceYearly: tenantsTable.customPriceYearly,
       enabledModules: tenantsTable.enabledModules,
       enabledFeatures: tenantsTable.enabledFeatures,
+      payslipConfig: tenantsTable.payslipConfig,
+      idCardConfig: tenantsTable.idCardConfig,
+      employeeIdPrefix: tenantsTable.employeeIdPrefix,
       createdAt: tenantsTable.createdAt,
       updatedAt: tenantsTable.updatedAt,
       userCount: sql<number>`(SELECT count(*)::int FROM hrms_users WHERE hrms_users.tenant_id = ${tenantsTable.id})`,
@@ -429,6 +432,7 @@ router.patch("/platform/tenants/:id", async (req, res) => {
     const numFields = ["planId","customMaxUsers","customMaxEmployees","customMaxBranches","customMaxApiCalls","customPriceMonthly","customPriceYearly"] as const;
     const tsFields = ["trialEndsAt","subscriptionStartsAt","subscriptionEndsAt"] as const;
     for (const f of strFields) if (f in body) updates[f] = body[f] === null ? null : String(body[f]).trim();
+    if ("employeeIdPrefix" in body) updates.employeeIdPrefix = body.employeeIdPrefix === null ? null : String(body.employeeIdPrefix).trim().toUpperCase() || null;
     for (const f of numFields) if (f in body) updates[f] = body[f] === null ? null : Number(body[f]);
     for (const f of tsFields) if (f in body) updates[f] = body[f] === null ? null : new Date(String(body[f]));
     if ("enabledModules" in body) updates.enabledModules = body.enabledModules;
@@ -495,6 +499,9 @@ router.get("/platform/tenants/:id/config", async (req, res) => {
       customMaxEmployees: tenantsTable.customMaxEmployees,
       customMaxBranches: tenantsTable.customMaxBranches,
       customMaxApiCalls: tenantsTable.customMaxApiCalls,
+      payslipConfig: tenantsTable.payslipConfig,
+      idCardConfig: tenantsTable.idCardConfig,
+      employeeIdPrefix: tenantsTable.employeeIdPrefix,
       planEnabledModules: subscriptionPlansTable.enabledModules,
       planEnabledFeatures: subscriptionPlansTable.enabledFeatures,
       planMaxUsers: subscriptionPlansTable.maxUsers,
@@ -557,6 +564,72 @@ router.patch("/platform/tenants/:id/theme", async (req, res) => {
       newValue: `preset=${(themeConfig as Record<string, unknown>)?.preset ?? "unknown"}`,
     });
     res.json({ ok: true, themeConfig: updated.themeConfig });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenant Payslip Letterhead ──────────────────────────────────────────────────
+
+router.patch("/platform/tenants/:id/payslip-config", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const { payslipConfig } = req.body as { payslipConfig: unknown };
+    if (payslipConfig !== null && typeof payslipConfig !== "object") {
+      res.status(400).json({ error: "payslipConfig must be an object or null" });
+      return;
+    }
+    const logoDataUri = (payslipConfig as Record<string, unknown> | null)?.logoDataUri;
+    if (typeof logoDataUri === "string" && logoDataUri.length > 400_000) {
+      res.status(400).json({ error: "Logo image is too large. Please use a smaller image (under ~300KB)." });
+      return;
+    }
+    const [updated] = await db.update(tenantsTable)
+      .set({ payslipConfig: payslipConfig as never, updatedAt: new Date() })
+      .where(eq(tenantsTable.id, id))
+      .returning({ id: tenantsTable.id, payslipConfig: tenantsTable.payslipConfig });
+    if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    void logAudit({
+      tenantId: id,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: "tenant.payslip_config_updated",
+      module: "payslip",
+      recordId: id,
+      newValue: `companyName=${(payslipConfig as Record<string, unknown> | null)?.companyName ?? "default"}`,
+    });
+    res.json({ ok: true, payslipConfig: updated.payslipConfig });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Tenant ID Card Design ───────────────────────────────────────────────────────
+
+router.patch("/platform/tenants/:id/id-card-config", async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const { idCardConfig } = req.body as { idCardConfig: unknown };
+    if (idCardConfig !== null && typeof idCardConfig !== "object") {
+      res.status(400).json({ error: "idCardConfig must be an object or null" });
+      return;
+    }
+    const logoDataUri = (idCardConfig as Record<string, unknown> | null)?.logoDataUri;
+    if (typeof logoDataUri === "string" && logoDataUri.length > 400_000) {
+      res.status(400).json({ error: "Logo image is too large. Please use a smaller image (under ~300KB)." });
+      return;
+    }
+    const [updated] = await db.update(tenantsTable)
+      .set({ idCardConfig: idCardConfig as never, updatedAt: new Date() })
+      .where(eq(tenantsTable.id, id))
+      .returning({ id: tenantsTable.id, idCardConfig: tenantsTable.idCardConfig });
+    if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+    void logAudit({
+      tenantId: id,
+      platformAdminEmail: req.platformAdmin?.email,
+      action: "tenant.id_card_config_updated",
+      module: "id_card",
+      recordId: id,
+      newValue: `cardTitle=${(idCardConfig as Record<string, unknown> | null)?.cardTitle ?? "default"}`,
+    });
+    res.json({ ok: true, idCardConfig: updated.idCardConfig });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

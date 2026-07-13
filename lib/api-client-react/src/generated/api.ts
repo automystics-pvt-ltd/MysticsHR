@@ -138,6 +138,7 @@ import type {
   GetDashboardRecentActivityParams,
   GetEmployeeDirectoryReport200,
   GetEmployeeDirectoryReportParams,
+  GetEmployeeIdConfig200,
   GetEmployeesIdAttendanceParams,
   GetEmployeesIdOvertimeParams,
   GetEsiReportParams,
@@ -275,6 +276,7 @@ import type {
   PostOnboardingTasksIdCompleteBody,
   PreOnboardingDocument,
   PreOnboardingRecord,
+  PreviewEmployeeIdCard200,
   ProcessAccessRevocations200,
   RegularizationActionBody,
   RejectOfferBody,
@@ -335,6 +337,7 @@ import type {
   UpdateInterviewBody,
   UpdateLeavePolicyBody,
   UpdateLoanBody,
+  UpdateMyAvatarBody,
   UpdateMyNotificationPreferences200,
   UpdateMyNotificationPreferencesBody,
   UpdateMyTimezoneBody,
@@ -2017,6 +2020,345 @@ export const useUpdateMyTimezone = <
 > => {
   return useMutation(getUpdateMyTimezoneMutationOptions(options));
 };
+
+/**
+ * @summary Update the authenticated employee's own profile photo (self-service)
+ */
+export const getUpdateMyAvatarUrl = () => {
+  return `/api/employees/me/avatar`;
+};
+
+export const updateMyAvatar = async (
+  updateMyAvatarBody: UpdateMyAvatarBody,
+  options?: RequestInit,
+): Promise<Employee> => {
+  return customFetch<Employee>(getUpdateMyAvatarUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateMyAvatarBody),
+  });
+};
+
+export const getUpdateMyAvatarMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMyAvatar>>,
+    TError,
+    { data: BodyType<UpdateMyAvatarBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMyAvatar>>,
+  TError,
+  { data: BodyType<UpdateMyAvatarBody> },
+  TContext
+> => {
+  const mutationKey = ["updateMyAvatar"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMyAvatar>>,
+    { data: BodyType<UpdateMyAvatarBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateMyAvatar(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateMyAvatarMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateMyAvatar>>
+>;
+export type UpdateMyAvatarMutationBody = BodyType<UpdateMyAvatarBody>;
+export type UpdateMyAvatarMutationError = ErrorType<void>;
+
+/**
+ * @summary Update the authenticated employee's own profile photo (self-service)
+ */
+export const useUpdateMyAvatar = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMyAvatar>>,
+    TError,
+    { data: BodyType<UpdateMyAvatarBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateMyAvatar>>,
+  TError,
+  { data: BodyType<UpdateMyAvatarBody> },
+  TContext
+> => {
+  return useMutation(getUpdateMyAvatarMutationOptions(options));
+};
+
+/**
+ * @summary Get the tenant's configured employee ID prefix (validation hint only)
+ */
+export const getGetEmployeeIdConfigUrl = () => {
+  return `/api/employees/id-config`;
+};
+
+export const getEmployeeIdConfig = async (
+  options?: RequestInit,
+): Promise<GetEmployeeIdConfig200> => {
+  return customFetch<GetEmployeeIdConfig200>(getGetEmployeeIdConfigUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEmployeeIdConfigQueryKey = () => {
+  return [`/api/employees/id-config`] as const;
+};
+
+export const getGetEmployeeIdConfigQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEmployeeIdConfig>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEmployeeIdConfig>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetEmployeeIdConfigQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getEmployeeIdConfig>>
+  > = ({ signal }) => getEmployeeIdConfig({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEmployeeIdConfig>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEmployeeIdConfigQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEmployeeIdConfig>>
+>;
+export type GetEmployeeIdConfigQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the tenant's configured employee ID prefix (validation hint only)
+ */
+
+export function useGetEmployeeIdConfig<
+  TData = Awaited<ReturnType<typeof getEmployeeIdConfig>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEmployeeIdConfig>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEmployeeIdConfigQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary On-screen HTML preview of the employee ID card (same branding/fields as the PDF)
+ */
+export const getPreviewEmployeeIdCardUrl = (id: number) => {
+  return `/api/employees/${id}/id-card/preview`;
+};
+
+export const previewEmployeeIdCard = async (
+  id: number,
+  options?: RequestInit,
+): Promise<PreviewEmployeeIdCard200> => {
+  return customFetch<PreviewEmployeeIdCard200>(
+    getPreviewEmployeeIdCardUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getPreviewEmployeeIdCardQueryKey = (id: number) => {
+  return [`/api/employees/${id}/id-card/preview`] as const;
+};
+
+export const getPreviewEmployeeIdCardQueryOptions = <
+  TData = Awaited<ReturnType<typeof previewEmployeeIdCard>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof previewEmployeeIdCard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getPreviewEmployeeIdCardQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof previewEmployeeIdCard>>
+  > = ({ signal }) => previewEmployeeIdCard(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof previewEmployeeIdCard>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type PreviewEmployeeIdCardQueryResult = NonNullable<
+  Awaited<ReturnType<typeof previewEmployeeIdCard>>
+>;
+export type PreviewEmployeeIdCardQueryError = ErrorType<void>;
+
+/**
+ * @summary On-screen HTML preview of the employee ID card (same branding/fields as the PDF)
+ */
+
+export function usePreviewEmployeeIdCard<
+  TData = Awaited<ReturnType<typeof previewEmployeeIdCard>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof previewEmployeeIdCard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getPreviewEmployeeIdCardQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Serve an employee's uploaded photo
+ */
+export const getGetEmployeeAvatarUrl = (id: number) => {
+  return `/api/employees/${id}/avatar`;
+};
+
+export const getEmployeeAvatar = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetEmployeeAvatarUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEmployeeAvatarQueryKey = (id: number) => {
+  return [`/api/employees/${id}/avatar`] as const;
+};
+
+export const getGetEmployeeAvatarQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEmployeeAvatar>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEmployeeAvatar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetEmployeeAvatarQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getEmployeeAvatar>>
+  > = ({ signal }) => getEmployeeAvatar(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEmployeeAvatar>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEmployeeAvatarQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEmployeeAvatar>>
+>;
+export type GetEmployeeAvatarQueryError = ErrorType<void>;
+
+/**
+ * @summary Serve an employee's uploaded photo
+ */
+
+export function useGetEmployeeAvatar<
+  TData = Awaited<ReturnType<typeof getEmployeeAvatar>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEmployeeAvatar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEmployeeAvatarQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List distinct skill names held by any non-deleted employee

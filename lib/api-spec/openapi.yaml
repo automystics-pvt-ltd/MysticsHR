@@ -436,6 +436,87 @@ paths:
         "403":
           description: User not linked to an employee record
 
+  /employees/me/avatar:
+    patch:
+      operationId: updateMyAvatar
+      tags: [employees]
+      summary: Update the authenticated employee's own profile photo (self-service)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                avatarUrl:
+                  type: string
+                  description: Object storage path returned by the presigned upload flow.
+              required:
+                - avatarUrl
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "403":
+          description: User not linked to an employee record
+
+  /employees/id-config:
+    get:
+      operationId: getEmployeeIdConfig
+      tags: [employees]
+      summary: Get the tenant's configured employee ID prefix (validation hint only)
+      responses:
+        "200":
+          description: Employee ID prefix configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  employeeIdPrefix:
+                    type: ["string", "null"]
+
+  /employees/{id}/id-card/preview:
+    get:
+      operationId: previewEmployeeIdCard
+      tags: [Onboarding]
+      summary: On-screen HTML preview of the employee ID card (same branding/fields as the PDF)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: HTML preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  html:
+                    type: string
+        "403":
+          description: Conditions not met — onboarding checklist not 100% complete
+
+  /employees/{id}/avatar:
+    get:
+      operationId: getEmployeeAvatar
+      tags: [employees]
+      summary: Serve an employee's uploaded photo
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Image binary
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: No photo on file
+
   /employees/skills/distinct:
     get:
       operationId: listDistinctEmployeeSkills
@@ -9478,6 +9559,7 @@ components:
         department: { type: ['string', 'null'] }
         dateOfJoining: { type: ['string', 'null'] }
         phone: { type: ['string', 'null'] }
+        avatarUrl: { type: ['string', 'null'] }
         personalEmail: { type: ['string', 'null'] }
         currentAddress: { type: ['string', 'null'] }
         emergencyContactName: { type: ['string', 'null'] }

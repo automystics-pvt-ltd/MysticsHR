@@ -11,12 +11,30 @@ import {
   employeeCertificationsTable,
   branchesTable,
   shiftTemplatesTable,
+  tenantsTable,
+  ticketAttachmentsTable,
+  employeeDocumentsTable,
 } from "@workspace/db/schema";
 import { eq, isNull, and, sql, desc, asc } from "drizzle-orm";
 import { autoCreateOnboardingChecklist } from "../lib/onboarding-utils";
 import { recordHistory } from "../lib/history-utils";
 import { seedNotificationPreferencesForEmployee } from "../lib/notification-service";
 import { DEFAULT_TIMEZONE, isValidIanaTimezone } from "../lib/timezones";
+import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { Readable } from "node:stream";
+
+const objectStorageService = new ObjectStorageService();
+
+// Validation hint only — checked as a required prefix on manually-entered
+// employee IDs. Does NOT auto-generate or auto-increment IDs.
+async function getEmployeeIdPrefix(tenantId: number): Promise<string | null> {
+  const [row] = await db
+    .select({ employeeIdPrefix: tenantsTable.employeeIdPrefix })
+    .from(tenantsTable)
+    .where(eq(tenantsTable.id, tenantId))
+    .limit(1);
+  return row?.employeeIdPrefix?.trim() || null;
+}
 
 async function getCompanyDefaultTimezone(tenantId: number): Promise<string> {
   const [row] = await db
@@ -94,6 +112,110 @@ router.patch("/employees/me/timezone", requireHrmsUser, async (req, res) => {
     await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Employees", recordId: empId, ipAddress: req.ip });
     res.json(emp);
   } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Employee-facing metadata needed by forms (e.g. the ID prefix validation hint).
+router.get("/employees/id-config", requireHrmsUser, async (req, res) => {
+  try {
+    const employeeIdPrefix = await getEmployeeIdPrefix(req.hrmsUser!.tenantId);
+    res.json({ employeeIdPrefix });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Object paths accepted for avatars must be freshly-issued upload objects
+// (the shape returned by POST /storage/uploads/request-url), never an
+// arbitrary string. Without this, a user could point their own avatarUrl at
+// someone else's private object path (e.g. a confidential ticket attachment
+// or employee document) and, since avatars are viewable by any tenant user
+// via GET /employees/:id/avatar, use themselves as a relay to leak content
+// that record's real ACL would otherwise block.
+const AVATAR_OBJECT_PATH_RE = /^\/objects\/uploads\/[a-f0-9-]{36}$/;
+
+async function isObjectClaimedElsewhere(objectPath: string, tenantId: number): Promise<boolean> {
+  const [asAttachment] = await db.select({ id: ticketAttachmentsTable.id })
+    .from(ticketAttachmentsTable)
+    .where(and(eq(ticketAttachmentsTable.objectPath, objectPath), eq(ticketAttachmentsTable.tenantId, tenantId)))
+    .limit(1);
+  if (asAttachment) return true;
+  const apiPrefixed = `/api/storage${objectPath}`;
+  const [asDocument] = await db.select({ id: employeeDocumentsTable.id })
+    .from(employeeDocumentsTable)
+    .where(and(sql`${employeeDocumentsTable.fileUrl} in (${objectPath}, ${apiPrefixed})`, eq(employeeDocumentsTable.tenantId, tenantId)))
+    .limit(1);
+  return !!asDocument;
+}
+
+// Self-service: any authenticated employee may update their own photo.
+router.patch("/employees/me/avatar", requireHrmsUser, async (req, res) => {
+  try {
+    const empId = req.hrmsUser?.employeeId;
+    if (!empId) {
+      res.status(403).json({ error: "Authenticated user is not linked to an employee record" });
+      return;
+    }
+    const { avatarUrl } = req.body ?? {};
+    if (typeof avatarUrl !== "string" || !avatarUrl) {
+      res.status(400).json({ error: "avatarUrl is required" });
+      return;
+    }
+    if (!AVATAR_OBJECT_PATH_RE.test(avatarUrl)) {
+      res.status(400).json({ error: "Invalid avatar object path" });
+      return;
+    }
+    if (await isObjectClaimedElsewhere(avatarUrl, req.hrmsUser!.tenantId)) {
+      res.status(400).json({ error: "This file is already in use elsewhere and cannot be used as an avatar" });
+      return;
+    }
+    const [emp] = await db
+      .update(employeesTable)
+      .set({ avatarUrl, updatedAt: new Date() })
+      .where(and(eq(employeesTable.id, empId), isNull(employeesTable.deletedAt), eq(employeesTable.tenantId, req.hrmsUser!.tenantId)))
+      .returning();
+    if (!emp) {
+      res.status(404).json({ error: "Employee not found" });
+      return;
+    }
+    await logAudit({ user: req.hrmsUser, action: "UPDATE", module: "Employees", recordId: empId, ipAddress: req.ip });
+    res.json(emp);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Serves an employee's photo. Any authenticated user in the same tenant may
+// view it (avatars already surface on ID cards, org chart, and directories),
+// unlike ticket/document attachments which use per-record ACLs.
+router.get("/employees/:id/avatar", requireHrmsUser, async (req, res) => {
+  try {
+    const id = parseInt(String(req.params.id), 10);
+    const tenantId = req.hrmsUser!.tenantId;
+    const [emp] = await db
+      .select({ avatarUrl: employeesTable.avatarUrl })
+      .from(employeesTable)
+      .where(and(eq(employeesTable.id, id), eq(employeesTable.tenantId, tenantId), isNull(employeesTable.deletedAt)))
+      .limit(1);
+    if (!emp?.avatarUrl) {
+      res.status(404).json({ error: "No photo on file" });
+      return;
+    }
+    const file = await objectStorageService.getObjectEntityFile(emp.avatarUrl);
+    const response = await objectStorageService.downloadObject(file);
+    res.status(response.status);
+    response.headers.forEach((value, key) => res.setHeader(key, value));
+    if (response.body) {
+      Readable.fromWeb(response.body as any).pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (err) {
+    if (err instanceof ObjectNotFoundError) { res.status(404).json({ error: "Photo not found" }); return; }
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
@@ -183,6 +305,19 @@ router.post(
 
       if (!employeeId || !firstName || !lastName || !email) {
         res.status(400).json({ error: "employeeId, firstName, lastName, and email are required" });
+        return;
+      }
+
+      if (avatarUrl !== undefined && avatarUrl !== null) {
+        if (!AVATAR_OBJECT_PATH_RE.test(avatarUrl) || await isObjectClaimedElsewhere(avatarUrl, req.hrmsUser!.tenantId)) {
+          res.status(400).json({ error: "Invalid avatar object path" });
+          return;
+        }
+      }
+
+      const idPrefix = await getEmployeeIdPrefix(req.hrmsUser!.tenantId);
+      if (idPrefix && !String(employeeId).toUpperCase().startsWith(idPrefix.toUpperCase())) {
+        res.status(400).json({ error: `Employee ID must start with "${idPrefix}" (this tenant's configured prefix).` });
         return;
       }
 
@@ -346,6 +481,13 @@ router.patch(
       if (timezone !== undefined && !isValidIanaTimezone(timezone)) {
         res.status(400).json({ error: "Invalid IANA timezone identifier" });
         return;
+      }
+
+      if (avatarUrl !== undefined && avatarUrl !== null) {
+        if (!AVATAR_OBJECT_PATH_RE.test(avatarUrl) || await isObjectClaimedElsewhere(avatarUrl, req.hrmsUser!.tenantId)) {
+          res.status(400).json({ error: "Invalid avatar object path" });
+          return;
+        }
       }
 
       const [existing] = await db

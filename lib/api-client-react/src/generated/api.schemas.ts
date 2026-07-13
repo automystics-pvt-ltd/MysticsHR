@@ -2719,6 +2719,8 @@ export interface EssProfile {
   /** @nullable */
   phone?: string | null;
   /** @nullable */
+  avatarUrl?: string | null;
+  /** @nullable */
   personalEmail?: string | null;
   /** @nullable */
   currentAddress?: string | null;
@@ -3743,6 +3745,20 @@ export type ListEmployeesParams = {
 export type UpdateMyTimezoneBody = {
   /** IANA timezone identifier (e.g. "Asia/Kolkata"). */
   timezone: string;
+};
+
+export type UpdateMyAvatarBody = {
+  /** Object storage path returned by the presigned upload flow. */
+  avatarUrl: string;
+};
+
+export type GetEmployeeIdConfig200 = {
+  /** @nullable */
+  employeeIdPrefix?: string | null;
+};
+
+export type PreviewEmployeeIdCard200 = {
+  html?: string;
 };
 
 export type ListDistinctEmployeeSkills200 = {
