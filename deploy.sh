@@ -37,6 +37,18 @@ step 1 "Pulling latest from origin/$BRANCH"
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
+# IMPORTANT: this script rewrites itself via the git reset above. bash reads a
+# script incrementally as it runs, and if the file's bytes change underneath
+# an already-running interpreter, the rest of the run can silently execute
+# stale/mismatched content (wrong TOTAL, missing steps, half-old SQL — exactly
+# the kind of confusing partial-apply seen in past deploys). To guarantee the
+# rest of this run always reflects exactly what was just pulled, re-exec a
+# brand-new bash process on the on-disk file now that it's up to date.
+if [ -z "${DEPLOY_REEXECED:-}" ]; then
+  export DEPLOY_REEXECED=1
+  exec bash "$PROJECT_DIR/deploy.sh" "$@"
+fi
+
 # ── 2. Install dependencies ───────────────────────────────────────────────────
 step 2 "Installing dependencies"
 pnpm install --no-frozen-lockfile
