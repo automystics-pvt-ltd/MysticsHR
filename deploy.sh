@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 # MysticsHR — smooth VPS deploy script
 # • Only ever touches the "mysticshr-api" pm2 process — nothing else.
-# • DB migrations are plain SQL (IF NOT EXISTS) — zero interactive prompts.
 # • Uses pm2 restart/update-env when already running; pm2 start on first run.
+#
+# DB schema sync (permanent fix for prod schema drift):
+#   1. One-time idempotent ALTER statements catch this DB up to a known-good
+#      baseline (lib/db/migrations/0000_*.sql) and record that baseline as
+#      applied in drizzle's own tracking table.
+#   2. From then on, `pnpm --filter @workspace/db run migrate` (drizzle-kit
+#      migrate) applies any newer migration files automatically. Whenever the
+#      schema in lib/db/src/schema changes, run
+#      `pnpm --filter @workspace/db run generate` in dev, commit the new
+#      migration file under lib/db/migrations/, and this script will apply it
+#      on the next deploy — no more hand-written ALTER TABLE statements here.
 #
 # Usage (secrets come from the existing .env.pm2 on VPS — no need to export):
 #   bash deploy.sh
@@ -20,7 +30,7 @@ PM2_APP="mysticshr-api"
 cd "$PROJECT_DIR"
 
 step() { echo ""; echo "▶ [$1/$TOTAL] $2"; }
-TOTAL=7
+TOTAL=8
 
 # ── 1. Pull ───────────────────────────────────────────────────────────────────
 step 1 "Pulling latest from origin/$BRANCH"
@@ -116,28 +126,52 @@ CREATE TABLE IF NOT EXISTS platform_db_archives (
   admin_email text NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
+
+-- One-time bootstrap of drizzle-kit's tracked-migrations table (idempotent).
+-- This marks the full-schema baseline (lib/db/migrations/0000_*.sql) as
+-- already applied, since the ALTER statements above just brought this
+-- database's columns in line with that baseline. From here on, ANY future
+-- schema change is captured as a new drizzle migration file (checked into
+-- git) and applied automatically by step 4 below — no more hand-written
+-- ALTER TABLE statements needed, so this class of drift can't recur.
+CREATE SCHEMA IF NOT EXISTS "drizzle";
+CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
+  id         serial PRIMARY KEY,
+  hash       text NOT NULL,
+  created_at bigint
+);
+INSERT INTO "drizzle"."__drizzle_migrations" (hash, created_at)
+SELECT '5a4405625a094b8862d93fdb1d83b55b15aad6ec21b9d3b7cbdaa1f615dcef5e', 1783930935158
+WHERE NOT EXISTS (
+  SELECT 1 FROM "drizzle"."__drizzle_migrations"
+  WHERE hash = '5a4405625a094b8862d93fdb1d83b55b15aad6ec21b9d3b7cbdaa1f615dcef5e'
+);
 SQL
 
-echo "  ✓ DB schema up to date"
+echo "  ✓ DB schema caught up + migrations baseline recorded"
 
-# ── 4. Build shared DB types ──────────────────────────────────────────────────
-step 4 "Building shared DB types"
+# ── 4. Apply tracked schema migrations (permanent fix for schema drift) ──────
+step 4 "Applying tracked schema migrations"
+DATABASE_URL="$DATABASE_URL" pnpm --filter @workspace/db run migrate
+
+# ── 5. Build shared DB types ──────────────────────────────────────────────────
+step 5 "Building shared DB types"
 pnpm --filter @workspace/db run build
 
-# ── 5. Build SPAs ─────────────────────────────────────────────────────────────
-step 5 "Building SPAs"
+# ── 6. Build SPAs ─────────────────────────────────────────────────────────────
+step 6 "Building SPAs"
 echo "  → MysticsHR SPA (BASE_PATH=/)"
 PORT=5173 BASE_PATH=/ pnpm --filter @workspace/mysticshr run build
 
 echo "  → Platform Admin SPA (BASE_PATH=/platform_admin/)"
 PORT=5174 BASE_PATH=/platform_admin/ pnpm --filter @workspace/platform-admin run build
 
-# ── 6. Build API server ───────────────────────────────────────────────────────
-step 6 "Building API server"
+# ── 7. Build API server ───────────────────────────────────────────────────────
+step 7 "Building API server"
 pnpm --filter @workspace/api-server run build
 
-# ── 7. Restart ONLY mysticshr-api ─────────────────────────────────────────────
-step 7 "Restarting $PM2_APP"
+# ── 8. Restart ONLY mysticshr-api ─────────────────────────────────────────────
+step 8 "Restarting $PM2_APP"
 mkdir -p /var/log/pm2
 
 if pm2 describe "$PM2_APP" &>/dev/null; then

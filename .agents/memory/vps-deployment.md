@@ -33,3 +33,9 @@ description: Hard-won lessons from deploying to srv1609330 (shared multi-tenant 
 ## OTP for platform admin
 - OTP is logged to pm2 stdout (no email required during dev/testing).
 - `pm2 logs mysticshr-api --lines 50 --nostream | grep "Platform OTP"`
+
+## Prod schema drift — now fixed permanently via tracked drizzle migrations
+- `deploy.sh` used to hand-patch prod schema with ad-hoc `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` blocks. Schema fields added in dev (lib/db/src/schema) after each patch was written silently never reached prod, causing 500s on routes selecting those columns (e.g. tenant detail).
+- Fixed by baselining drizzle-kit's own migration tracker (`drizzle.__drizzle_migrations`) against a full-schema snapshot (`lib/db/migrations/0000_*.sql`), then wiring `deploy.sh` to run `pnpm --filter @workspace/db run migrate` every deploy.
+- **Going forward:** any schema change in `lib/db/src/schema` must be followed by `pnpm --filter @workspace/db run generate` (commit the new `lib/db/migrations/NNNN_*.sql` + updated `meta/`) — that's what makes it reach prod automatically. Editing `deploy.sh` by hand for schema changes is no longer needed/correct.
+- Dev DB's own migrations tracker was also baselined (same hash/timestamp) so `drizzle-kit migrate` no-ops there; dev still uses `pnpm --filter @workspace/db run push` for fast iteration.
