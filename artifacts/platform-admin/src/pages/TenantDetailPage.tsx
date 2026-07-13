@@ -1893,10 +1893,11 @@ export function TenantDetailPage() {
   const tenantId = Number(id);
   const qc = useQueryClient();
 
-  const { data: tenant, isLoading, refetch } = useQuery({
+  const { data: tenant, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["platform-tenant", tenantId],
     queryFn: () => api.getTenant(tenantId),
     enabled: !!tenantId,
+    retry: (failureCount, err) => (err as { status?: number })?.status !== 404 && failureCount < 2,
   });
 
   const { data: plansData } = useQuery({
@@ -1910,6 +1911,28 @@ export function TenantDetailPage() {
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    const status = (error as { status?: number } | undefined)?.status;
+    const isNotFound = status === 404;
+    return (
+      <div className="p-6 max-w-md mx-auto text-center space-y-3">
+        <p className="text-sm text-muted-foreground">
+          {isNotFound
+            ? "This tenant doesn't exist or was removed."
+            : "Something went wrong loading this tenant. This is usually temporary — please try again."}
+        </p>
+        <div className="flex items-center justify-center gap-3">
+          {!isNotFound && (
+            <Button size="sm" variant="outline" onClick={() => void refetch()} disabled={isFetching}>
+              {isFetching ? "Retrying…" : "Try again"}
+            </Button>
+          )}
+          <Link href="/tenants" className="text-sm text-primary hover:underline">Back to tenants</Link>
+        </div>
       </div>
     );
   }

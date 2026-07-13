@@ -59,6 +59,41 @@ CREATE TABLE IF NOT EXISTS platform_settings (
 ALTER TABLE subscription_plans
   ADD COLUMN IF NOT EXISTS enabled_screens jsonb NOT NULL DEFAULT '[]'::jsonb;
 
+-- Tenants: catch up any columns added to the dev schema since this VPS was
+-- first provisioned. All ADD COLUMN IF NOT EXISTS — safe to re-run any time.
+ALTER TABLE tenants
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS plan_id integer,
+  ADD COLUMN IF NOT EXISTS contact_email text,
+  ADD COLUMN IF NOT EXISTS industry text,
+  ADD COLUMN IF NOT EXISTS website text,
+  ADD COLUMN IF NOT EXISTS country text,
+  ADD COLUMN IF NOT EXISTS notes text,
+  ADD COLUMN IF NOT EXISTS billing_cycle text NOT NULL DEFAULT 'monthly',
+  ADD COLUMN IF NOT EXISTS grace_period_days integer NOT NULL DEFAULT 7,
+  ADD COLUMN IF NOT EXISTS trial_ends_at timestamp,
+  ADD COLUMN IF NOT EXISTS subscription_starts_at timestamp,
+  ADD COLUMN IF NOT EXISTS subscription_ends_at timestamp,
+  ADD COLUMN IF NOT EXISTS custom_max_users integer,
+  ADD COLUMN IF NOT EXISTS custom_max_employees integer,
+  ADD COLUMN IF NOT EXISTS custom_max_branches integer,
+  ADD COLUMN IF NOT EXISTS custom_max_api_calls integer,
+  ADD COLUMN IF NOT EXISTS custom_price_monthly integer,
+  ADD COLUMN IF NOT EXISTS custom_price_yearly integer,
+  ADD COLUMN IF NOT EXISTS enabled_modules jsonb,
+  ADD COLUMN IF NOT EXISTS enabled_features jsonb,
+  ADD COLUMN IF NOT EXISTS theme_config jsonb,
+  ADD COLUMN IF NOT EXISTS payslip_config jsonb,
+  ADD COLUMN IF NOT EXISTS id_card_config jsonb,
+  ADD COLUMN IF NOT EXISTS employee_id_prefix text,
+  ADD COLUMN IF NOT EXISTS employee_id_sequence integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS razorpay_customer_id text,
+  ADD COLUMN IF NOT EXISTS stripe_customer_id text,
+  ADD COLUMN IF NOT EXISTS stripe_subscription_id text,
+  ADD COLUMN IF NOT EXISTS gst_number text,
+  ADD COLUMN IF NOT EXISTS billing_address jsonb,
+  ADD COLUMN IF NOT EXISTS cancel_at_period_end boolean NOT NULL DEFAULT false;
+
 -- DB Admin: audit log of all DB admin operations
 CREATE TABLE IF NOT EXISTS platform_db_audit_log (
   id          serial PRIMARY KEY,
