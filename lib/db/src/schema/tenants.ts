@@ -34,9 +34,14 @@ export const tenantsTable = pgTable("tenants", {
   // Per-tenant employee ID card design (field toggles, logo, brand color).
   // Falls back to hardcoded platform defaults when null/unset.
   idCardConfig: jsonb("id_card_config"),
-  // Validation hint only (e.g. "EMP-") — checked as a required prefix on new
-  // employee IDs entered manually. Does NOT auto-generate or auto-increment.
+  // Prefix used both as a validation hint on manually-entered employee IDs
+  // (e.g. "EMP-") and as the basis for auto-generated sequential IDs.
   employeeIdPrefix: text("employee_id_prefix"),
+  // Running counter for auto-generated sequential employee IDs, scoped to
+  // this tenant. Incremented (under a row lock) each time an employee is
+  // created with auto-generation enabled. Never decremented, so IDs never
+  // repeat even after deletions.
+  employeeIdSequence: integer("employee_id_sequence").notNull().default(0),
   razorpayCustomerId: text("razorpay_customer_id"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),

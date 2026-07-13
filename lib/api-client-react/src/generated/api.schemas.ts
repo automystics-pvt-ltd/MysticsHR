@@ -685,6 +685,10 @@ export interface EmployeeListResponse {
 }
 
 export interface CreateEmployeeBody {
+  /** Required unless autoGenerateId is true. Must start with the tenant's configured prefix, if any. */
+  employeeId?: string;
+  /** When true, the server assigns the next sequential ID based on the tenant's configured prefix, ignoring any employeeId in the body. Requires the tenant to have a prefix configured. */
+  autoGenerateId?: boolean;
   firstName: string;
   lastName: string;
   email: string;
@@ -3755,6 +3759,11 @@ export type UpdateMyAvatarBody = {
 export type GetEmployeeIdConfig200 = {
   /** @nullable */
   employeeIdPrefix?: string | null;
+  /**
+   * Preview of the ID that would be auto-generated right now, or null if no prefix is configured. Not reserved — the real ID is assigned atomically at creation time.
+   * @nullable
+   */
+  nextEmployeeId?: string | null;
 };
 
 export type PreviewEmployeeIdCard200 = {

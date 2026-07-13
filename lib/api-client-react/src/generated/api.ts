@@ -2108,7 +2108,7 @@ export const useUpdateMyAvatar = <
 };
 
 /**
- * @summary Get the tenant's configured employee ID prefix (validation hint only)
+ * @summary Get the tenant's employee ID prefix and a preview of the next auto-generated ID
  */
 export const getGetEmployeeIdConfigUrl = () => {
   return `/api/employees/id-config`;
@@ -2159,7 +2159,7 @@ export type GetEmployeeIdConfigQueryResult = NonNullable<
 export type GetEmployeeIdConfigQueryError = ErrorType<unknown>;
 
 /**
- * @summary Get the tenant's configured employee ID prefix (validation hint only)
+ * @summary Get the tenant's employee ID prefix and a preview of the next auto-generated ID
  */
 
 export function useGetEmployeeIdConfig<

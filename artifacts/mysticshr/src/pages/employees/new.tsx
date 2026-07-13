@@ -31,6 +31,7 @@ interface FormState {
   lastName: string;
   email: string;
   employeeId: string;
+  idMode: "auto" | "manual";
   phone: string;
   dateOfBirth: string;
   gender: string;
@@ -60,6 +61,7 @@ const initialState: FormState = {
   lastName: "",
   email: "",
   employeeId: suggestEmployeeId(),
+  idMode: "manual",
   phone: "",
   dateOfBirth: "",
   gender: "",
@@ -94,17 +96,36 @@ export default function NewEmployeePage() {
   const { data: shiftResp } = useGetShiftsTemplates();
   const { data: idConfig } = useGetEmployeeIdConfig();
   const idPrefix = idConfig?.employeeIdPrefix?.trim() || null;
+  const nextEmployeeId = idConfig?.nextEmployeeId ?? null;
+  const [idModeTouched, setIdModeTouched] = useState(false);
 
-  // Once the tenant's configured prefix loads, refresh the suggested ID to
-  // match it (only if the user hasn't already started typing their own).
+  // Once the tenant's configured prefix loads: default to auto-generation
+  // (the recommended path) and, for tenants without a prefix, fall back to
+  // the old manual-entry suggestion so the field isn't blank.
   useEffect(() => {
-    if (idPrefix && form.employeeId === initialState.employeeId) {
-      const year = new Date().getFullYear();
-      const rand = String(Math.floor(Math.random() * 900) + 100);
-      setForm((prev) => ({ ...prev, employeeId: `${idPrefix}-${year}-${rand}` }));
+    if (idModeTouched) return;
+    if (idPrefix) {
+      setForm((prev) => ({ ...prev, idMode: "auto" }));
+    } else if (form.employeeId === initialState.employeeId) {
+      // No prefix configured — nothing to auto-generate from; keep manual.
+      setForm((prev) => ({ ...prev, idMode: "manual" }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idPrefix]);
+  }, [idPrefix, idModeTouched]);
+
+  function setIdMode(mode: "auto" | "manual") {
+    setIdModeTouched(true);
+    setForm((prev) => ({
+      ...prev,
+      idMode: mode,
+      // Seed the manual field with the prefix hint the first time the user
+      // switches to manual entry, so they aren't starting from a blank box.
+      employeeId: mode === "manual" && prev.employeeId === initialState.employeeId && idPrefix
+        ? `${idPrefix}-${new Date().getFullYear()}-`
+        : prev.employeeId,
+    }));
+  }
+
   const departments = (Array.isArray(deptResp) ? deptResp : (deptResp as any)?.data) ?? [];
   const designations = (Array.isArray(desigResp) ? desigResp : (desigResp as any)?.data) ?? [];
   const employees = (Array.isArray(empResp) ? empResp : (empResp as any)?.data) ?? [];
@@ -123,12 +144,14 @@ export default function NewEmployeePage() {
     }
   }
 
+  const usingAutoId = form.idMode === "auto" && !!idPrefix;
+
   const validate = (): string | null => {
     if (!form.firstName.trim()) return "First name is required";
     if (!form.lastName.trim()) return "Last name is required";
     if (!form.email.trim()) return "Email is required";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return "Email is not valid";
-    if (!form.employeeId.trim()) return "Employee ID is required";
+    if (!usingAutoId && !form.employeeId.trim()) return "Employee ID is required";
     if (form.ctc && Number.isNaN(Number(form.ctc))) return "CTC must be a valid number";
     return null;
   };
@@ -141,14 +164,16 @@ export default function NewEmployeePage() {
 
     setSubmitting(true);
     try {
-      const payload: Record<string, unknown> = {
-        employeeId: form.employeeId.trim(),
+      const payload: Record<string, unknown> = usingAutoId
+        ? { autoGenerateId: true }
+        : { employeeId: form.employeeId.trim() };
+      Object.assign(payload, {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         email: form.email.trim().toLowerCase(),
         employmentType: form.employmentType,
         status: form.status,
-      };
+      });
       if (form.phone) payload.phone = form.phone.trim();
       if (form.dateOfBirth) payload.dateOfBirth = form.dateOfBirth;
       if (form.gender) payload.gender = form.gender;
@@ -238,15 +263,42 @@ export default function NewEmployeePage() {
               <Input id="email" type="email" value={form.email}
                 onChange={(e) => update("email", e.target.value)} placeholder="firstname.lastname@automystics.com" />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="employeeId">Employee ID <span className="text-destructive">*</span></Label>
-              <Input id="employeeId" value={form.employeeId}
-                onChange={(e) => update("employeeId", e.target.value)} placeholder={idPrefix ? `${idPrefix}-2026-001` : "AMT-2026-001"} />
-              <p className="text-xs text-muted-foreground">
-                {idPrefix
-                  ? `Auto-suggested using this tenant's "${idPrefix}" prefix — edit if needed`
-                  : "Auto-suggested — edit if needed"}
-              </p>
+            <div className="space-y-1.5 md:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="employeeId">Employee ID <span className="text-destructive">*</span></Label>
+                {idPrefix && (
+                  <div className="flex items-center gap-1 rounded-md border p-0.5 text-xs">
+                    <button type="button"
+                      className={`rounded px-2 py-1 ${form.idMode === "auto" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                      onClick={() => setIdMode("auto")}>
+                      Auto
+                    </button>
+                    <button type="button"
+                      className={`rounded px-2 py-1 ${form.idMode === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                      onClick={() => setIdMode("manual")}>
+                      Manual
+                    </button>
+                  </div>
+                )}
+              </div>
+              {usingAutoId ? (
+                <>
+                  <Input id="employeeId" value={nextEmployeeId ?? "Generating…"} disabled readOnly />
+                  <p className="text-xs text-muted-foreground">
+                    Auto-assigned using this tenant's "{idPrefix}" prefix and next available sequence number.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Input id="employeeId" value={form.employeeId}
+                    onChange={(e) => update("employeeId", e.target.value)} placeholder={idPrefix ? `${idPrefix}-2026-001` : "AMT-2026-001"} />
+                  <p className="text-xs text-muted-foreground">
+                    {idPrefix
+                      ? `Must start with this tenant's "${idPrefix}" prefix — enter the rest yourself`
+                      : "Auto-suggested — edit if needed"}
+                  </p>
+                </>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="phone">Phone</Label>

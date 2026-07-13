@@ -3,3 +3,4 @@
 - [Artifact registration lost on re-import](artifact-reimport-registration.md) — fix via a real `verifyAndReplaceArtifactToml` edit, which triggers full artifact re-scan.
 - [Notification config gotchas](notification-config-gotchas.md) — SMTP/WhatsApp creds fail silently on wrong values; always live-test after collecting them, not just assume correctness.
 - [OpenAPI spec source of truth](openapi-spec-source-of-truth.md) — lib/api-spec/openapi.yaml is hand-maintained, must be edited before codegen; platform-admin's api.ts is separate and not covered.
+- [Sequential employee ID generation](sequential-employee-ids.md) — per-tenant monotonic counter avoids collisions with manually-entered IDs; see generateNextEmployeeId.

@@ -467,7 +467,7 @@ paths:
     get:
       operationId: getEmployeeIdConfig
       tags: [employees]
-      summary: Get the tenant's configured employee ID prefix (validation hint only)
+      summary: Get the tenant's employee ID prefix and a preview of the next auto-generated ID
       responses:
         "200":
           description: Employee ID prefix configuration
@@ -478,6 +478,9 @@ paths:
                 properties:
                   employeeIdPrefix:
                     type: ["string", "null"]
+                  nextEmployeeId:
+                    type: ["string", "null"]
+                    description: Preview of the ID that would be auto-generated right now, or null if no prefix is configured. Not reserved — the real ID is assigned atomically at creation time.
 
   /employees/{id}/id-card/preview:
     get:
@@ -7462,6 +7465,12 @@ components:
     CreateEmployeeBody:
       type: object
       properties:
+        employeeId:
+          type: string
+          description: Required unless autoGenerateId is true. Must start with the tenant's configured prefix, if any.
+        autoGenerateId:
+          type: boolean
+          description: When true, the server assigns the next sequential ID based on the tenant's configured prefix, ignoring any employeeId in the body. Requires the tenant to have a prefix configured.
         firstName:
           type: string
         lastName:

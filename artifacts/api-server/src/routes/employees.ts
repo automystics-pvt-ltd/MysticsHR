@@ -25,8 +25,8 @@ import { Readable } from "node:stream";
 
 const objectStorageService = new ObjectStorageService();
 
-// Validation hint only — checked as a required prefix on manually-entered
-// employee IDs. Does NOT auto-generate or auto-increment IDs.
+// Checked as a required prefix on manually-entered employee IDs, and used as
+// the basis for auto-generated sequential IDs (see generateNextEmployeeId).
 async function getEmployeeIdPrefix(tenantId: number): Promise<string | null> {
   const [row] = await db
     .select({ employeeIdPrefix: tenantsTable.employeeIdPrefix })
@@ -34,6 +34,72 @@ async function getEmployeeIdPrefix(tenantId: number): Promise<string | null> {
     .where(eq(tenantsTable.id, tenantId))
     .limit(1);
   return row?.employeeIdPrefix?.trim() || null;
+}
+
+const EMPLOYEE_ID_SEQ_PAD = 4;
+
+function formatEmployeeId(prefix: string, year: number, seq: number): string {
+  return prefix + "-" + year + "-" + String(seq).padStart(EMPLOYEE_ID_SEQ_PAD, "0");
+}
+
+// Highest trailing numeric suffix among this tenant's existing employee IDs
+// that start with `prefix` (case-insensitive), including soft-deleted rows so
+// a restored/re-imported ID never gets reused. Guards against collisions with
+// IDs that were typed in manually before/alongside auto-generation.
+async function getHighestExistingSuffix(tenantId: number, prefix: string): Promise<number> {
+  const rows = await db
+    .select({ employeeId: employeesTable.employeeId })
+    .from(employeesTable)
+    .where(and(eq(employeesTable.tenantId, tenantId), sql`${employeesTable.employeeId} ILIKE ${prefix + "%"}`));
+  let max = 0;
+  for (const row of rows) {
+    const match = /(\d+)$/.exec(row.employeeId ?? "");
+    if (match) max = Math.max(max, parseInt(match[1], 10));
+  }
+  return max;
+}
+
+// Atomically reserves the next sequential employee ID for a tenant. Must run
+// inside `tx` (a `db.transaction` callback) — the row lock on the tenant is
+// what keeps concurrent creations from handing out the same ID. The counter
+// is seeded from (and kept ahead of) any manually-entered IDs already in use,
+// so auto and manual entry can coexist without collisions.
+async function generateNextEmployeeId(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tenantId: number,
+  prefix: string
+): Promise<string> {
+  const [tenantRow] = await tx
+    .select({ employeeIdSequence: tenantsTable.employeeIdSequence })
+    .from(tenantsTable)
+    .where(eq(tenantsTable.id, tenantId))
+    .for("update");
+  const storedSeq = tenantRow?.employeeIdSequence ?? 0;
+  const existingMaxSuffix = await getHighestExistingSuffix(tenantId, prefix);
+  const nextSeq = Math.max(storedSeq, existingMaxSuffix) + 1;
+
+  await tx
+    .update(tenantsTable)
+    .set({ employeeIdSequence: nextSeq, updatedAt: new Date() })
+    .where(eq(tenantsTable.id, tenantId));
+
+  return formatEmployeeId(prefix, new Date().getFullYear(), nextSeq);
+}
+
+// Best-effort preview of the ID that would be generated right now, for
+// display in the "auto" mode UI before the employee is actually created.
+// Does not reserve/increment anything, so it can drift under concurrent
+// creations — the real ID is only assigned atomically at creation time.
+async function previewNextEmployeeId(tenantId: number, prefix: string): Promise<string> {
+  const [tenantRow] = await db
+    .select({ employeeIdSequence: tenantsTable.employeeIdSequence })
+    .from(tenantsTable)
+    .where(eq(tenantsTable.id, tenantId))
+    .limit(1);
+  const storedSeq = tenantRow?.employeeIdSequence ?? 0;
+  const existingMaxSuffix = await getHighestExistingSuffix(tenantId, prefix);
+  const nextSeq = Math.max(storedSeq, existingMaxSuffix) + 1;
+  return formatEmployeeId(prefix, new Date().getFullYear(), nextSeq);
 }
 
 async function getCompanyDefaultTimezone(tenantId: number): Promise<string> {
@@ -117,11 +183,17 @@ router.patch("/employees/me/timezone", requireHrmsUser, async (req, res) => {
   }
 });
 
-// Employee-facing metadata needed by forms (e.g. the ID prefix validation hint).
+// Employee-facing metadata needed by forms: the ID prefix (validation hint
+// for manual entry) and a preview of the next auto-generated ID, if a prefix
+// is configured. `nextEmployeeId` is a preview only — the real ID is reserved
+// atomically at creation time via `autoGenerateId: true`.
 router.get("/employees/id-config", requireHrmsUser, async (req, res) => {
   try {
     const employeeIdPrefix = await getEmployeeIdPrefix(req.hrmsUser!.tenantId);
-    res.json({ employeeIdPrefix });
+    const nextEmployeeId = employeeIdPrefix
+      ? await previewNextEmployeeId(req.hrmsUser!.tenantId, employeeIdPrefix)
+      : null;
+    res.json({ employeeIdPrefix, nextEmployeeId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -297,13 +369,17 @@ router.post(
   async (req, res) => {
     try {
       const {
-        employeeId, firstName, lastName, email, phone, dateOfBirth,
+        employeeId, autoGenerateId, firstName, lastName, email, phone, dateOfBirth,
         gender, departmentId, designationId, employmentType, status,
         dateOfJoining, ctc, managerId, location, avatarUrl, timezone,
         branchId, defaultShiftTemplateId,
       } = req.body;
 
-      if (!employeeId || !firstName || !lastName || !email) {
+      if (!firstName || !lastName || !email) {
+        res.status(400).json({ error: "firstName, lastName, and email are required" });
+        return;
+      }
+      if (!autoGenerateId && !employeeId) {
         res.status(400).json({ error: "employeeId, firstName, lastName, and email are required" });
         return;
       }
@@ -316,7 +392,11 @@ router.post(
       }
 
       const idPrefix = await getEmployeeIdPrefix(req.hrmsUser!.tenantId);
-      if (idPrefix && !String(employeeId).toUpperCase().startsWith(idPrefix.toUpperCase())) {
+      if (autoGenerateId && !idPrefix) {
+        res.status(400).json({ error: "This tenant has no employee ID prefix configured — auto-generation is unavailable. Enter an ID manually." });
+        return;
+      }
+      if (!autoGenerateId && idPrefix && !String(employeeId).toUpperCase().startsWith(idPrefix.toUpperCase())) {
         res.status(400).json({ error: `Employee ID must start with "${idPrefix}" (this tenant's configured prefix).` });
         return;
       }
@@ -331,18 +411,28 @@ router.post(
         resolvedTimezone = timezone;
       }
 
-      const [emp] = await db
-        .insert(employeesTable)
-        .values({
-          employeeId, firstName, lastName, email, phone, dateOfBirth,
-          gender, departmentId, designationId, employmentType, status,
-          dateOfJoining, ctc, managerId, location, avatarUrl,
-          branchId: branchId ? Number(branchId) : undefined,
-          defaultShiftTemplateId: defaultShiftTemplateId ? Number(defaultShiftTemplateId) : undefined,
-          timezone: resolvedTimezone,
-          tenantId: req.hrmsUser!.tenantId,
-        })
-        .returning();
+      const emp = await db.transaction(async (tx) => {
+        // Reserving the sequence and inserting the employee happen in the
+        // same transaction so a failed insert (e.g. duplicate email) rolls
+        // back the reservation instead of burning a sequence number.
+        const resolvedEmployeeId = autoGenerateId
+          ? await generateNextEmployeeId(tx, req.hrmsUser!.tenantId, idPrefix!)
+          : String(employeeId).trim();
+
+        const [row] = await tx
+          .insert(employeesTable)
+          .values({
+            employeeId: resolvedEmployeeId, firstName, lastName, email, phone, dateOfBirth,
+            gender, departmentId, designationId, employmentType, status,
+            dateOfJoining, ctc, managerId, location, avatarUrl,
+            branchId: branchId ? Number(branchId) : undefined,
+            defaultShiftTemplateId: defaultShiftTemplateId ? Number(defaultShiftTemplateId) : undefined,
+            timezone: resolvedTimezone,
+            tenantId: req.hrmsUser!.tenantId,
+          })
+          .returning();
+        return row;
+      });
 
       await logAudit({ user: req.hrmsUser, action: "CREATE", module: "Employees", recordId: emp.id, ipAddress: req.ip });
 

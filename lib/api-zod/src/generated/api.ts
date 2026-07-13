@@ -333,6 +333,18 @@ export const ListEmployeesResponse = zod.object({
  * @summary Create an employee
  */
 export const CreateEmployeeBody = zod.object({
+  employeeId: zod
+    .string()
+    .optional()
+    .describe(
+      "Required unless autoGenerateId is true. Must start with the tenant's configured prefix, if any.",
+    ),
+  autoGenerateId: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, the server assigns the next sequential ID based on the tenant's configured prefix, ignoring any employeeId in the body. Requires the tenant to have a prefix configured.",
+    ),
   firstName: zod.string(),
   lastName: zod.string(),
   email: zod.string(),
@@ -437,10 +449,16 @@ export const UpdateMyAvatarResponse = zod.object({
 });
 
 /**
- * @summary Get the tenant's configured employee ID prefix (validation hint only)
+ * @summary Get the tenant's employee ID prefix and a preview of the next auto-generated ID
  */
 export const GetEmployeeIdConfigResponse = zod.object({
   employeeIdPrefix: zod.string().nullish(),
+  nextEmployeeId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Preview of the ID that would be auto-generated right now, or null if no prefix is configured. Not reserved — the real ID is assigned atomically at creation time.",
+    ),
 });
 
 /**
