@@ -4,3 +4,5 @@
 - [Notification config gotchas](notification-config-gotchas.md) — SMTP/WhatsApp creds fail silently on wrong values; always live-test after collecting them, not just assume correctness.
 - [OpenAPI spec source of truth](openapi-spec-source-of-truth.md) — lib/api-spec/openapi.yaml is hand-maintained, must be edited before codegen; platform-admin's api.ts is separate and not covered.
 - [Sequential employee ID generation](sequential-employee-ids.md) — per-tenant monotonic counter avoids collisions with manually-entered IDs; see generateNextEmployeeId.
+- [XLSX bulk-import date parsing](xlsx-date-parsing.md) — read with cellDates:true and format Date as local YYYY-MM-DD, or serial numbers leak into date columns and break inserts.
+- [Stale dist after schema change](drizzle-project-references-stale-dist.md) — composite lib packages (lib/db etc.) need a rebuild after schema changes, or consumers see phantom "property does not exist" typecheck errors.

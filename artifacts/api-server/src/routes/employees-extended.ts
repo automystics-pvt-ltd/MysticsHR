@@ -33,6 +33,23 @@ const tooManyRowsMessage = `Too many rows: limit is ${MAX_IMPORT_ROWS} per impor
 type RowMap = Record<string, string>;
 type SectionResult = { imported: number; errors: { row: number; error: string }[] };
 
+// Drizzle wraps every failed query in a DrizzleQueryError whose own `.message`
+// is "Failed query: <sql>\nparams: <all bound values>" — useful for server
+// logs, but if shown to a user it leaks the raw SQL and every field value
+// (including PII) for that row. The real, short reason lives on `.cause`
+// (the underlying pg driver error, e.g. "invalid input syntax for type
+// date: \"45124\""). Prefer that; fall back to a generic message rather
+// than ever surfacing the raw query string to the import results UI.
+function friendlyImportError(err: unknown): string {
+  const e = err as { code?: string; message?: string; cause?: { code?: string; message?: string } };
+  if (e?.code === "23505" || e?.cause?.code === "23505") return "Duplicate value conflicts with an existing record";
+  if (e?.cause?.code === "23503" || e?.code === "23503") return "References a record that does not exist (check department/designation/manager values)";
+  const causeMsg = e?.cause?.message;
+  if (causeMsg && !/^failed query/i.test(causeMsg)) return causeMsg;
+  if (e?.message && !/^failed query/i.test(e.message)) return e.message;
+  return "This row could not be saved. Please check its values and try again.";
+}
+
 function createSheet(
   wb: ExcelJS.Workbook,
   name: string,
@@ -254,6 +271,7 @@ router.post(
 
       const empResult: SectionResult = { imported: 0, errors: [] };
       const empIdMap = new Map<string, number>();
+      const empDateRe = /^\d{4}-\d{2}-\d{2}$/;
 
       for (let i = 0; i < employees.length; i++) {
         const r = employees[i];
@@ -261,6 +279,18 @@ router.post(
         try {
           if (!r.employeeId || !r.firstName || !r.lastName || !r.email) {
             empResult.errors.push({ row: i + 1, error: "employeeId, firstName, lastName, email are required" });
+            continue;
+          }
+          // Catch malformed dates up front with a friendly message instead of
+          // letting them reach the database and surface as a raw SQL error
+          // (this previously happened when Excel date cells were read as
+          // serial numbers like "45124" on the client before this fix).
+          if (r.dateOfBirth?.trim() && !empDateRe.test(r.dateOfBirth.trim())) {
+            empResult.errors.push({ row: i + 1, error: `dateOfBirth "${r.dateOfBirth.trim()}" must be in YYYY-MM-DD format` });
+            continue;
+          }
+          if (r.dateOfJoining?.trim() && !empDateRe.test(r.dateOfJoining.trim())) {
+            empResult.errors.push({ row: i + 1, error: `dateOfJoining "${r.dateOfJoining.trim()}" must be in YYYY-MM-DD format` });
             continue;
           }
           const departmentId = r.department ? (deptMap.get(r.department.toLowerCase()) ?? null) : null;
@@ -298,8 +328,8 @@ router.post(
             }
           }
         } catch (err: unknown) {
-          const e = err as { code?: string; message?: string };
-          const msg = e?.code === "23505" ? "Duplicate employee ID or email" : (e?.message ?? "Unknown error");
+          const e = err as { code?: string; cause?: { code?: string } };
+          const msg = (e?.code === "23505" || e?.cause?.code === "23505") ? "Duplicate employee ID or email" : friendlyImportError(err);
           empResult.errors.push({ row: i + 1, error: msg });
         }
       }
@@ -355,7 +385,7 @@ router.post(
           }
           profileResult.imported++;
         } catch (err: unknown) {
-          profileResult.errors.push({ row: i + 1, error: (err as any)?.message ?? "Unknown error" });
+          profileResult.errors.push({ row: i + 1, error: friendlyImportError(err) });
         }
       }
 
@@ -381,7 +411,7 @@ router.post(
           });
           eduResult.imported++;
         } catch (err: unknown) {
-          eduResult.errors.push({ row: i + 1, error: (err as any)?.message ?? "Unknown error" });
+          eduResult.errors.push({ row: i + 1, error: friendlyImportError(err) });
         }
       }
 
@@ -408,7 +438,7 @@ router.post(
           });
           wxpResult.imported++;
         } catch (err: unknown) {
-          wxpResult.errors.push({ row: i + 1, error: (err as any)?.message ?? "Unknown error" });
+          wxpResult.errors.push({ row: i + 1, error: friendlyImportError(err) });
         }
       }
 
@@ -430,7 +460,7 @@ router.post(
           });
           skillsResult.imported++;
         } catch (err: unknown) {
-          skillsResult.errors.push({ row: i + 1, error: (err as any)?.message ?? "Unknown error" });
+          skillsResult.errors.push({ row: i + 1, error: friendlyImportError(err) });
         }
       }
 
@@ -456,7 +486,7 @@ router.post(
           });
           certResult.imported++;
         } catch (err: unknown) {
-          certResult.errors.push({ row: i + 1, error: (err as any)?.message ?? "Unknown error" });
+          certResult.errors.push({ row: i + 1, error: friendlyImportError(err) });
         }
       }
 
@@ -483,7 +513,7 @@ router.post(
           });
           famResult.imported++;
         } catch (err: unknown) {
-          famResult.errors.push({ row: i + 1, error: (err as any)?.message ?? "Unknown error" });
+          famResult.errors.push({ row: i + 1, error: friendlyImportError(err) });
         }
       }
 

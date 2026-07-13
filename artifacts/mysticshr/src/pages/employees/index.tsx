@@ -60,6 +60,21 @@ interface ImportResult {
   };
 }
 
+// Excel stores dates as JS Date objects when the workbook is read with
+// `cellDates: true`. Format using local date parts (not toISOString, which
+// shifts by timezone and can roll the date to the previous/next day) so the
+// backend receives a plain "YYYY-MM-DD" string it can insert into a
+// Postgres `date` column.
+function formatCellValue(v: unknown): string {
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, "0");
+    const d = String(v.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return String(v ?? "");
+}
+
 function sheetToRows(wb: XLSX.WorkBook, sheetName: string): Record<string, string>[] {
   const ws = wb.Sheets[sheetName];
   if (!ws) return [];
@@ -69,7 +84,7 @@ function sheetToRows(wb: XLSX.WorkBook, sheetName: string): Record<string, strin
       Object.entries(row).map(([k, v]) => [
         // Strip trailing " *" used to mark required columns in the template header
         k.replace(/\s*\*+\s*$/, "").trim(),
-        String(v ?? ""),
+        formatCellValue(v),
       ])
     )
   );
@@ -222,7 +237,7 @@ export default function EmployeesPage() {
 
     try {
       const buffer = await importFile.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array", cellDates: false });
+      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
 
       const employees = sheetToRows(wb, "Employees");
       const profiles = sheetToRows(wb, "Profiles");
