@@ -8,6 +8,7 @@ import {
   useDeleteNotificationTemplate,
   useTestSmtpConfig,
   useTestWhatsAppConfig,
+  useSendTestNotification,
   useGetSystemSettings,
   useUpdateSystemSettings,
   getListNotificationLogsQueryKey,
@@ -24,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Bell, Mail, MessageSquare, CheckCircle, XCircle, AlertCircle, Pencil, Trash2, Plus, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -311,6 +313,7 @@ function EmailConfigTab() {
   const { data: settings } = useGetSystemSettings("email");
   const updateMut = useUpdateSystemSettings();
   const testMut = useTestSmtpConfig();
+  const sendTestMut = useSendTestNotification();
 
   const cfg = (settings as Record<string, string> | undefined) ?? {};
   const [form, setForm] = useState<Record<string, string>>({});
@@ -335,6 +338,21 @@ function EmailConfigTab() {
       }
     } catch (e: unknown) {
       toast({ title: "SMTP test failed", variant: "destructive" });
+    }
+  }
+
+  async function handleSendTest() {
+    try {
+      const result = await sendTestMut.mutateAsync({ data: { channel: "email" } });
+      const r = result as { success?: boolean; message?: string; error?: string };
+      if (r.success) {
+        toast({ title: r.message ?? "Test notification sent" });
+      } else {
+        toast({ title: r.error ?? "Failed to send test notification", variant: "destructive" });
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to send test notification";
+      toast({ title: msg, variant: "destructive" });
     }
   }
 
@@ -385,6 +403,18 @@ function EmailConfigTab() {
             <RefreshCw className={`w-4 h-4 mr-1 ${testMut.isPending ? "animate-spin" : ""}`} />
             Test Connection
           </Button>
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" onClick={handleSendTest} disabled={sendTestMut.isPending}>
+                  {sendTestMut.isPending ? "Sending…" : "Send test notification"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs text-xs">
+                Sends a real email to your own account using the currently saved settings — save first if you just made changes.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </CardContent>
     </Card>
@@ -397,6 +427,7 @@ function WhatsAppConfigTab() {
   const { data: settings } = useGetSystemSettings("whatsapp");
   const updateMut = useUpdateSystemSettings();
   const testMut = useTestWhatsAppConfig();
+  const sendTestMut = useSendTestNotification();
 
   const cfg = (settings as Record<string, string> | undefined) ?? {};
   const [form, setForm] = useState<Record<string, string>>({});
@@ -421,6 +452,21 @@ function WhatsAppConfigTab() {
       }
     } catch {
       toast({ title: "WhatsApp test failed", variant: "destructive" });
+    }
+  }
+
+  async function handleSendTest() {
+    try {
+      const result = await sendTestMut.mutateAsync({ data: { channel: "whatsapp" } });
+      const r = result as { success?: boolean; message?: string; error?: string };
+      if (r.success) {
+        toast({ title: r.message ?? "Test notification sent" });
+      } else {
+        toast({ title: r.error ?? "Failed to send test notification", variant: "destructive" });
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to send test notification";
+      toast({ title: msg, variant: "destructive" });
     }
   }
 
@@ -454,6 +500,18 @@ function WhatsAppConfigTab() {
             <RefreshCw className={`w-4 h-4 mr-1 ${testMut.isPending ? "animate-spin" : ""}`} />
             Send Test Message
           </Button>
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" onClick={handleSendTest} disabled={sendTestMut.isPending}>
+                  {sendTestMut.isPending ? "Sending…" : "Send test notification"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs text-xs">
+                Sends a real WhatsApp message to your own account (using your linked employee phone number) with the currently saved settings — save first if you just made changes.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </CardContent>
     </Card>
