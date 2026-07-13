@@ -664,7 +664,7 @@ export default function DashboardPage() {
 
   if (isEmployee && !isHod && !isAnyManager) {
     return (
-      <div className="p-5 md:p-7 max-w-6xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <EmployeeView firstName={firstName} greeting={greeting} />
       </div>
     );
@@ -684,7 +684,7 @@ export default function DashboardPage() {
   ].filter(Boolean) as { icon: React.ElementType; label: string; href: string; iconBg: string; iconColor: string }[];
 
   return (
-    <div className="p-5 md:p-7 max-w-7xl mx-auto space-y-5">
+    <div className="space-y-5">
 
       {/* ── Welcome Header ── */}
       <div className="flex items-center justify-between">

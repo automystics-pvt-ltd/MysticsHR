@@ -208,7 +208,7 @@ export default function SalaryStructuresPage() {
   const filtered = structures?.filter(s => !employeeFilter || (s.employeeName?.toLowerCase().includes(employeeFilter.toLowerCase()) || s.employeeCode?.toLowerCase().includes(employeeFilter.toLowerCase())));
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Salary Structures</h1>

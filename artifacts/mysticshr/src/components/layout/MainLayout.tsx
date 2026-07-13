@@ -94,7 +94,7 @@ function LayoutSkeleton() {
           <Skeleton className="h-8 w-8 rounded-full" />
         </div>
         <div className="flex-1 p-6 lg:p-8">
-          <div className="mx-auto max-w-7xl space-y-6">
+          <div className="mx-auto max-w-[1600px] space-y-6">
             <div className="space-y-2">
               <Skeleton className="h-7 w-40" />
               <Skeleton className="h-4 w-56" />
@@ -175,8 +175,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           onCommandOpen={() => setCommandOpen(true)}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          <div className="mx-auto w-full max-w-7xl">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 lg:p-8">
+          <div className="mx-auto w-full max-w-[1600px]">
             {children}
           </div>
         </main>
