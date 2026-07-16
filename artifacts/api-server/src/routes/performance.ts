@@ -66,9 +66,11 @@ router.post("/performance/cycles", requireHrmsUser, requireRole(...HR_ROLES), as
 
 router.get("/performance/cycles/:id", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
+    const _cycleId = Number(req.params.id);
+    if (isNaN(_cycleId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [cycle] = await db.select().from(performanceCyclesTable)
       .where(and(
-        eq(performanceCyclesTable.id, Number(req.params.id)),
+        eq(performanceCyclesTable.id, _cycleId),
         eq(performanceCyclesTable.tenantId, req.hrmsUser!.tenantId)
       ));
     if (!cycle) { res.status(404).json({ error: "Not found" }); return; }
@@ -78,6 +80,7 @@ router.get("/performance/cycles/:id", requireHrmsUser, requireRole(...ALL_ROLES)
 
 router.put("/performance/cycles/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    if (isNaN(Number(req.params.id))) { res.status(400).json({ error: "Invalid id" }); return; }
     const { title, cycleType, startDate, endDate, description, status } = req.body;
     const [updated] = await db.update(performanceCyclesTable)
       .set({ title, cycleType, startDate, endDate, description: description ?? null, status: status ?? "Draft", updatedAt: new Date() })
@@ -93,6 +96,7 @@ router.put("/performance/cycles/:id", requireHrmsUser, requireRole(...HR_ROLES),
 
 router.post("/performance/cycles/:id/advance-stage", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    if (isNaN(Number(req.params.id))) { res.status(400).json({ error: "Invalid id" }); return; }
     const [cycle] = await db.select().from(performanceCyclesTable)
       .where(and(
         eq(performanceCyclesTable.id, Number(req.params.id)),
@@ -242,6 +246,7 @@ router.put("/performance/goals/:id", requireHrmsUser, requireRole(...MANAGER_ROL
   try {
     const u = req.hrmsUser!;
     const goalId = Number(req.params.id);
+    if (isNaN(goalId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { title, description, weightage, targetValue, measurementMethod, status } = req.body;
 
     // Fetch goal to verify scope
@@ -281,6 +286,7 @@ router.put("/performance/goals/:id", requireHrmsUser, requireRole(...MANAGER_ROL
 
 router.delete("/performance/goals/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
+    if (isNaN(Number(req.params.id))) { res.status(400).json({ error: "Invalid id" }); return; }
     await db.delete(performanceGoalsTable).where(and(
       eq(performanceGoalsTable.id, Number(req.params.id)),
       eq(performanceGoalsTable.tenantId, req.hrmsUser!.tenantId)
@@ -328,6 +334,7 @@ router.get("/performance/goals/:id/progress", requireHrmsUser, requireRole(...MA
   try {
     const u = req.hrmsUser!;
     const goalId = Number(req.params.id);
+    if (isNaN(goalId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     const [goal] = await db.select({ id: performanceGoalsTable.id, employeeId: performanceGoalsTable.employeeId })
       .from(performanceGoalsTable).where(and(
@@ -353,6 +360,7 @@ router.post("/performance/goals/:id/progress", requireHrmsUser, requireRole(...M
   try {
     const u = req.hrmsUser!;
     const goalId = Number(req.params.id);
+    if (isNaN(goalId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { progressPercent, commentary } = req.body;
     if (progressPercent === undefined) {
       res.status(400).json({ error: "progressPercent is required" });

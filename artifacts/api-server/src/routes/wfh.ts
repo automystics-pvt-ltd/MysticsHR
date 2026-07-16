@@ -120,6 +120,7 @@ router.post("/wfh/:id/cancel", requireHrmsUser, async (req, res) => {
     const tenantId = req.hrmsUser!.tenantId;
     const employeeId = req.hrmsUser!.employeeId;
     const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     const [existing] = await db
       .select()
@@ -152,6 +153,7 @@ router.post("/wfh/:id/action", requireHrmsUser, async (req, res) => {
     const userId = req.hrmsUser!.id;
     const role = req.hrmsUser!.role;
     const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     const isHr = ["customer_admin", "hr_manager", "hr_executive"].includes(role);
     const isHod = role === "hod";

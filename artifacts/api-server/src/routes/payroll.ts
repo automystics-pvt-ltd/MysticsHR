@@ -216,6 +216,7 @@ router.get("/payroll/my-active-salary-structure", requireHrmsUser, async (req, r
 router.get("/payroll/salary-structures/:id", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const tenantId = req.hrmsUser!.tenantId;
     const [structure] = await db.select().from(salaryStructuresTable).where(and(eq(salaryStructuresTable.id, id), eq(salaryStructuresTable.tenantId, tenantId)));
     if (!structure) { res.status(404).json({ error: "Not found" }); return; }
@@ -275,6 +276,7 @@ router.post("/payroll/salary-structures", requireHrmsUser, requireRole(...HR_ROL
 router.put("/payroll/salary-structures/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const tenantId = req.hrmsUser!.tenantId;
     const body = req.body as {
       name?: string; effectiveFrom?: string; effectiveTo?: string;
@@ -375,6 +377,7 @@ router.post("/payroll/loans", requireHrmsUser, requireRole(...HR_ROLES), async (
 router.patch("/payroll/loans/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
+    if (isNaN(Number(req.params.id))) { res.status(400).json({ error: "Invalid id" }); return; }
     const body = req.body as { outstandingAmount?: string; monthlyDeduction?: string; isActive?: boolean; notes?: string };
     const [updated] = await db.update(loanRepaymentsTable).set({
       ...(body.outstandingAmount !== undefined && { outstandingAmount: body.outstandingAmount }),
@@ -546,6 +549,7 @@ router.post("/payroll/locks/:year/:month/lock", requireHrmsUser, requireRole(...
   try {
     const year = Number(req.params.year);
     const month = Number(req.params.month);
+    if (isNaN(year) || isNaN(month)) { res.status(400).json({ error: "Invalid year or month" }); return; }
     const tenantId = req.hrmsUser!.tenantId;
     const [existing] = await db.select().from(payrollLocksTable).where(and(eq(payrollLocksTable.year, year), eq(payrollLocksTable.month, month), eq(payrollLocksTable.tenantId, tenantId)));
     let lock;
@@ -580,6 +584,7 @@ router.post("/payroll/locks/:year/:month/unlock", requireHrmsUser, requireRole("
   try {
     const year = Number(req.params.year);
     const month = Number(req.params.month);
+    if (isNaN(year) || isNaN(month)) { res.status(400).json({ error: "Invalid year or month" }); return; }
     const tenantId = req.hrmsUser!.tenantId;
     const [existing] = await db.select().from(payrollLocksTable).where(and(eq(payrollLocksTable.year, year), eq(payrollLocksTable.month, month), eq(payrollLocksTable.tenantId, tenantId)));
     if (!existing) { res.status(404).json({ error: "Lock record not found" }); return; }
@@ -635,6 +640,7 @@ router.post("/payroll/lock-exceptions", requireHrmsUser, requireRole(...HR_ROLES
 router.post("/payroll/lock-exceptions/:id/action", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
+    if (isNaN(Number(req.params.id))) { res.status(400).json({ error: "Invalid id" }); return; }
     const { action, approvalRemarks } = req.body as { action: "approve" | "reject"; approvalRemarks?: string };
     const [exc] = await db.update(payrollLockExceptionsTable).set({
       status: action === "approve" ? "Approved" : "Rejected",
@@ -700,6 +706,7 @@ router.post("/payroll/salary-revisions", requireHrmsUser, requireRole(...HR_ROLE
 
 router.post("/payroll/salary-revisions/:id/action", requireHrmsUser, requireRole("customer_admin"), async (req, res) => {
   try {
+    if (isNaN(Number(req.params.id))) { res.status(400).json({ error: "Invalid id" }); return; }
     const { action, approvalRemarks } = req.body as { action: "approve" | "reject"; approvalRemarks?: string };
     const tenantId = req.hrmsUser!.tenantId;
 
@@ -804,6 +811,7 @@ router.post("/payroll/runs", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES
 router.get("/payroll/runs/:id", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const tenantId = req.hrmsUser!.tenantId;
     const [run] = await db.select().from(payrollRunsTable).where(and(eq(payrollRunsTable.id, id), eq(payrollRunsTable.tenantId, tenantId)));
     if (!run) { res.status(404).json({ error: "Not found" }); return; }
@@ -814,6 +822,7 @@ router.get("/payroll/runs/:id", requireHrmsUser, requireRole(...PAYROLL_ADMIN_RO
 router.post("/payroll/runs/:id/compute", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const runId = Number(req.params.id);
+    if (isNaN(runId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [run] = await db.select().from(payrollRunsTable).where(eq(payrollRunsTable.id, runId));
     if (!run) { res.status(404).json({ error: "Not found" }); return; }
     if (!["Draft", "Computed"].includes(run.status)) { res.status(422).json({ error: "Payroll run cannot be recomputed in current status." }); return; }
@@ -1069,6 +1078,7 @@ router.post("/payroll/runs/:id/compute", requireHrmsUser, requireRole(...PAYROLL
 router.post("/payroll/runs/:id/approve", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const runId = Number(req.params.id);
+    if (isNaN(runId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [run] = await db.select().from(payrollRunsTable).where(and(eq(payrollRunsTable.id, runId), eq(payrollRunsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!run) { res.status(404).json({ error: "Not found" }); return; }
     if (run.status !== "Computed") { res.status(422).json({ error: "Payroll must be in Computed status to approve." }); return; }
@@ -1154,6 +1164,7 @@ router.post("/payroll/runs/:id/approve", requireHrmsUser, requireRole(...PAYROLL
 router.post("/payroll/runs/:id/finalize", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const runId = Number(req.params.id);
+    if (isNaN(runId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [run] = await db.select().from(payrollRunsTable).where(and(eq(payrollRunsTable.id, runId), eq(payrollRunsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!run) { res.status(404).json({ error: "Not found" }); return; }
     if (run.status !== "Approved") { res.status(422).json({ error: "Payroll must be Approved to finalize." }); return; }
@@ -1182,6 +1193,7 @@ router.post("/payroll/runs/:id/finalize", requireHrmsUser, requireRole(...PAYROL
 router.get("/payroll/runs/:id/records", requireHrmsUser, requireRole(...PAYROLL_ADMIN_ROLES), async (req, res) => {
   try {
     const runId = Number(req.params.id);
+    if (isNaN(runId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { limit, offset } = paging(req);
     const records = await db.select({
       id: payrollRecordsTable.id,
@@ -1260,6 +1272,7 @@ router.get("/payroll/payslips", requireHrmsUser, requireRole(...ALL_ROLES), asyn
 router.get("/payroll/payslips/:id", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const u = req.hrmsUser!;
+    if (isNaN(Number(req.params.id))) { res.status(400).json({ error: "Invalid id" }); return; }
     const [payslip] = await db.select().from(payslipsTable).where(and(eq(payslipsTable.id, Number(req.params.id)), eq(payslipsTable.tenantId, u.tenantId)));
     if (!payslip) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -1905,6 +1918,7 @@ router.get("/payroll/reports/form-16/:employeeId/:year", requireHrmsUser, requir
   try {
     const empId = Number(req.params.employeeId);
     const year = Number(req.params.year);
+    if (isNaN(empId) || isNaN(year)) { res.status(400).json({ error: "Invalid employeeId or year" }); return; }
     const u = req.hrmsUser!;
     const forbidden = await assertCanAccessEmployeeTaxData(req, empId);
     if (forbidden) { res.status(403).json({ error: forbidden }); return; }
@@ -1919,6 +1933,7 @@ router.get("/payroll/reports/form-16/:employeeId/:year/pdf", requireHrmsUser, re
   try {
     const empId = Number(req.params.employeeId);
     const year = Number(req.params.year);
+    if (isNaN(empId) || isNaN(year)) { res.status(400).json({ error: "Invalid employeeId or year" }); return; }
     const u = req.hrmsUser!;
     const forbidden = await assertCanAccessEmployeeTaxData(req, empId);
     if (forbidden) { res.status(403).json({ error: forbidden }); return; }
@@ -2397,6 +2412,7 @@ async function generateForm16Pdf(data: Form16Data): Promise<Uint8Array> {
 router.get("/payroll/payslips/:id/pdf", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
+    if (isNaN(Number(req.params.id))) { res.status(400).json({ error: "Invalid id" }); return; }
     const [payslip] = await db.select().from(payslipsTable).where(and(eq(payslipsTable.id, Number(req.params.id)), eq(payslipsTable.tenantId, tenantId)));
     if (!payslip) { res.status(404).json({ error: "Not found" }); return; }
 

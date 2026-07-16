@@ -469,6 +469,7 @@ router.get("/billing/invoices/:id", requireHrmsUser, async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
     const id = Number(req.params["id"]);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     const [row] = await db
       .select({
@@ -501,6 +502,7 @@ router.get("/billing/invoices/:id/pdf", requireHrmsUser, async (req, res) => {
   try {
     const tenantId = req.hrmsUser!.tenantId;
     const id = Number(req.params["id"]);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     const [row] = await db
       .select({

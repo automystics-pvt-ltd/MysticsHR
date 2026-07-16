@@ -138,7 +138,7 @@ async function upsertOvertimeRecord(
       await db.insert(overtimeRecordsTable).values({
         tenantId,
         employeeId, attendanceDate, overtimeMinutes: overtimeMins,
-        ratePerHour: ratePerHour ?? null, totalAmount, attendanceRecordId,
+        ratePerHour: ratePerHour !== "" && ratePerHour != null ? ratePerHour : null, totalAmount, attendanceRecordId,
       });
     }
   } else {
@@ -456,6 +456,7 @@ router.post("/attendance/regularizations/:id/action", requireHrmsUser, requireRo
   try {
     const { action, remarks } = req.body as { action: "Approved" | "Rejected"; remarks?: string };
     const regId = Number(req.params.id);
+    if (isNaN(regId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     const [reg] = await db.select().from(attendanceRegularizationsTable).where(and(eq(attendanceRegularizationsTable.id, regId), eq(attendanceRegularizationsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!reg) { res.status(404).json({ error: "Not found" }); return; }
@@ -764,6 +765,8 @@ router.post("/attendance/me/clock-out", requireHrmsUser, requireRole(...ALL_ROLE
 
 router.get("/attendance/:id", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
+    const _attRecId = Number(req.params.id);
+    if (isNaN(_attRecId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [record] = await db
       .select({
         id: attendanceRecordsTable.id,
@@ -796,7 +799,7 @@ router.get("/attendance/:id", requireHrmsUser, requireRole(...HR_READ_ROLES), as
       })
       .from(attendanceRecordsTable)
       .leftJoin(employeesTable, eq(attendanceRecordsTable.employeeId, employeesTable.id))
-      .where(and(eq(attendanceRecordsTable.id, Number(req.params.id)), eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)));
+      .where(and(eq(attendanceRecordsTable.id, _attRecId), eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!record) { res.status(404).json({ error: "Not found" }); return; }
     res.json(record);
   } catch (err) {
@@ -810,6 +813,7 @@ router.patch("/attendance/:id", requireHrmsUser, requireRole(...HR_ROLES), async
     const body = req.body;
     if (!body.overrideReason) { res.status(400).json({ error: "overrideReason is required for HR override" }); return; }
     const id = Number(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [existing] = await db.select().from(attendanceRecordsTable).where(and(eq(attendanceRecordsTable.id, id), eq(attendanceRecordsTable.tenantId, req.hrmsUser!.tenantId)));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -865,6 +869,7 @@ router.patch("/attendance/:id", requireHrmsUser, requireRole(...HR_ROLES), async
 router.get("/employees/:id/attendance", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const empId = Number(req.params.id);
+    if (isNaN(empId)) { res.status(400).json({ error: "Invalid id" }); return; }
     if (req.hrmsUser!.role === "employee") {
       const [userRow] = await db.select({ employeeId: hrmsUsersTable.employeeId }).from(hrmsUsersTable).where(and(eq(hrmsUsersTable.id, req.hrmsUser!.id), eq(hrmsUsersTable.tenantId, req.hrmsUser!.tenantId)));
       if (!userRow?.employeeId || userRow.employeeId !== empId) { res.status(403).json({ error: "Forbidden" }); return; }
@@ -890,6 +895,7 @@ router.get("/employees/:id/attendance", requireHrmsUser, requireRole(...ALL_ROLE
 router.get("/employees/:id/overtime", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const empId = Number(req.params.id);
+    if (isNaN(empId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { month } = req.query;
     const conditions: SQL<unknown>[] = [eq(overtimeRecordsTable.employeeId, empId), eq(overtimeRecordsTable.tenantId, req.hrmsUser!.tenantId)];
     if (month && typeof month === "string") {

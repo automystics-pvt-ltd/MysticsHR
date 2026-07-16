@@ -623,6 +623,7 @@ router.post(
 router.get("/employees/:id/profile", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [profile] = await db
       .select()
       .from(employeeProfilesTable)
@@ -646,6 +647,7 @@ router.put(
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);
+      if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
       const b = req.body;
 
       // If the request touches bank account fields, enforce payroll lock
@@ -720,6 +722,7 @@ router.put(
 router.get("/employees/:id/education", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const rows = await db
       .select()
       .from(employeeEducationTable)
@@ -735,6 +738,7 @@ router.get("/employees/:id/education", requireHrmsUser, requireRole(...HR_READ_R
 router.post("/employees/:id/education", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { degree, institution, fieldOfStudy, startYear, endYear, grade } = req.body;
     if (!degree || !institution) {
       res.status(400).json({ error: "degree and institution are required" });
@@ -755,6 +759,7 @@ router.post("/employees/:id/education", requireHrmsUser, requireRole(...HR_ROLES
 router.post("/employees/:id/education/import", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { rows } = req.body as { rows: Record<string, string>[] };
     if (!Array.isArray(rows)) { res.status(400).json({ error: "rows must be an array" }); return; }
     if (rows.length > MAX_IMPORT_ROWS) { res.status(400).json({ error: tooManyRowsMessage }); return; }
@@ -800,6 +805,7 @@ router.post("/employees/:id/education/import", requireHrmsUser, requireRole(...H
 router.patch("/employee-education/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { degree, institution, fieldOfStudy, startYear, endYear, grade } = req.body;
     const [existing] = await db.select().from(employeeEducationTable).where(and(eq(employeeEducationTable.id, id), eq(employeeEducationTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
@@ -833,6 +839,7 @@ router.patch("/employee-education/:id", requireHrmsUser, requireRole(...HR_ROLES
 router.delete("/employee-education/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     await db.delete(employeeEducationTable).where(and(eq(employeeEducationTable.id, id), eq(employeeEducationTable.tenantId, req.hrmsUser!.tenantId)));
     await logAudit({ user: req.hrmsUser, action: "DELETE", module: "EmployeeEducation", recordId: id, ipAddress: req.ip });
     res.status(204).send();
@@ -845,6 +852,7 @@ router.delete("/employee-education/:id", requireHrmsUser, requireRole(...HR_ROLE
 router.get("/employees/:id/work-experience", requireHrmsUser, requireRole(...HR_READ_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const rows = await db
       .select()
       .from(employeeWorkExperienceTable)
@@ -860,6 +868,7 @@ router.get("/employees/:id/work-experience", requireHrmsUser, requireRole(...HR_
 router.post("/employees/:id/work-experience", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { company, designation, location, startDate, endDate, description, ctcDrawn } = req.body;
     if (!company || !designation) {
       res.status(400).json({ error: "company and designation are required" });
@@ -880,6 +889,7 @@ router.post("/employees/:id/work-experience", requireHrmsUser, requireRole(...HR
 router.post("/employees/:id/work-experience/import", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { rows } = req.body as { rows: Record<string, string>[] };
     if (!Array.isArray(rows)) { res.status(400).json({ error: "rows must be an array" }); return; }
     if (rows.length > MAX_IMPORT_ROWS) { res.status(400).json({ error: tooManyRowsMessage }); return; }
@@ -925,6 +935,7 @@ router.post("/employees/:id/work-experience/import", requireHrmsUser, requireRol
 router.patch("/employee-work-experience/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { company, designation, location, startDate, endDate, description, ctcDrawn } = req.body;
     const [existing] = await db.select().from(employeeWorkExperienceTable).where(and(eq(employeeWorkExperienceTable.id, id), eq(employeeWorkExperienceTable.tenantId, req.hrmsUser!.tenantId))).limit(1);
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
@@ -959,6 +970,7 @@ router.patch("/employee-work-experience/:id", requireHrmsUser, requireRole(...HR
 router.delete("/employee-work-experience/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     await db.delete(employeeWorkExperienceTable).where(and(eq(employeeWorkExperienceTable.id, id), eq(employeeWorkExperienceTable.tenantId, req.hrmsUser!.tenantId)));
     await logAudit({ user: req.hrmsUser, action: "DELETE", module: "EmployeeWorkExp", recordId: id, ipAddress: req.ip });
     res.status(204).send();

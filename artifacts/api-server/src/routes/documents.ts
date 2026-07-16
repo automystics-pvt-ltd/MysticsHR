@@ -58,6 +58,7 @@ router.post("/documents/templates", requireHrmsUser, requireRole(...HR_ROLES), a
 router.put("/documents/templates/:id", requireHrmsUser, requireRole(...HR_ROLES), async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { documentType, name, companyName, companyAddress, headerText, footerText, bodyTemplate, isActive } = req.body;
 
     const [updated] = await db.update(documentTemplatesTable).set({
@@ -364,6 +365,7 @@ router.get("/documents/public/download/:token", async (req, res) => {
 router.get("/documents/issued/:id/download", requireHrmsUser, requireRole(...ALL_ROLES), async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const u = req.hrmsUser!;
     const isHrRole = (HR_ROLES as readonly string[]).includes(u.role);
 
@@ -420,6 +422,7 @@ router.post("/employees/:id/fnf-approve", requireHrmsUser, requireRole(...HR_ROL
   try {
     const u = req.hrmsUser!;
     const employeeId = Number(req.params.id);
+    if (isNaN(employeeId)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { lastWorkingDay, remarks } = req.body;
     if (!lastWorkingDay) {
       res.status(400).json({ error: "lastWorkingDay is required" }); return;
@@ -626,6 +629,7 @@ router.put("/documents/requests/:id", requireHrmsUser, requireRole(...HR_ROLES),
   try {
     const u = req.hrmsUser!;
     const id = Number(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const { status, hrNote, issuedDocumentId } = req.body;
     if (!status) { res.status(400).json({ error: "status is required" }); return; }
 

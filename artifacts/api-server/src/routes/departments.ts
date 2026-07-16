@@ -80,6 +80,7 @@ router.post(
 router.get("/departments/:id", requireHrmsUser, async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [dept] = await db
       .select(deptSelect)
       .from(departmentsTable)
@@ -105,6 +106,7 @@ router.patch(
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);
+      if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
       const { name, code, description, headId, isActive } = req.body;
       const [dept] = await db
         .update(departmentsTable)
@@ -136,6 +138,7 @@ router.delete(
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);
+      if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
       const [dept] = await db
         .update(departmentsTable)
         .set({ deletedAt: new Date(), isActive: false, updatedAt: new Date() })

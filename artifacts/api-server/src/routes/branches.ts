@@ -68,6 +68,7 @@ router.post(
 router.get("/branches/:id", requireHrmsUser, async (req, res) => {
   try {
     const id = parseInt(String(req.params.id), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
     const [branch] = await db
       .select()
       .from(branchesTable)
@@ -88,6 +89,7 @@ router.patch(
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);
+      if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
       const { name, code, address, city, state, country, phone, email, isHeadquarters, isActive } = req.body as {
         name?: string; code?: string; address?: string; city?: string; state?: string;
         country?: string; phone?: string; email?: string; isHeadquarters?: boolean; isActive?: boolean;
@@ -131,6 +133,7 @@ router.delete(
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);
+      if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
       const [branch] = await db
         .delete(branchesTable)
         .where(and(eq(branchesTable.id, id), eq(branchesTable.tenantId, req.hrmsUser!.tenantId)))

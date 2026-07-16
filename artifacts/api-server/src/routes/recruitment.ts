@@ -117,10 +117,10 @@ router.post("/requisitions", requireHrmsUser, requireRole(...HR_WRITE_ROLES), as
         numberOfPositions: body.numberOfPositions,
         employmentType: body.employmentType ?? "Permanent",
         location: body.location ?? null,
-        experienceMin: body.experienceMin ?? null,
-        experienceMax: body.experienceMax ?? null,
-        budgetMin: body.budgetMin ?? null,
-        budgetMax: body.budgetMax ?? null,
+        experienceMin: body.experienceMin !== "" && body.experienceMin != null ? Number(body.experienceMin) : null,
+        experienceMax: body.experienceMax !== "" && body.experienceMax != null ? Number(body.experienceMax) : null,
+        budgetMin: body.budgetMin !== "" && body.budgetMin != null ? body.budgetMin : null,
+        budgetMax: body.budgetMax !== "" && body.budgetMax != null ? body.budgetMax : null,
         jobDescription: body.jobDescription ?? null,
         requiredSkills: body.requiredSkills ?? null,
         status: "Pending Approval",
@@ -170,6 +170,8 @@ router.patch("/requisitions/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES
   try {
     const id = parseInt(String(req.params.id), 10);
     const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const _intFields = new Set(["experienceMin", "experienceMax", "numberOfPositions"]);
+    const _numericFields = new Set(["budgetMin", "budgetMax"]);
     for (const key of [
       "title",
       "departmentId",
@@ -185,7 +187,16 @@ router.patch("/requisitions/:id", requireHrmsUser, requireRole(...HR_WRITE_ROLES
       "requiredSkills",
       "status",
     ]) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
+      if (req.body[key] !== undefined) {
+        const v = req.body[key];
+        if ((_intFields.has(key) || _numericFields.has(key)) && v === "") {
+          updates[key] = null;
+        } else if (_intFields.has(key) && v !== null && v !== "") {
+          updates[key] = Number(v);
+        } else {
+          updates[key] = v;
+        }
+      }
     }
     const [row] = await db
       .update(jobRequisitionsTable)
@@ -366,9 +377,9 @@ router.post("/candidates", requireHrmsUser, requireRole(...HR_WRITE_ROLES), asyn
         phone: b.phone ?? null,
         currentCompany: b.currentCompany ?? null,
         currentDesignation: b.currentDesignation ?? null,
-        totalExperience: b.totalExperience ?? null,
-        currentCtc: b.currentCtc ?? null,
-        expectedCtc: b.expectedCtc ?? null,
+        totalExperience: b.totalExperience !== "" && b.totalExperience != null ? Number(b.totalExperience) : null,
+        currentCtc: b.currentCtc !== "" ? (b.currentCtc ?? null) : null,
+        expectedCtc: b.expectedCtc !== "" ? (b.expectedCtc ?? null) : null,
         noticePeriod: b.noticePeriod ?? null,
         resumeUrl: b.resumeUrl ?? null,
         source: b.source ?? "Other",
