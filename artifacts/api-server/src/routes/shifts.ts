@@ -54,11 +54,11 @@ router.post("/shifts/templates", requireHrmsUser, requireRole(...HR_ROLES), asyn
       minWorkingHoursMinutes: body.minWorkingHoursMinutes ?? 480,
       weeklyOff: body.weeklyOff ?? null,
       departmentId: body.departmentId ?? null,
-      shiftRatePerHour: body.shiftRatePerHour ?? null,
-      nightDifferentialRate: body.nightDifferentialRate ?? null,
+      shiftRatePerHour: body.shiftRatePerHour !== "" && body.shiftRatePerHour != null ? body.shiftRatePerHour : null,
+      nightDifferentialRate: body.nightDifferentialRate !== "" && body.nightDifferentialRate != null ? body.nightDifferentialRate : null,
       overtimeThresholdMinutes: body.overtimeThresholdMinutes ?? 30,
       isActive: body.isActive !== false,
-      notes: body.notes ?? null,
+      notes: body.notes !== "" ? (body.notes ?? null) : null,
     }).returning();
     await logAudit({ user: req.hrmsUser!, action: "CREATE", module: "ShiftTemplates", recordId: created.id, newValue: created.name, ipAddress: req.ip });
     res.status(201).json(created);
@@ -97,8 +97,13 @@ router.patch("/shifts/templates/:id", requireHrmsUser, requireRole(...HR_ROLES),
     );
     if (!before) { res.status(404).json({ error: "Not found" }); return; }
 
+    const patch = { ...body };
+    if (patch.shiftRatePerHour === "") patch.shiftRatePerHour = null;
+    if (patch.nightDifferentialRate === "") patch.nightDifferentialRate = null;
+    if (patch.notes === "") patch.notes = null;
+
     const [updated] = await db.update(shiftTemplatesTable)
-      .set({ ...body, updatedAt: new Date() })
+      .set({ ...patch, updatedAt: new Date() })
       .where(
         and(
           eq(shiftTemplatesTable.id, templateId),
